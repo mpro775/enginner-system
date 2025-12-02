@@ -289,7 +289,8 @@ docker compose up -d mongodb redis backend frontend nginx
 
 ```bash
 # الحصول على شهادة للـ Frontend
-docker compose run --rm certbot certonly \
+# مهم: استخدام --entrypoint="" لتجاوز entrypoint المحدد في docker-compose.yml
+docker compose run --rm --entrypoint="" certbot certbot certonly \
     --webroot \
     --webroot-path=/var/www/certbot \
     -d mohd-morad.pro \
@@ -299,7 +300,7 @@ docker compose run --rm certbot certonly \
     --no-eff-email
 
 # الحصول على شهادة للـ API
-docker compose run --rm certbot certonly \
+docker compose run --rm --entrypoint="" certbot certbot certonly \
     --webroot \
     --webroot-path=/var/www/certbot \
     -d api.mohd-morad.pro \
@@ -502,6 +503,95 @@ docker compose exec nginx ls -la /etc/letsencrypt/live/
 
 # إعادة الحصول على الشهادات
 docker compose run --rm certbot certonly --force-renewal ...
+```
+
+### مشكلة: certbot "No renewals were attempted"
+
+إذا ظهرت رسالة:
+
+```
+No renewals were attempted.
+```
+
+**الأسباب المحتملة والحلول:**
+
+1. **التحقق من الشهادات الموجودة:**
+
+```bash
+# فحص الشهادات الموجودة
+docker compose run --rm certbot certificates
+
+# أو من داخل nginx container
+docker compose exec nginx ls -la /etc/letsencrypt/live/
+```
+
+2. **إذا كانت الشهادات موجودة، استخدم force-renewal:**
+
+```bash
+# إجبار تجديد الشهادات
+docker compose run --rm certbot certonly \
+    --webroot \
+    --webroot-path=/var/www/certbot \
+    --force-renewal \
+    -d mohd-morad.pro \
+    -d www.mohd-morad.pro \
+    --email eng.muhammedmurad@gmail.com \
+    --agree-tos \
+    --no-eff-email
+```
+
+3. **التحقق من الوصول إلى webroot path:**
+
+```bash
+# اختبار الوصول إلى webroot
+docker compose exec nginx ls -la /var/www/certbot/
+
+# إنشاء ملف اختبار
+docker compose exec nginx sh -c "echo 'test' > /var/www/certbot/test.txt"
+
+# التحقق من الخارج (يجب أن يكون متاحاً على http://mohd-morad.pro/.well-known/acme-challenge/test.txt)
+curl http://mohd-morad.pro/.well-known/acme-challenge/test.txt
+```
+
+4. **استخدام dry-run للاختبار:**
+
+```bash
+# اختبار بدون الحصول على شهادة حقيقية
+docker compose run --rm certbot certonly \
+    --webroot \
+    --webroot-path=/var/www/certbot \
+    --dry-run \
+    -d mohd-morad.pro \
+    --email eng.muhammedmurad@gmail.com \
+    --agree-tos \
+    --no-eff-email
+```
+
+5. **إذا لم تكن الشهادات موجودة، استخدم certonly بدون force-renewal:**
+
+```bash
+# للحصول على شهادة جديدة (أول مرة)
+docker compose run --rm certbot certonly \
+    --webroot \
+    --webroot-path=/var/www/certbot \
+    -d mohd-morad.pro \
+    -d www.mohd-morad.pro \
+    --email eng.muhammedmurad@gmail.com \
+    --agree-tos \
+    --no-eff-email \
+    --verbose
+```
+
+6. **التحقق من DNS:**
+
+```bash
+# تأكد أن DNS يشير إلى السيرفر
+nslookup mohd-morad.pro
+nslookup api.mohd-morad.pro
+
+# التحقق من الوصول من الخارج
+curl -I http://mohd-morad.pro
+curl -I http://api.mohd-morad.pro
 ```
 
 ### مشكلة: Permission denied - Docker daemon socket
