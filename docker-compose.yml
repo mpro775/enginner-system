@@ -4,73 +4,30 @@
 # Domains:
 #   - Frontend: https://mohd-morad.pro
 #   - Backend:  https://api.mohd-morad.pro
+#
+# Note: MongoDB is external (MongoDB Atlas)
+#       Cache is in-memory (no Redis required)
 # =====================================================
 
-version: '3.8'
+version: "3.8"
 
 services:
   # =================================================
-  # MongoDB Database
-  # =================================================
-  mongodb:
-    image: mongo:7
-    container_name: maintenance-mongodb
-    restart: unless-stopped
-    volumes:
-      - mongodb_data:/data/db
-      - ./backups/mongodb:/backups
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-changeme123}
-      MONGO_INITDB_DATABASE: maintenance-system
-    networks:
-      - maintenance-network
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
-  # =================================================
-  # Redis Cache
-  # =================================================
-  redis:
-    image: redis:7-alpine
-    container_name: maintenance-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-    networks:
-      - maintenance-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # =================================================
   # Backend API (NestJS)
   # =================================================
+  # Note: MONGODB_URI must be set in .env file
+  #       Should point to MongoDB Atlas connection string
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: maintenance-backend
     restart: unless-stopped
-    depends_on:
-      mongodb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     environment:
       NODE_ENV: production
       PORT: 3000
       API_PREFIX: api/v1
-      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-changeme123}@mongodb:27017/maintenance-system?authSource=admin
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      MONGODB_URI: ${MONGODB_URI}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
@@ -147,11 +104,8 @@ services:
 # =================================================
 # Volumes
 # =================================================
-volumes:
-  mongodb_data:
-    driver: local
-  redis_data:
-    driver: local
+# No volumes needed - MongoDB is external (Atlas)
+# Cache is in-memory, no Redis required
 
 # =================================================
 # Networks
@@ -159,4 +113,3 @@ volumes:
 networks:
   maintenance-network:
     driver: bridge
-
