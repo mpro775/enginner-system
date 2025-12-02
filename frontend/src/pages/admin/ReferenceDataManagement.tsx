@@ -1,27 +1,27 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit, Trash2, Loader2, UserCheck, UserX } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus, Edit, Trash2, Loader2, UserCheck, UserX } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Card, CardContent } from '@/components/ui/card';
+} from "@/components/ui/select";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
-import { PageLoader } from '@/components/shared/LoadingSpinner';
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { PageLoader } from "@/components/shared/LoadingSpinner";
 
 interface ReferenceDataProps {
   title: string;
@@ -37,7 +37,7 @@ interface ReferenceDataProps {
   fields: {
     name: string;
     label: string;
-    type: 'text' | 'textarea' | 'select';
+    type: "text" | "textarea" | "select";
     required?: boolean;
     options?: { value: string; label: string }[];
   }[];
@@ -60,8 +60,13 @@ export default function ReferenceDataManagement({
 }: ReferenceDataProps) {
   const queryClient = useQueryClient();
   const [showDialog, setShowDialog] = useState(false);
-  const [editingItem, setEditingItem] = useState<Record<string, unknown> | null>(null);
-  const [formData, setFormData] = useState<Record<string, string | boolean>>({});
+  const [editingItem, setEditingItem] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const [formData, setFormData] = useState<Record<string, string | boolean>>(
+    {}
+  );
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: [queryKey],
@@ -102,9 +107,15 @@ export default function ReferenceDataManagement({
   });
 
   const toggleStatusMutation = useMutation({
-    mutationFn: async ({ id, currentStatus }: { id: string; currentStatus: boolean }) => {
+    mutationFn: async ({
+      id,
+      currentStatus,
+    }: {
+      id: string;
+      currentStatus: boolean;
+    }) => {
       if (!service.toggleStatus) {
-        throw new Error('Toggle status is not supported');
+        throw new Error("Toggle status is not supported");
       }
       return service.toggleStatus(id, currentStatus);
     },
@@ -125,10 +136,10 @@ export default function ReferenceDataManagement({
     const initialData: Record<string, string | boolean> = {};
     fields.forEach((field) => {
       const value = item[field.name];
-      if (typeof value === 'object' && value !== null && 'id' in value) {
+      if (typeof value === "object" && value !== null && "id" in value) {
         initialData[field.name] = (value as { id: string }).id;
       } else {
-        initialData[field.name] = String(value || '');
+        initialData[field.name] = String(value || "");
       }
     });
     // Add isActive to form data
@@ -156,7 +167,7 @@ export default function ReferenceDataManagement({
     return <PageLoader />;
   }
 
-  const items = data as Record<string, unknown>[] || [];
+  const items = (data as Record<string, unknown>[]) || [];
 
   return (
     <div className="space-y-6 animate-in">
@@ -186,7 +197,10 @@ export default function ReferenceDataManagement({
             <tbody>
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length + 2} className="text-center py-8 text-muted-foreground">
+                  <td
+                    colSpan={columns.length + 2}
+                    className="text-center py-8 text-muted-foreground"
+                  >
                     لا توجد بيانات
                   </td>
                 </tr>
@@ -195,14 +209,17 @@ export default function ReferenceDataManagement({
                   <tr key={item.id as string}>
                     {columns.map((col) => (
                       <td key={col.key}>
-                        {typeof item[col.key] === 'object' && item[col.key] !== null
+                        {typeof item[col.key] === "object" &&
+                        item[col.key] !== null
                           ? (item[col.key] as { name: string }).name
-                          : String(item[col.key] || '-')}
+                          : String(item[col.key] || "-")}
                       </td>
                     ))}
                     <td>
-                      <Badge variant={item.isActive ? 'success' : 'destructive'}>
-                        {item.isActive ? 'نشط' : 'معطل'}
+                      <Badge
+                        variant={item.isActive ? "success" : "destructive"}
+                      >
+                        {item.isActive ? "نشط" : "معطل"}
                       </Badge>
                     </td>
                     <td>
@@ -237,7 +254,7 @@ export default function ReferenceDataManagement({
                           variant="ghost"
                           size="icon"
                           onClick={() => {
-                            if (confirm('هل أنت متأكد من الحذف؟')) {
+                            if (confirm("هل أنت متأكد من الحذف؟")) {
                               deleteMutation.mutate(item.id as string);
                             }
                           }}
@@ -258,61 +275,79 @@ export default function ReferenceDataManagement({
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingItem ? 'تعديل' : 'إضافة جديد'}</DialogTitle>
+            <DialogTitle>{editingItem ? "تعديل" : "إضافة جديد"}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {fields.map((field) => (
-              <div key={field.name} className="space-y-2">
-                <Label>{field.label} {field.required && '*'}</Label>
-                {field.type === 'textarea' ? (
-                  <Textarea
-                    value={formData[field.name] || ''}
-                    onChange={(e) =>
-                      setFormData({ ...formData, [field.name]: e.target.value })
-                    }
-                    required={field.required}
-                  />
-                ) : field.type === 'select' ? (
-                  <Select
-                    value={formData[field.name] || ''}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, [field.name]: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {field.options?.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                      {field.name === relatedService?.fieldName &&
-                        relatedData?.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
-                            {item.name}
+            {fields.map((field) => {
+              const fieldValue = formData[field.name];
+              const stringValue =
+                typeof fieldValue === "string" ? fieldValue : "";
+
+              return (
+                <div key={field.name} className="space-y-2">
+                  <Label>
+                    {field.label} {field.required && "*"}
+                  </Label>
+                  {field.type === "textarea" ? (
+                    <Textarea
+                      value={stringValue}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          [field.name]: e.target.value,
+                        })
+                      }
+                      required={field.required}
+                    />
+                  ) : field.type === "select" ? (
+                    <Select
+                      value={stringValue}
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, [field.name]: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {field.options?.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
                           </SelectItem>
                         ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    value={formData[field.name] || ''}
-                    onChange={(e) =>
-                      setFormData({ ...formData, [field.name]: e.target.value })
-                    }
-                    required={field.required}
-                  />
-                )}
-              </div>
-            ))}
+                        {field.name === relatedService?.fieldName &&
+                          relatedData?.map((item) => (
+                            <SelectItem key={item.id} value={item.id}>
+                              {item.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={stringValue}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          [field.name]: e.target.value,
+                        })
+                      }
+                      required={field.required}
+                    />
+                  )}
+                </div>
+              );
+            })}
             {editingItem && (
               <div className="flex items-center space-x-2 space-x-reverse">
                 <input
                   type="checkbox"
                   id="isActive"
-                  checked={typeof formData.isActive === 'boolean' ? formData.isActive : false}
+                  checked={
+                    typeof formData.isActive === "boolean"
+                      ? formData.isActive
+                      : false
+                  }
                   onChange={(e) =>
                     setFormData({ ...formData, isActive: e.target.checked })
                   }
@@ -335,7 +370,7 @@ export default function ReferenceDataManagement({
                 {(createMutation.isPending || updateMutation.isPending) && (
                   <Loader2 className="ml-2 h-4 w-4 animate-spin" />
                 )}
-                {editingItem ? 'حفظ' : 'إضافة'}
+                {editingItem ? "حفظ" : "إضافة"}
               </Button>
             </DialogFooter>
           </form>
@@ -344,6 +379,3 @@ export default function ReferenceDataManagement({
     </div>
   );
 }
-
-
-
