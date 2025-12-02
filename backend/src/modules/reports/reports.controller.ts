@@ -1,0 +1,71 @@
+import {
+  Controller,
+  Get,
+  Query,
+  Param,
+  UseGuards,
+  Res,
+} from '@nestjs/common';
+import { Response } from 'express';
+import { ReportsService } from './reports.service';
+import { ReportFilterDto } from './dto/report-filter.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { Role } from '../../common/enums';
+
+@Controller('reports')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.ADMIN, Role.CONSULTANT)
+export class ReportsController {
+  constructor(private readonly reportsService: ReportsService) {}
+
+  @Get('requests')
+  async getRequestsReport(
+    @Query() filter: ReportFilterDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (filter.format === 'excel') {
+      await this.reportsService.generateExcelReport(filter, res);
+      return;
+    }
+
+    if (filter.format === 'pdf') {
+      await this.reportsService.generatePdfReport(filter, res);
+      return;
+    }
+
+    const data = await this.reportsService.getRequestsReport(filter);
+    return {
+      data,
+      message: 'Requests report generated successfully',
+    };
+  }
+
+  @Get('engineer/:id')
+  async getEngineerReport(
+    @Param('id') engineerId: string,
+    @Query() filter: ReportFilterDto,
+  ) {
+    const report = await this.reportsService.getEngineerReport(engineerId, filter);
+    return {
+      data: report,
+      message: 'Engineer report generated successfully',
+    };
+  }
+
+  @Get('summary')
+  @Roles(Role.ADMIN)
+  async getSummaryReport(@Query() filter: ReportFilterDto) {
+    const report = await this.reportsService.getSummaryReport(filter);
+    return {
+      data: report,
+      message: 'Summary report generated successfully',
+    };
+  }
+}
+
+
+
+
+

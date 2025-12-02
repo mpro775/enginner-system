@@ -1,0 +1,218 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* TNC Brand Colors - Tabrak Najed Contracting */
+    /* Primary: Navy Blue #1E3A5F | Accent: Gold #C4A052 */
+    
+    --background: 210 25% 97%;
+    --foreground: 213 52% 20%;
+    --card: 0 0% 100%;
+    --card-foreground: 213 52% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 213 52% 20%;
+    
+    /* Primary - TNC Navy Blue */
+    --primary: 213 52% 25%;
+    --primary-foreground: 45 43% 96%;
+    
+    /* Secondary - Lighter Navy */
+    --secondary: 213 30% 92%;
+    --secondary-foreground: 213 52% 20%;
+    
+    --muted: 213 20% 94%;
+    --muted-foreground: 213 15% 45%;
+    
+    /* Accent - TNC Gold */
+    --accent: 43 49% 55%;
+    --accent-foreground: 213 52% 15%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 43 92% 50%;
+    --warning-foreground: 213 52% 15%;
+    
+    --border: 213 25% 88%;
+    --input: 213 25% 88%;
+    --ring: 213 52% 25%;
+    --radius: 0.5rem;
+    
+    /* Custom TNC Colors */
+    --tnc-navy: 213 52% 25%;
+    --tnc-navy-light: 213 45% 35%;
+    --tnc-navy-dark: 213 55% 18%;
+    --tnc-gold: 43 49% 55%;
+    --tnc-gold-light: 43 55% 70%;
+    --tnc-gold-dark: 43 45% 40%;
+  }
+
+  .dark {
+    /* TNC Brand Colors - Dark Mode */
+    --background: 213 55% 8%;
+    --foreground: 45 30% 95%;
+    --card: 213 50% 12%;
+    --card-foreground: 45 30% 95%;
+    --popover: 213 50% 12%;
+    --popover-foreground: 45 30% 95%;
+    
+    /* Primary - TNC Navy Blue (lighter in dark mode) */
+    --primary: 213 65% 55%;
+    --primary-foreground: 213 55% 8%;
+    
+    /* Secondary */
+    --secondary: 213 40% 18%;
+    --secondary-foreground: 45 30% 95%;
+    
+    --muted: 213 35% 18%;
+    --muted-foreground: 213 20% 65%;
+    
+    /* Accent - TNC Gold */
+    --accent: 43 55% 58%;
+    --accent-foreground: 213 55% 8%;
+    
+    --destructive: 0 65% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 70% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 43 85% 55%;
+    --warning-foreground: 213 55% 8%;
+    
+    --border: 213 35% 22%;
+    --input: 213 35% 22%;
+    --ring: 213 65% 55%;
+    
+    /* Custom TNC Colors - Dark Mode */
+    --tnc-navy: 213 65% 55%;
+    --tnc-navy-light: 213 60% 65%;
+    --tnc-navy-dark: 213 50% 45%;
+    --tnc-gold: 43 55% 58%;
+    --tnc-gold-light: 43 60% 70%;
+    --tnc-gold-dark: 43 50% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  html {
+    direction: rtl;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-lg border border-white/20 shadow-xl;
+  }
+
+  .dark .glass-card {
+    @apply bg-gray-900/80 border-gray-700/30;
+  }
+
+  .stat-card {
+    @apply relative overflow-hidden rounded-xl p-6 transition-all duration-300 hover:shadow-lg;
+  }
+
+  .stat-card::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-br opacity-10;
+  }
+
+  .sidebar-link {
+    @apply relative flex items-center gap-3 px-3 py-2.5 sm:px-4 sm:py-3 rounded-lg transition-all duration-200 text-muted-foreground hover:text-foreground hover:bg-secondary;
+  }
+
+  .sidebar-link.active {
+    @apply bg-[#1E3A5F] text-white hover:bg-[#2C4A6B] hover:text-white shadow-md;
+    box-shadow: 0 2px 8px rgba(30, 58, 95, 0.25);
+  }
+
+  .sidebar-link.active::after {
+    content: '';
+    @apply absolute right-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-l;
+    background: linear-gradient(to bottom, #C4A052, #B8860B);
+  }
+
+  .dark .sidebar-link {
+    @apply hover:bg-[#1E3A5F]/20;
+  }
+
+  .dark .sidebar-link.active {
+    @apply bg-[#1E3A5F] shadow-lg;
+    box-shadow: 0 4px 12px rgba(30, 58, 95, 0.4);
+  }
+
+  .data-table {
+    @apply w-full text-sm;
+  }
+
+  .data-table th {
+    @apply px-3 py-3 text-right font-medium text-muted-foreground bg-muted/50;
+    @apply first:rounded-tr-lg last:rounded-tl-lg;
+  }
+
+  .data-table td {
+    @apply px-3 py-3 border-b border-border/50;
+  }
+
+  .data-table tr:hover td {
+    @apply bg-muted/30;
+  }
+
+  .dark .data-table th {
+    @apply bg-muted/20 text-foreground/70;
+  }
+
+  .dark .data-table td {
+    @apply border-border/30;
+  }
+
+  .dark .data-table tr:hover td {
+    @apply bg-muted/10;
+  }
+
+  @media (min-width: 1024px) {
+    .data-table th,
+    .data-table td {
+      @apply px-4;
+    }
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-muted/30 rounded-full;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/30 rounded-full hover:bg-muted-foreground/50;
+}
+
+/* Animation utilities */
+.animate-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+
+
+
+
