@@ -64,7 +64,7 @@ export default function Statistics() {
     name: stat.engineerName,
     total: stat.totalRequests,
     completed: stat.byStatus.completed,
-    pending: stat.byStatus.pendingReview + stat.byStatus.inProgress,
+    pending: stat.byStatus.inProgress,
   })) || [];
 
   const locationChartData = locationStats?.map((stat, index) => ({

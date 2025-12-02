@@ -93,7 +93,7 @@ export default function RequestDetails() {
   const isEngineer = user?.role === Role.ENGINEER;
   const isConsultant = user?.role === Role.CONSULTANT;
   const isAdmin = user?.role === Role.ADMIN;
-  const isOwner = isEngineer && request.engineerId?._id === user?.id;
+  const isOwner = isEngineer && request.engineerId?.id === user?.id;
   
   const canStop = isOwner && request.status === RequestStatus.IN_PROGRESS;
   const canComplete = isOwner && request.status === RequestStatus.IN_PROGRESS;

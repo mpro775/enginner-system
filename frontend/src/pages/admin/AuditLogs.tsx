@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Filter, ChevronLeft, ChevronRight, Eye, ChevronDown } from 'lucide-react';
+import { Filter, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -22,7 +22,7 @@ import { PageLoader } from '@/components/shared/LoadingSpinner';
 import { auditLogsService } from '@/services/audit-logs';
 import { usersService } from '@/services/users';
 import { formatDate } from '@/lib/utils';
-import { AuditAction, AuditLog, User } from '@/types';
+import { AuditAction, AuditLog } from '@/types';
 
 const actionLabels: Record<AuditAction, string> = {
   [AuditAction.CREATE]: 'إنشاء',

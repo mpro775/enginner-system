@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -61,7 +61,7 @@ export default function ReferenceDataManagement({
   const queryClient = useQueryClient();
   const [showDialog, setShowDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<Record<string, unknown> | null>(null);
-  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [formData, setFormData] = useState<Record<string, string | boolean>>({});
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: [queryKey],
@@ -102,8 +102,12 @@ export default function ReferenceDataManagement({
   });
 
   const toggleStatusMutation = useMutation({
-    mutationFn: ({ id, currentStatus }: { id: string; currentStatus: boolean }) =>
-      service.toggleStatus?.(id, currentStatus),
+    mutationFn: async ({ id, currentStatus }: { id: string; currentStatus: boolean }) => {
+      if (!service.toggleStatus) {
+        throw new Error('Toggle status is not supported');
+      }
+      return service.toggleStatus(id, currentStatus);
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: [queryKey] });
       await refetch();
@@ -308,7 +312,7 @@ export default function ReferenceDataManagement({
                 <input
                   type="checkbox"
                   id="isActive"
-                  checked={formData.isActive as boolean}
+                  checked={typeof formData.isActive === 'boolean' ? formData.isActive : false}
                   onChange={(e) =>
                     setFormData({ ...formData, isActive: e.target.checked })
                   }

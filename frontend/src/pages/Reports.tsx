@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download, FileSpreadsheet, FileText, Filter, Search } from 'lucide-react';
+import { FileSpreadsheet, FileText, Filter, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -17,7 +17,7 @@ import { reportsService } from '@/services/reports';
 import { locationsService, departmentsService, systemsService } from '@/services/reference-data';
 import { usersService } from '@/services/users';
 import { useAuthStore } from '@/store/auth';
-import { formatDate, formatDateTime } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import { RequestStatus, MaintenanceType, Role } from '@/types';
 import type { ReportFilter } from '@/services/reports';
 

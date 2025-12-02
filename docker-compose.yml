@@ -9,8 +9,6 @@
 #       Cache is in-memory (no Redis required)
 # =====================================================
 
-version: "3.8"
-
 services:
   # =================================================
   # Backend API (NestJS)

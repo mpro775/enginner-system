@@ -19,11 +19,11 @@
 
 ### متطلبات VPS
 
-| المتطلب | الحد الأدنى | الموصى به |
-|---------|-------------|-----------|
-| RAM | 2 GB | 4 GB |
-| CPU | 1 Core | 2 Cores |
-| Storage | 20 GB SSD | 40 GB SSD |
+| المتطلب      | الحد الأدنى      | الموصى به        |
+| ------------ | ---------------- | ---------------- |
+| RAM          | 2 GB             | 4 GB             |
+| CPU          | 1 Core           | 2 Cores          |
+| Storage      | 20 GB SSD        | 40 GB SSD        |
 | نظام التشغيل | Ubuntu 22.04 LTS | Ubuntu 22.04 LTS |
 
 ### الدومينات المطلوبة
@@ -392,11 +392,11 @@ exit
 
 ### الخطوة 2: بيانات تسجيل الدخول الافتراضية
 
-| الدور | البريد الإلكتروني | كلمة المرور |
-|-------|-------------------|-------------|
-| Admin | admin@maintenance.com | 123456 |
-| Consultant | consultant1@maintenance.com | 123456 |
-| Engineer | engineer1@maintenance.com | 123456 |
+| الدور      | البريد الإلكتروني           | كلمة المرور |
+| ---------- | --------------------------- | ----------- |
+| Admin      | admin@maintenance.com       | 123456      |
+| Consultant | consultant1@maintenance.com | 123456      |
+| Engineer   | engineer1@maintenance.com   | 123456      |
 
 **مهم: قم بتغيير كلمات المرور فور تسجيل الدخول الأول!**
 
@@ -504,6 +504,55 @@ docker compose exec nginx ls -la /etc/letsencrypt/live/
 docker compose run --rm certbot certonly --force-renewal ...
 ```
 
+### مشكلة: Permission denied - Docker daemon socket
+
+إذا ظهرت رسالة الخطأ:
+
+```
+permission denied while trying to connect to the Docker daemon socket
+```
+
+**الحل:**
+
+```bash
+# التحقق من أن المستخدم في مجموعة docker
+groups
+
+# إذا لم يكن في المجموعة، قم بإضافته (يحتاج root أو sudo)
+sudo usermod -aG docker deploy
+
+# تسجيل الخروج والدخول مرة أخرى لتفعيل التغييرات
+exit
+
+# الدخول مرة أخرى
+ssh deploy@YOUR_VPS_IP
+
+# التحقق من الصلاحيات
+docker ps
+
+# إذا لم يعمل، جرب هذا الحل البديل:
+newgrp docker
+
+# ثم جرب الأمر مرة أخرى
+docker compose up -d backend frontend nginx
+```
+
+**ملاحظة:** إذا كنت تستخدم `sudo` مؤقتاً:
+
+```bash
+sudo docker compose up -d backend frontend nginx
+```
+
+### مشكلة: تحذير version في docker-compose.yml
+
+إذا ظهر تحذير:
+
+```
+WARN[0000] the attribute `version` is obsolete
+```
+
+**الحل:** تم إزالة `version` من docker-compose.yml في الإصدارات الحديثة. يمكن تجاهل هذا التحذير أو إزالته من الملف (تم إصلاحه).
+
 ### مشكلة: خطأ 502 Bad Gateway
 
 ```bash
@@ -604,4 +653,3 @@ maintenance-system/
 
 **تم إنشاء هذا الدليل لنظام إدارة الصيانة**
 **التاريخ:** ديسمبر 2024
-
