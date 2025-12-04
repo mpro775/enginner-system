@@ -14,14 +14,140 @@ import { User, UserDocument } from "../users/schemas/user.schema";
 import { ReportFilterDto } from "./dto/report-filter.dto";
 import { StatisticsService } from "../statistics/statistics.service";
 
-// Helper function to reverse Arabic text for PDFKit (workaround for RTL)
-function reverseArabicText(text: string): string {
+// Arabic character ranges
+const ARABIC_REGEX = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+
+// Arabic letter forms mapping (isolated, final, initial, medial)
+const ARABIC_FORMS: Record<string, string[]> = {
+  "\u0627": ["\uFE8D", "\uFE8E", "\uFE8D", "\uFE8E"], // ا alef
+  "\u0628": ["\uFE8F", "\uFE90", "\uFE91", "\uFE92"], // ب ba
+  "\u062A": ["\uFE95", "\uFE96", "\uFE97", "\uFE98"], // ت ta
+  "\u062B": ["\uFE99", "\uFE9A", "\uFE9B", "\uFE9C"], // ث tha
+  "\u062C": ["\uFE9D", "\uFE9E", "\uFE9F", "\uFEA0"], // ج jim
+  "\u062D": ["\uFEA1", "\uFEA2", "\uFEA3", "\uFEA4"], // ح ha
+  "\u062E": ["\uFEA5", "\uFEA6", "\uFEA7", "\uFEA8"], // خ kha
+  "\u062F": ["\uFEA9", "\uFEAA", "\uFEA9", "\uFEAA"], // د dal
+  "\u0630": ["\uFEAB", "\uFEAC", "\uFEAB", "\uFEAC"], // ذ dhal
+  "\u0631": ["\uFEAD", "\uFEAE", "\uFEAD", "\uFEAE"], // ر ra
+  "\u0632": ["\uFEAF", "\uFEB0", "\uFEAF", "\uFEB0"], // ز zay
+  "\u0633": ["\uFEB1", "\uFEB2", "\uFEB3", "\uFEB4"], // س sin
+  "\u0634": ["\uFEB5", "\uFEB6", "\uFEB7", "\uFEB8"], // ش shin
+  "\u0635": ["\uFEB9", "\uFEBA", "\uFEBB", "\uFEBC"], // ص sad
+  "\u0636": ["\uFEBD", "\uFEBE", "\uFEBF", "\uFEC0"], // ض dad
+  "\u0637": ["\uFEC1", "\uFEC2", "\uFEC3", "\uFEC4"], // ط ta
+  "\u0638": ["\uFEC5", "\uFEC6", "\uFEC7", "\uFEC8"], // ظ za
+  "\u0639": ["\uFEC9", "\uFECA", "\uFECB", "\uFECC"], // ع ain
+  "\u063A": ["\uFECD", "\uFECE", "\uFECF", "\uFED0"], // غ ghain
+  "\u0641": ["\uFED1", "\uFED2", "\uFED3", "\uFED4"], // ف fa
+  "\u0642": ["\uFED5", "\uFED6", "\uFED7", "\uFED8"], // ق qaf
+  "\u0643": ["\uFED9", "\uFEDA", "\uFEDB", "\uFEDC"], // ك kaf
+  "\u0644": ["\uFEDD", "\uFEDE", "\uFEDF", "\uFEE0"], // ل lam
+  "\u0645": ["\uFEE1", "\uFEE2", "\uFEE3", "\uFEE4"], // م mim
+  "\u0646": ["\uFEE5", "\uFEE6", "\uFEE7", "\uFEE8"], // ن nun
+  "\u0647": ["\uFEE9", "\uFEEA", "\uFEEB", "\uFEEC"], // ه ha
+  "\u0648": ["\uFEED", "\uFEEE", "\uFEED", "\uFEEE"], // و waw
+  "\u064A": ["\uFEF1", "\uFEF2", "\uFEF3", "\uFEF4"], // ي ya
+  "\u0649": ["\uFEEF", "\uFEF0", "\uFEEF", "\uFEF0"], // ى alef maqsura
+  "\u0621": ["\uFE80", "\uFE80", "\uFE80", "\uFE80"], // ء hamza
+  "\u0622": ["\uFE81", "\uFE82", "\uFE81", "\uFE82"], // آ alef madda
+  "\u0623": ["\uFE83", "\uFE84", "\uFE83", "\uFE84"], // أ alef hamza above
+  "\u0624": ["\uFE85", "\uFE86", "\uFE85", "\uFE86"], // ؤ waw hamza
+  "\u0625": ["\uFE87", "\uFE88", "\uFE87", "\uFE88"], // إ alef hamza below
+  "\u0626": ["\uFE89", "\uFE8A", "\uFE8B", "\uFE8C"], // ئ ya hamza
+  "\u0629": ["\uFE93", "\uFE94", "\uFE93", "\uFE94"], // ة ta marbuta
+};
+
+// Letters that don't connect to the next letter
+const NON_JOINING = new Set([
+  "\u0627", "\u062F", "\u0630", "\u0631", "\u0632", "\u0648",
+  "\u0622", "\u0623", "\u0624", "\u0625", "\u0629", "\u0649",
+]);
+
+// Reshape Arabic text (connect letters properly)
+function reshapeArabic(text: string): string {
   if (!text) return text;
-  // Check if text contains Arabic characters
-  const arabicRegex = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
-  if (!arabicRegex.test(text)) return text;
-  // Reverse the text for proper RTL display in PDFKit
-  return text.split("").reverse().join("");
+  
+  const result: string[] = [];
+  const chars = [...text];
+  
+  for (let i = 0; i < chars.length; i++) {
+    const char = chars[i];
+    const forms = ARABIC_FORMS[char];
+    
+    if (!forms) {
+      result.push(char);
+      continue;
+    }
+    
+    const prevChar = i > 0 ? chars[i - 1] : null;
+    const nextChar = i < chars.length - 1 ? chars[i + 1] : null;
+    
+    const prevJoins = prevChar && ARABIC_FORMS[prevChar] && !NON_JOINING.has(prevChar);
+    const nextJoins = nextChar && ARABIC_FORMS[nextChar];
+    
+    let formIndex: number;
+    if (prevJoins && nextJoins) {
+      formIndex = 3; // medial
+    } else if (prevJoins) {
+      formIndex = 1; // final
+    } else if (nextJoins) {
+      formIndex = 2; // initial
+    } else {
+      formIndex = 0; // isolated
+    }
+    
+    result.push(forms[formIndex]);
+  }
+  
+  return result.join("");
+}
+
+// Process Arabic text for PDFKit RTL rendering
+function processArabicText(text: string): string {
+  if (!text) return text;
+  if (!ARABIC_REGEX.test(text)) return text;
+  
+  // Split text into segments (Arabic vs non-Arabic)
+  const segments: Array<{ text: string; isArabic: boolean }> = [];
+  let currentText = "";
+  let currentIsArabic: boolean | null = null;
+  
+  for (const char of text) {
+    const charIsArabic = ARABIC_REGEX.test(char) || char === " ";
+    
+    // Space handling: attach to current segment
+    if (char === " " && currentText) {
+      currentText += char;
+      continue;
+    }
+    
+    if (currentIsArabic !== null && charIsArabic !== currentIsArabic && currentText.trim()) {
+      segments.push({ text: currentText.trim(), isArabic: currentIsArabic });
+      currentText = "";
+    }
+    
+    currentText += char;
+    if (char !== " ") {
+      currentIsArabic = charIsArabic;
+    }
+  }
+  
+  if (currentText.trim() && currentIsArabic !== null) {
+    segments.push({ text: currentText.trim(), isArabic: currentIsArabic });
+  }
+  
+  // Process each segment
+  const processedSegments = segments.map((seg) => {
+    if (seg.isArabic) {
+      // Reshape and reverse Arabic text
+      const reshaped = reshapeArabic(seg.text);
+      return [...reshaped].reverse().join("");
+    }
+    return seg.text;
+  });
+  
+  // Reverse segment order for RTL
+  return processedSegments.reverse().join(" ");
 }
 
 export interface RequestReportData {
@@ -271,7 +397,7 @@ export class ReportsService {
       doc
         .font(boldFont)
         .fontSize(20)
-        .text(reverseArabicText("تقرير طلبات الصيانة"), { align: "center" })
+        .text(processArabicText("تقرير طلبات الصيانة"), { align: "center" })
         .moveDown();
 
       // Date range
@@ -280,7 +406,7 @@ export class ReportsService {
       doc
         .font(mainFont)
         .fontSize(12)
-        .text(reverseArabicText(`الفترة: من ${fromDate} إلى ${toDate}`), {
+        .text(processArabicText(`الفترة: من ${fromDate} إلى ${toDate}`), {
           align: "center",
         })
         .moveDown(2);
@@ -289,30 +415,30 @@ export class ReportsService {
       doc
         .font(boldFont)
         .fontSize(14)
-        .text(reverseArabicText("ملخص الإحصائيات"), { align: "right" })
+        .text(processArabicText("ملخص الإحصائيات"), { align: "right" })
         .moveDown();
       doc.font(mainFont).fontSize(10);
       doc.text(
-        reverseArabicText(`إجمالي الطلبات: ${stats?.totalRequests || 0}`),
+        processArabicText(`إجمالي الطلبات: ${stats?.totalRequests || 0}`),
         { align: "right" }
       );
-      doc.text(reverseArabicText(`قيد التنفيذ: ${stats?.inProgress || 0}`), {
+      doc.text(processArabicText(`قيد التنفيذ: ${stats?.inProgress || 0}`), {
         align: "right",
       });
-      doc.text(reverseArabicText(`مكتملة: ${stats?.completed || 0}`), {
+      doc.text(processArabicText(`مكتملة: ${stats?.completed || 0}`), {
         align: "right",
       });
-      doc.text(reverseArabicText(`متوقفة: ${stats?.stopped || 0}`), {
+      doc.text(processArabicText(`متوقفة: ${stats?.stopped || 0}`), {
         align: "right",
       });
-      doc.text(reverseArabicText(`طوارئ: ${stats?.emergencyRequests || 0}`), {
+      doc.text(processArabicText(`طوارئ: ${stats?.emergencyRequests || 0}`), {
         align: "right",
       });
-      doc.text(reverseArabicText(`وقائية: ${stats?.preventiveRequests || 0}`), {
+      doc.text(processArabicText(`وقائية: ${stats?.preventiveRequests || 0}`), {
         align: "right",
       });
       doc.text(
-        reverseArabicText(
+        processArabicText(
           `متوسط وقت الإنجاز: ${stats?.avgCompletionTimeHours || 0} ساعة`
         ),
         { align: "right" }
@@ -324,7 +450,7 @@ export class ReportsService {
         doc
           .font(boldFont)
           .fontSize(14)
-          .text(reverseArabicText("تفاصيل الطلبات"), { align: "right" })
+          .text(processArabicText("تفاصيل الطلبات"), { align: "right" })
           .moveDown();
 
         // Table headers (Arabic - reversed for RTL)
@@ -342,7 +468,7 @@ export class ReportsService {
 
         doc.font(boldFont).fontSize(9);
         headers.forEach((header, i) => {
-          doc.text(reverseArabicText(header), x, tableTop, {
+          doc.text(processArabicText(header), x, tableTop, {
             width: colWidths[i],
             align: "right",
           });
@@ -399,7 +525,7 @@ export class ReportsService {
 
           rowData.forEach((cell, i) => {
             const cellText = String(cell || "N/A");
-            doc.text(reverseArabicText(cellText), x, y, {
+            doc.text(processArabicText(cellText), x, y, {
               width: colWidths[i] - 5,
               align: "right",
             });
@@ -411,7 +537,7 @@ export class ReportsService {
 
         if (data.length > 30) {
           doc.moveDown();
-          doc.text(reverseArabicText(`... و ${data.length - 30} طلبات أخرى`), {
+          doc.text(processArabicText(`... و ${data.length - 30} طلبات أخرى`), {
             align: "center",
           });
         }
@@ -419,7 +545,7 @@ export class ReportsService {
         doc
           .font(mainFont)
           .fontSize(12)
-          .text(reverseArabicText("لا توجد بيانات"), { align: "center" });
+          .text(processArabicText("لا توجد بيانات"), { align: "center" });
       }
 
       // Footer
@@ -427,7 +553,7 @@ export class ReportsService {
         .font(mainFont)
         .fontSize(8)
         .text(
-          reverseArabicText(
+          processArabicText(
             `تم إنشاء التقرير في ${new Date().toLocaleString("ar-SA")}`
           ),
           50,
