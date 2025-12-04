@@ -6,7 +6,10 @@
   "private": true,
   "license": "MIT",
   "scripts": {
-    "build": "nest build",
+    "build": "nest build && npm run copy-assets",
+    "copy-assets": "node scripts/copy-assets.js",
+    "download-fonts": "node scripts/download-fonts.js",
+    "postinstall": "npm run download-fonts",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -87,7 +90,3 @@
     "testEnvironment": "node"
   }
 }
-
-
-
-

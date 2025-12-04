@@ -4,6 +4,8 @@ import { Model, FilterQuery } from "mongoose";
 import * as ExcelJS from "exceljs";
 import * as PDFDocument from "pdfkit";
 import { Response } from "express";
+import * as path from "path";
+import * as fs from "fs";
 import {
   MaintenanceRequest,
   MaintenanceRequestDocument,
@@ -11,6 +13,16 @@ import {
 import { User, UserDocument } from "../users/schemas/user.schema";
 import { ReportFilterDto } from "./dto/report-filter.dto";
 import { StatisticsService } from "../statistics/statistics.service";
+
+// Helper function to reverse Arabic text for PDFKit (workaround for RTL)
+function reverseArabicText(text: string): string {
+  if (!text) return text;
+  // Check if text contains Arabic characters
+  const arabicRegex = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
+  if (!arabicRegex.test(text)) return text;
+  // Reverse the text for proper RTL display in PDFKit
+  return text.split("").reverse().join("");
+}
 
 export interface RequestReportData {
   requestCode: string;
@@ -174,6 +186,62 @@ export class ReportsService {
 
       const doc = new PDFDocument({ margin: 50, size: "A4" });
 
+      // Register Arabic font (Cairo or Amiri as fallback)
+      // Try multiple possible paths for fonts directory
+      const possibleFontsDirs = [
+        path.join(__dirname, "..", "..", "..", "assets", "fonts"),
+        path.join(__dirname, "..", "..", "assets", "fonts"),
+        path.join(process.cwd(), "dist", "assets", "fonts"),
+        path.join(process.cwd(), "assets", "fonts"),
+        path.join(process.cwd(), "src", "assets", "fonts"),
+      ];
+
+      // Font configurations to try (Cairo first, then Amiri)
+      const fontConfigs = [
+        { regular: "Cairo-Regular.ttf", bold: "Cairo-Bold.ttf", name: "Cairo" },
+        { regular: "Amiri-Regular.ttf", bold: "Amiri-Bold.ttf", name: "Amiri" },
+      ];
+
+      let fontsDir = "";
+      let selectedFont = null;
+
+      // Find available fonts
+      for (const dir of possibleFontsDirs) {
+        for (const config of fontConfigs) {
+          if (
+            fs.existsSync(path.join(dir, config.regular)) &&
+            fs.existsSync(path.join(dir, config.bold))
+          ) {
+            fontsDir = dir;
+            selectedFont = config;
+            break;
+          }
+        }
+        if (selectedFont) break;
+      }
+
+      let hasArabicFont = false;
+      if (fontsDir && selectedFont) {
+        const arabicFontPath = path.join(fontsDir, selectedFont.regular);
+        const arabicBoldFontPath = path.join(fontsDir, selectedFont.bold);
+        try {
+          doc.registerFont("Arabic", arabicFontPath);
+          doc.registerFont("Arabic-Bold", arabicBoldFontPath);
+          hasArabicFont = true;
+          console.log(
+            `Arabic fonts (${selectedFont.name}) registered successfully from:`,
+            fontsDir
+          );
+        } catch (fontError) {
+          console.warn("Failed to register Arabic fonts:", fontError);
+        }
+      } else {
+        console.warn(
+          "Arabic font files not found. Searched in:",
+          possibleFontsDirs
+        );
+      }
+
       // Handle PDF generation errors before piping
       doc.on("error", (err) => {
         console.error("PDF generation error:", err);
@@ -195,65 +263,108 @@ export class ReportsService {
 
       doc.pipe(res);
 
-      // Title
+      // Use Arabic font if available
+      const mainFont = hasArabicFont ? "Arabic" : "Helvetica";
+      const boldFont = hasArabicFont ? "Arabic-Bold" : "Helvetica-Bold";
+
+      // Title (Arabic)
       doc
+        .font(boldFont)
         .fontSize(20)
-        .text("Maintenance Requests Report", { align: "center" })
+        .text(reverseArabicText("تقرير طلبات الصيانة"), { align: "center" })
         .moveDown();
 
       // Date range
-      const fromDate = filter.fromDate || "All time";
-      const toDate = filter.toDate || "Present";
+      const fromDate = filter.fromDate || "جميع الفترات";
+      const toDate = filter.toDate || "الآن";
       doc
+        .font(mainFont)
         .fontSize(12)
-        .text(`Period: ${fromDate} to ${toDate}`, { align: "center" })
+        .text(reverseArabicText(`الفترة: من ${fromDate} إلى ${toDate}`), {
+          align: "center",
+        })
         .moveDown(2);
 
-      // Summary statistics
+      // Summary statistics (Arabic)
       doc
+        .font(boldFont)
         .fontSize(14)
-        .text("Summary Statistics", { underline: true })
+        .text(reverseArabicText("ملخص الإحصائيات"), { align: "right" })
         .moveDown();
-      doc.fontSize(10);
-      doc.text(`Total Requests: ${stats?.totalRequests || 0}`);
-      doc.text(`In Progress: ${stats?.inProgress || 0}`);
-      doc.text(`Completed: ${stats?.completed || 0}`);
-      doc.text(`Stopped: ${stats?.stopped || 0}`);
-      doc.text(`Emergency: ${stats?.emergencyRequests || 0}`);
-      doc.text(`Preventive: ${stats?.preventiveRequests || 0}`);
+      doc.font(mainFont).fontSize(10);
       doc.text(
-        `Avg. Completion Time: ${stats?.avgCompletionTimeHours || 0} hours`
+        reverseArabicText(`إجمالي الطلبات: ${stats?.totalRequests || 0}`),
+        { align: "right" }
+      );
+      doc.text(reverseArabicText(`قيد التنفيذ: ${stats?.inProgress || 0}`), {
+        align: "right",
+      });
+      doc.text(reverseArabicText(`مكتملة: ${stats?.completed || 0}`), {
+        align: "right",
+      });
+      doc.text(reverseArabicText(`متوقفة: ${stats?.stopped || 0}`), {
+        align: "right",
+      });
+      doc.text(reverseArabicText(`طوارئ: ${stats?.emergencyRequests || 0}`), {
+        align: "right",
+      });
+      doc.text(reverseArabicText(`وقائية: ${stats?.preventiveRequests || 0}`), {
+        align: "right",
+      });
+      doc.text(
+        reverseArabicText(
+          `متوسط وقت الإنجاز: ${stats?.avgCompletionTimeHours || 0} ساعة`
+        ),
+        { align: "right" }
       );
       doc.moveDown(2);
 
       // Requests table
       if (data && data.length > 0) {
         doc
+          .font(boldFont)
           .fontSize(14)
-          .text("Request Details", { underline: true })
+          .text(reverseArabicText("تفاصيل الطلبات"), { align: "right" })
           .moveDown();
 
-        // Table headers
+        // Table headers (Arabic - reversed for RTL)
         const tableTop = doc.y;
         const headers = [
-          "Code",
-          "Engineer",
-          "Type",
-          "Status",
-          "Location",
-          "Date",
+          "التاريخ",
+          "الموقع",
+          "الحالة",
+          "النوع",
+          "المهندس",
+          "الكود",
         ];
-        const colWidths = [70, 90, 60, 70, 90, 70];
+        const colWidths = [70, 90, 70, 60, 90, 70];
         let x = 50;
 
-        doc.fontSize(9).font("Helvetica-Bold");
+        doc.font(boldFont).fontSize(9);
         headers.forEach((header, i) => {
-          doc.text(header, x, tableTop, { width: colWidths[i] });
+          doc.text(reverseArabicText(header), x, tableTop, {
+            width: colWidths[i],
+            align: "right",
+          });
           x += colWidths[i];
         });
 
-        doc.font("Helvetica").fontSize(8);
-        let y = tableTop + 20;
+        doc.font(mainFont).fontSize(8);
+        let y = tableTop + 25;
+
+        // Status translation map
+        const statusMap: Record<string, string> = {
+          in_progress: "قيد التنفيذ",
+          completed: "مكتملة",
+          stopped: "متوقفة",
+          pending: "معلقة",
+        };
+
+        // Maintenance type translation map
+        const typeMap: Record<string, string> = {
+          emergency: "طوارئ",
+          preventive: "وقائية",
+        };
 
         data.slice(0, 30).forEach((row) => {
           if (y > 750) {
@@ -262,46 +373,63 @@ export class ReportsService {
           }
 
           x = 50;
-          const statusText = row.status
-            ? String(row.status).replace(/_/g, " ")
-            : "N/A";
+          const statusKey = row.status
+            ? String(row.status).toLowerCase().replace(/_/g, "_")
+            : "";
+          const statusText = statusMap[statusKey] || row.status || "N/A";
+
+          const typeKey = row.maintenanceType
+            ? String(row.maintenanceType).toLowerCase()
+            : "";
+          const typeText = typeMap[typeKey] || row.maintenanceType || "N/A";
+
           const openedDate = row.openedAt
-            ? new Date(row.openedAt).toLocaleDateString()
+            ? new Date(row.openedAt).toLocaleDateString("ar-SA")
             : "N/A";
 
+          // Data in reversed order for RTL (Date, Location, Status, Type, Engineer, Code)
           const rowData = [
-            row.requestCode || "N/A",
-            row.engineerName || "N/A",
-            row.maintenanceType || "N/A",
-            statusText,
-            row.locationName || "N/A",
             openedDate,
+            row.locationName || "N/A",
+            statusText,
+            typeText,
+            row.engineerName || "N/A",
+            row.requestCode || "N/A",
           ];
 
           rowData.forEach((cell, i) => {
             const cellText = String(cell || "N/A");
-            doc.text(cellText, x, y, { width: colWidths[i] - 5 });
+            doc.text(reverseArabicText(cellText), x, y, {
+              width: colWidths[i] - 5,
+              align: "right",
+            });
             x += colWidths[i];
           });
 
-          y += 15;
+          y += 20;
         });
 
         if (data.length > 30) {
           doc.moveDown();
-          doc.text(`... and ${data.length - 30} more requests`, {
+          doc.text(reverseArabicText(`... و ${data.length - 30} طلبات أخرى`), {
             align: "center",
           });
         }
       } else {
-        doc.fontSize(12).text("No data available", { align: "center" });
+        doc
+          .font(mainFont)
+          .fontSize(12)
+          .text(reverseArabicText("لا توجد بيانات"), { align: "center" });
       }
 
       // Footer
       doc
+        .font(mainFont)
         .fontSize(8)
         .text(
-          `Generated on ${new Date().toLocaleString()}`,
+          reverseArabicText(
+            `تم إنشاء التقرير في ${new Date().toLocaleString("ar-SA")}`
+          ),
           50,
           doc.page.height - 50,
           { align: "center" }
