@@ -115,55 +115,18 @@ function reshapeArabic(text: string): string {
 }
 
 // Process Arabic text for PDFKit RTL rendering
+// Note: PDFKit doesn't natively support RTL, so we reshape Arabic letters
+// and rely on align:right for proper display
 function processArabicText(text: string): string {
   if (!text) return text;
+
+  // Check if text contains Arabic characters
   if (!ARABIC_REGEX.test(text)) return text;
 
-  // Split text into segments (Arabic vs non-Arabic)
-  const segments: Array<{ text: string; isArabic: boolean }> = [];
-  let currentText = "";
-  let currentIsArabic: boolean | null = null;
-
-  for (const char of text) {
-    const charIsArabic = ARABIC_REGEX.test(char) || char === " ";
-
-    // Space handling: attach to current segment
-    if (char === " " && currentText) {
-      currentText += char;
-      continue;
-    }
-
-    if (
-      currentIsArabic !== null &&
-      charIsArabic !== currentIsArabic &&
-      currentText.trim()
-    ) {
-      segments.push({ text: currentText.trim(), isArabic: currentIsArabic });
-      currentText = "";
-    }
-
-    currentText += char;
-    if (char !== " ") {
-      currentIsArabic = charIsArabic;
-    }
-  }
-
-  if (currentText.trim() && currentIsArabic !== null) {
-    segments.push({ text: currentText.trim(), isArabic: currentIsArabic });
-  }
-
-  // Process each segment
-  const processedSegments = segments.map((seg) => {
-    if (seg.isArabic) {
-      // Reshape and reverse Arabic text
-      const reshaped = reshapeArabic(seg.text);
-      return [...reshaped].reverse().join("");
-    }
-    return seg.text;
-  });
-
-  // Reverse segment order for RTL
-  return processedSegments.reverse().join(" ");
+  // Simply reshape Arabic letters to connect properly
+  // Don't reverse text - let align:right handle the positioning
+  // This should work better with proper Arabic fonts
+  return reshapeArabic(text);
 }
 
 export interface RequestReportData {
