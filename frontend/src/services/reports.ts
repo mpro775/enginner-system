@@ -1,5 +1,5 @@
-import api from './api';
-import { ApiResponse, MaintenanceType, RequestStatus } from '@/types';
+import api from "./api";
+import { ApiResponse, MaintenanceType, RequestStatus } from "@/types";
 
 export interface ReportFilter {
   fromDate?: string;
@@ -11,7 +11,7 @@ export interface ReportFilter {
   systemId?: string;
   maintenanceType?: MaintenanceType;
   status?: RequestStatus;
-  format?: 'json' | 'excel' | 'pdf';
+  format?: "json" | "excel" | "pdf";
 }
 
 export interface RequestReportData {
@@ -56,7 +56,7 @@ function cleanFilter(filter?: ReportFilter): ReportFilter | undefined {
   if (!filter) return undefined;
   const cleaned: ReportFilter = {};
   Object.entries(filter).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') {
+    if (value !== undefined && value !== null && value !== "") {
       cleaned[key as keyof ReportFilter] = value;
     }
   });
@@ -66,34 +66,62 @@ function cleanFilter(filter?: ReportFilter): ReportFilter | undefined {
 export const reportsService = {
   async getRequestsReport(filter?: ReportFilter): Promise<RequestReportData[]> {
     const cleanedFilter = cleanFilter(filter);
-    const response = await api.get<ApiResponse<RequestReportData[]>>('/reports/requests', {
-      params: cleanedFilter,
-    });
+    const response = await api.get<ApiResponse<RequestReportData[]>>(
+      "/reports/requests",
+      {
+        params: cleanedFilter,
+      }
+    );
     return response.data.data;
   },
 
-  async downloadRequestsReport(filter: ReportFilter, format: 'excel' | 'pdf'): Promise<void> {
-    const cleanedFilter = cleanFilter({ ...filter, format });
-    const response = await api.get(`/reports/requests`, {
-      params: cleanedFilter,
-      responseType: 'blob',
-    });
+  async downloadRequestsReport(
+    filter: ReportFilter,
+    format: "excel" | "pdf"
+  ): Promise<void> {
+    try {
+      const cleanedFilter = cleanFilter({ ...filter, format });
+      const response = await api.get(`/reports/requests`, {
+        params: cleanedFilter,
+        responseType: "blob",
+      });
 
-    const blob = new Blob([response.data]);
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
+      // Check if response is actually a blob (not an error JSON)
+      if (response.data instanceof Blob) {
+        const blob = response.data;
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
 
-    const extension = format === 'excel' ? 'xlsx' : 'pdf';
-    const filename = `requests-report-${new Date().toISOString().split('T')[0]}.${extension}`;
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
+        const extension = format === "excel" ? "xlsx" : "pdf";
+        const filename = `requests-report-${
+          new Date().toISOString().split("T")[0]
+        }.${extension}`;
+        link.setAttribute("download", filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      } else {
+        // If response is not a blob, it might be an error JSON
+        const text = await response.data.text();
+        try {
+          const errorData = JSON.parse(text);
+          throw new Error(errorData.message || "Failed to download report");
+        } catch (e) {
+          throw new Error("Failed to download report: Invalid response format");
+        }
+      }
+    } catch (error: any) {
+      console.error("Error downloading report:", error);
+      throw error;
+    }
   },
 
-  async getEngineerReport(engineerId: string, filter?: ReportFilter): Promise<EngineerReport> {
+  async getEngineerReport(
+    engineerId: string,
+    filter?: ReportFilter
+  ): Promise<EngineerReport> {
     const cleanedFilter = cleanFilter(filter);
     const response = await api.get<ApiResponse<EngineerReport>>(
       `/reports/engineer/${engineerId}`,
@@ -106,10 +134,12 @@ export const reportsService = {
 
   async getSummaryReport(filter?: ReportFilter): Promise<SummaryReport> {
     const cleanedFilter = cleanFilter(filter);
-    const response = await api.get<ApiResponse<SummaryReport>>('/reports/summary', {
-      params: cleanedFilter,
-    });
+    const response = await api.get<ApiResponse<SummaryReport>>(
+      "/reports/summary",
+      {
+        params: cleanedFilter,
+      }
+    );
     return response.data.data;
   },
 };
-

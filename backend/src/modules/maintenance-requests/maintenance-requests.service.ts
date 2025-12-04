@@ -1,31 +1,31 @@
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, FilterQuery } from 'mongoose';
+import { Injectable, Inject, forwardRef } from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model, FilterQuery, Types } from "mongoose";
 import {
   MaintenanceRequest,
   MaintenanceRequestDocument,
-} from './schemas/maintenance-request.schema';
+} from "./schemas/maintenance-request.schema";
 import {
   CreateMaintenanceRequestDto,
   UpdateMaintenanceRequestDto,
   StopRequestDto,
   AddNoteDto,
   FilterRequestsDto,
-} from './dto';
+} from "./dto";
 import {
   EntityNotFoundException,
   InvalidOperationException,
   ForbiddenAccessException,
-} from '../../common/exceptions';
-import { RequestStatus, Role, AuditAction } from '../../common/enums';
+} from "../../common/exceptions";
+import { RequestStatus, Role, AuditAction } from "../../common/enums";
 import {
   createPaginationMeta,
   getSkipAndLimit,
   getSortOptions,
   PaginatedResult,
-} from '../../common/utils/pagination.util';
-import { NotificationsGateway } from '../notifications/notifications.gateway';
-import { AuditLogsService } from '../audit-logs/audit-logs.service';
+} from "../../common/utils/pagination.util";
+import { NotificationsGateway } from "../notifications/notifications.gateway";
+import { AuditLogsService } from "../audit-logs/audit-logs.service";
 
 @Injectable()
 export class MaintenanceRequestsService {
@@ -35,12 +35,12 @@ export class MaintenanceRequestsService {
     @Inject(forwardRef(() => NotificationsGateway))
     private notificationsGateway: NotificationsGateway,
     @Inject(forwardRef(() => AuditLogsService))
-    private auditLogsService: AuditLogsService,
+    private auditLogsService: AuditLogsService
   ) {}
 
   async create(
     createDto: CreateMaintenanceRequestDto,
-    user: { userId: string; name: string },
+    user: { userId: string; name: string }
   ): Promise<MaintenanceRequestDocument> {
     // Generate request code
     const requestCode = await this.generateRequestCode();
@@ -64,7 +64,7 @@ export class MaintenanceRequestsService {
       userId: user.userId,
       userName: user.name,
       action: AuditAction.CREATE,
-      entity: 'MaintenanceRequest',
+      entity: "MaintenanceRequest",
       entityId: saved._id.toString(),
       changes: {
         requestCode,
@@ -78,7 +78,7 @@ export class MaintenanceRequestsService {
 
   async findAll(
     filterDto: FilterRequestsDto,
-    user: { userId: string; role: string },
+    user: { userId: string; role: string }
   ): Promise<PaginatedResult<MaintenanceRequestDocument>> {
     const { skip, limit } = getSkipAndLimit(filterDto);
     const sortOptions = getSortOptions(filterDto);
@@ -88,12 +88,12 @@ export class MaintenanceRequestsService {
     const [requests, total] = await Promise.all([
       this.requestModel
         .find(filter)
-        .populate('engineerId', 'name email')
-        .populate('consultantId', 'name email')
-        .populate('locationId', 'name')
-        .populate('departmentId', 'name')
-        .populate('systemId', 'name')
-        .populate('machineId', 'name')
+        .populate("engineerId", "name email")
+        .populate("consultantId", "name email")
+        .populate("locationId", "name")
+        .populate("departmentId", "name")
+        .populate("systemId", "name")
+        .populate("machineId", "name")
         .sort(sortOptions)
         .skip(skip)
         .limit(limit)
@@ -109,12 +109,12 @@ export class MaintenanceRequestsService {
 
   async findOne(
     id: string,
-    user: { userId: string; role: string },
+    user: { userId: string; role: string }
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.populateRequest(id);
 
     if (!request) {
-      throw new EntityNotFoundException('Maintenance Request', id);
+      throw new EntityNotFoundException("Maintenance Request", id);
     }
 
     // Engineers can only see their own requests
@@ -122,7 +122,7 @@ export class MaintenanceRequestsService {
       user.role === Role.ENGINEER &&
       request.engineerId._id.toString() !== user.userId
     ) {
-      throw new ForbiddenAccessException('You can only view your own requests');
+      throw new ForbiddenAccessException("You can only view your own requests");
     }
 
     return request;
@@ -131,23 +131,25 @@ export class MaintenanceRequestsService {
   async update(
     id: string,
     updateDto: UpdateMaintenanceRequestDto,
-    user: { userId: string; name: string; role: string },
+    user: { userId: string; name: string; role: string }
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findById(id);
 
     if (!request) {
-      throw new EntityNotFoundException('Maintenance Request', id);
+      throw new EntityNotFoundException("Maintenance Request", id);
     }
 
     // Only the engineer who created the request can update it
     if (request.engineerId.toString() !== user.userId) {
-      throw new ForbiddenAccessException('You can only update your own requests');
+      throw new ForbiddenAccessException(
+        "You can only update your own requests"
+      );
     }
 
     // Can only update requests in in_progress status
     if (request.status !== RequestStatus.IN_PROGRESS) {
       throw new InvalidOperationException(
-        'Can only update requests that are in progress',
+        "Can only update requests that are in progress"
       );
     }
 
@@ -164,7 +166,7 @@ export class MaintenanceRequestsService {
       userId: user.userId,
       userName: user.name,
       action: AuditAction.UPDATE,
-      entity: 'MaintenanceRequest',
+      entity: "MaintenanceRequest",
       entityId: id,
       changes: updateDto as Record<string, unknown>,
       previousValues,
@@ -181,21 +183,21 @@ export class MaintenanceRequestsService {
   async stop(
     id: string,
     stopDto: StopRequestDto,
-    user: { userId: string; name: string },
+    user: { userId: string; name: string }
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findById(id);
 
     if (!request) {
-      throw new EntityNotFoundException('Maintenance Request', id);
+      throw new EntityNotFoundException("Maintenance Request", id);
     }
 
     if (request.engineerId.toString() !== user.userId) {
-      throw new ForbiddenAccessException('You can only stop your own requests');
+      throw new ForbiddenAccessException("You can only stop your own requests");
     }
 
     if (request.status !== RequestStatus.IN_PROGRESS) {
       throw new InvalidOperationException(
-        'Can only stop requests that are in progress',
+        "Can only stop requests that are in progress"
       );
     }
 
@@ -212,7 +214,7 @@ export class MaintenanceRequestsService {
       userId: user.userId,
       userName: user.name,
       action: AuditAction.STATUS_CHANGE,
-      entity: 'MaintenanceRequest',
+      entity: "MaintenanceRequest",
       entityId: id,
       changes: {
         status: RequestStatus.STOPPED,
@@ -232,12 +234,12 @@ export class MaintenanceRequestsService {
   async addConsultantNote(
     id: string,
     noteDto: AddNoteDto,
-    user: { userId: string; name: string },
+    user: { userId: string; name: string }
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findById(id);
 
     if (!request) {
-      throw new EntityNotFoundException('Maintenance Request', id);
+      throw new EntityNotFoundException("Maintenance Request", id);
     }
 
     const previousNotes = request.consultantNotes;
@@ -252,7 +254,7 @@ export class MaintenanceRequestsService {
       userId: user.userId,
       userName: user.name,
       action: AuditAction.UPDATE,
-      entity: 'MaintenanceRequest',
+      entity: "MaintenanceRequest",
       entityId: id,
       changes: {
         consultantNotes: noteDto.consultantNotes,
@@ -270,21 +272,23 @@ export class MaintenanceRequestsService {
 
   async complete(
     id: string,
-    user: { userId: string; name: string },
+    user: { userId: string; name: string }
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findById(id);
 
     if (!request) {
-      throw new EntityNotFoundException('Maintenance Request', id);
+      throw new EntityNotFoundException("Maintenance Request", id);
     }
 
     if (request.engineerId.toString() !== user.userId) {
-      throw new ForbiddenAccessException('You can only complete your own requests');
+      throw new ForbiddenAccessException(
+        "You can only complete your own requests"
+      );
     }
 
     if (request.status !== RequestStatus.IN_PROGRESS) {
       throw new InvalidOperationException(
-        'Can only complete requests that are in progress',
+        "Can only complete requests that are in progress"
       );
     }
 
@@ -300,7 +304,7 @@ export class MaintenanceRequestsService {
       userId: user.userId,
       userName: user.name,
       action: AuditAction.STATUS_CHANGE,
-      entity: 'MaintenanceRequest',
+      entity: "MaintenanceRequest",
       entityId: id,
       changes: { status: RequestStatus.COMPLETED },
       previousValues: { status: previousStatus },
@@ -317,7 +321,7 @@ export class MaintenanceRequestsService {
   private async generateRequestCode(): Promise<string> {
     const date = new Date();
     const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, "0");
 
     // Find the last request of this month
     const lastRequest = await this.requestModel
@@ -328,22 +332,27 @@ export class MaintenanceRequestsService {
 
     let sequence = 1;
     if (lastRequest) {
-      const lastSequence = parseInt(lastRequest.requestCode.split('-')[2], 10);
+      const lastSequence = parseInt(lastRequest.requestCode.split("-")[2], 10);
       sequence = lastSequence + 1;
     }
 
-    return `MR-${year}${month}-${String(sequence).padStart(4, '0')}`;
+    return `MR-${year}${month}-${String(sequence).padStart(4, "0")}`;
   }
 
   private buildFilter(
     filterDto: FilterRequestsDto,
-    user: { userId: string; role: string },
+    user: { userId: string; role: string }
   ): FilterQuery<MaintenanceRequestDocument> {
     const filter: FilterQuery<MaintenanceRequestDocument> = {};
 
     // Engineers can only see their own requests
     if (user.role === Role.ENGINEER) {
-      filter.engineerId = user.userId;
+      // Convert string userId to ObjectId for proper MongoDB query matching
+      if (Types.ObjectId.isValid(user.userId)) {
+        filter.engineerId = new Types.ObjectId(user.userId);
+      } else {
+        filter.engineerId = user.userId;
+      }
     }
 
     if (filterDto.status) {
@@ -391,22 +400,24 @@ export class MaintenanceRequestsService {
     return filter;
   }
 
-  private async populateRequest(id: string): Promise<MaintenanceRequestDocument> {
+  private async populateRequest(
+    id: string
+  ): Promise<MaintenanceRequestDocument> {
     return this.requestModel
       .findById(id)
-      .populate('engineerId', 'name email')
-      .populate('consultantId', 'name email')
-      .populate('locationId', 'name')
-      .populate('departmentId', 'name')
-      .populate('systemId', 'name')
-      .populate('machineId', 'name')
+      .populate("engineerId", "name email")
+      .populate("consultantId", "name email")
+      .populate("locationId", "name")
+      .populate("departmentId", "name")
+      .populate("systemId", "name")
+      .populate("machineId", "name")
       .exec() as Promise<MaintenanceRequestDocument>;
   }
 
   // Methods for statistics
   async countByStatus(): Promise<Record<string, number>> {
     const results = await this.requestModel.aggregate([
-      { $group: { _id: '$status', count: { $sum: 1 } } },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
     ]);
 
     return results.reduce((acc, curr) => {
@@ -417,7 +428,7 @@ export class MaintenanceRequestsService {
 
   async countByMaintenanceType(): Promise<Record<string, number>> {
     const results = await this.requestModel.aggregate([
-      { $group: { _id: '$maintenanceType', count: { $sum: 1 } } },
+      { $group: { _id: "$maintenanceType", count: { $sum: 1 } } },
     ]);
 
     return results.reduce((acc, curr) => {
@@ -430,6 +441,3 @@ export class MaintenanceRequestsService {
     return this.requestModel;
   }
 }
-
-
-

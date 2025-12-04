@@ -153,14 +153,14 @@ export default function AuditLogs() {
             <div className="space-y-2">
               <label className="text-sm font-medium">الإجراء</label>
               <Select
-                value={filters.action}
-                onValueChange={(value) => handleFilterChange('action', value)}
+                value={filters.action || 'all'}
+                onValueChange={(value) => handleFilterChange('action', value === 'all' ? '' : value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="جميع الإجراءات" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">جميع الإجراءات</SelectItem>
+                  <SelectItem value="all">جميع الإجراءات</SelectItem>
                   {Object.entries(actionLabels).map(([value, label]) => (
                     <SelectItem key={value} value={value}>
                       {label}
@@ -182,14 +182,14 @@ export default function AuditLogs() {
             <div className="space-y-2">
               <label className="text-sm font-medium">المستخدم</label>
               <Select
-                value={filters.userId}
-                onValueChange={(value) => handleFilterChange('userId', value)}
+                value={filters.userId || 'all'}
+                onValueChange={(value) => handleFilterChange('userId', value === 'all' ? '' : value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="جميع المستخدمين" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">جميع المستخدمين</SelectItem>
+                  <SelectItem value="all">جميع المستخدمين</SelectItem>
                   {usersData?.data.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.name}

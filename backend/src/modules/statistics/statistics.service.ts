@@ -1,15 +1,18 @@
-import { Injectable, Inject } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
-import { Model, PipelineStage } from 'mongoose';
+import { Injectable, Inject } from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { CACHE_MANAGER } from "@nestjs/cache-manager";
+import { Cache } from "cache-manager";
+import { Model, PipelineStage, Types } from "mongoose";
 import {
   MaintenanceRequest,
   MaintenanceRequestDocument,
-} from '../maintenance-requests/schemas/maintenance-request.schema';
-import { User, UserDocument } from '../users/schemas/user.schema';
-import { StatisticsFilterDto, TrendsFilterDto } from './dto/statistics-filter.dto';
-import { RequestStatus, MaintenanceType, Role } from '../../common/enums';
+} from "../maintenance-requests/schemas/maintenance-request.schema";
+import { User, UserDocument } from "../users/schemas/user.schema";
+import {
+  StatisticsFilterDto,
+  TrendsFilterDto,
+} from "./dto/statistics-filter.dto";
+import { RequestStatus, MaintenanceType, Role } from "../../common/enums";
 
 const CACHE_TTL = 60000; // 1 minute
 
@@ -65,13 +68,13 @@ export class StatisticsService {
     private requestModel: Model<MaintenanceRequestDocument>,
     @InjectModel(User.name)
     private userModel: Model<UserDocument>,
-    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache
   ) {}
 
   async getDashboardStatistics(
     filter: StatisticsFilterDto,
     userRole: string,
-    userId?: string,
+    userId?: string
   ): Promise<DashboardStatistics> {
     const cacheKey = `stats:dashboard:${JSON.stringify(filter)}:${userRole}:${userId}`;
     const cached = await this.cacheManager.get<DashboardStatistics>(cacheKey);
@@ -95,11 +98,11 @@ export class StatisticsService {
     ] = await Promise.all([
       this.requestModel.aggregate([
         { $match: matchStage },
-        { $group: { _id: '$status', count: { $sum: 1 } } },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
       ]),
       this.requestModel.aggregate([
         { $match: matchStage },
-        { $group: { _id: '$maintenanceType', count: { $sum: 1 } } },
+        { $group: { _id: "$maintenanceType", count: { $sum: 1 } } },
       ]),
       this.requestModel.countDocuments({
         ...matchStage,
@@ -124,14 +127,14 @@ export class StatisticsService {
         {
           $project: {
             completionTime: {
-              $subtract: ['$closedAt', '$openedAt'],
+              $subtract: ["$closedAt", "$openedAt"],
             },
           },
         },
         {
           $group: {
             _id: null,
-            avgTime: { $avg: '$completionTime' },
+            avgTime: { $avg: "$completionTime" },
           },
         },
       ]),
@@ -139,11 +142,11 @@ export class StatisticsService {
 
     const statusMap = statusCounts.reduce(
       (acc, curr) => ({ ...acc, [curr._id]: curr.count }),
-      {},
+      {}
     );
     const typeMap = typeCounts.reduce(
       (acc, curr) => ({ ...acc, [curr._id]: curr.count }),
-      {},
+      {}
     );
 
     const result: DashboardStatistics = {
@@ -159,17 +162,19 @@ export class StatisticsService {
       todayRequests: todayCount,
       thisWeekRequests: weekCount,
       thisMonthRequests: monthCount,
-      avgCompletionTimeHours:
-        avgCompletionTime[0]?.avgTime
-          ? Math.round(avgCompletionTime[0].avgTime / (1000 * 60 * 60) * 10) / 10
-          : 0,
+      avgCompletionTimeHours: avgCompletionTime[0]?.avgTime
+        ? Math.round((avgCompletionTime[0].avgTime / (1000 * 60 * 60)) * 10) /
+          10
+        : 0,
     };
 
     await this.cacheManager.set(cacheKey, result, CACHE_TTL);
     return result;
   }
 
-  async getByEngineer(filter: StatisticsFilterDto): Promise<EngineerStatistics[]> {
+  async getByEngineer(
+    filter: StatisticsFilterDto
+  ): Promise<EngineerStatistics[]> {
     const cacheKey = `stats:byEngineer:${JSON.stringify(filter)}`;
     const cached = await this.cacheManager.get<EngineerStatistics[]>(cacheKey);
     if (cached) return cached;
@@ -180,31 +185,51 @@ export class StatisticsService {
       { $match: matchStage },
       {
         $group: {
-          _id: '$engineerId',
+          _id: "$engineerId",
           total: { $sum: 1 },
           inProgress: {
-            $sum: { $cond: [{ $eq: ['$status', RequestStatus.IN_PROGRESS] }, 1, 0] },
+            $sum: {
+              $cond: [{ $eq: ["$status", RequestStatus.IN_PROGRESS] }, 1, 0],
+            },
           },
           completed: {
-            $sum: { $cond: [{ $eq: ['$status', RequestStatus.COMPLETED] }, 1, 0] },
+            $sum: {
+              $cond: [{ $eq: ["$status", RequestStatus.COMPLETED] }, 1, 0],
+            },
           },
           stopped: {
-            $sum: { $cond: [{ $eq: ['$status', RequestStatus.STOPPED] }, 1, 0] },
+            $sum: {
+              $cond: [{ $eq: ["$status", RequestStatus.STOPPED] }, 1, 0],
+            },
           },
           emergency: {
-            $sum: { $cond: [{ $eq: ['$maintenanceType', MaintenanceType.EMERGENCY] }, 1, 0] },
+            $sum: {
+              $cond: [
+                { $eq: ["$maintenanceType", MaintenanceType.EMERGENCY] },
+                1,
+                0,
+              ],
+            },
           },
           preventive: {
-            $sum: { $cond: [{ $eq: ['$maintenanceType', MaintenanceType.PREVENTIVE] }, 1, 0] },
+            $sum: {
+              $cond: [
+                { $eq: ["$maintenanceType", MaintenanceType.PREVENTIVE] },
+                1,
+                0,
+              ],
+            },
           },
           completedRequests: {
             $push: {
               $cond: [
-                { $and: [
-                  { $eq: ['$status', RequestStatus.COMPLETED] },
-                  { $ifNull: ['$closedAt', false] },
-                ]},
-                { openedAt: '$openedAt', closedAt: '$closedAt' },
+                {
+                  $and: [
+                    { $eq: ["$status", RequestStatus.COMPLETED] },
+                    { $ifNull: ["$closedAt", false] },
+                  ],
+                },
+                { openedAt: "$openedAt", closedAt: "$closedAt" },
                 null,
               ],
             },
@@ -213,26 +238,27 @@ export class StatisticsService {
       },
       {
         $lookup: {
-          from: 'users',
-          localField: '_id',
-          foreignField: '_id',
-          as: 'engineer',
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "engineer",
         },
       },
-      { $unwind: '$engineer' },
+      { $unwind: "$engineer" },
       { $sort: { total: -1 } },
     ]);
 
     const result: EngineerStatistics[] = stats.map((stat) => {
       const completedWithTime = stat.completedRequests.filter(
-        (r: any) => r !== null,
+        (r: any) => r !== null
       );
       let avgTime = 0;
       if (completedWithTime.length > 0) {
         const totalTime = completedWithTime.reduce(
           (acc: number, r: any) =>
-            acc + (new Date(r.closedAt).getTime() - new Date(r.openedAt).getTime()),
-          0,
+            acc +
+            (new Date(r.closedAt).getTime() - new Date(r.openedAt).getTime()),
+          0
         );
         avgTime = totalTime / completedWithTime.length / (1000 * 60 * 60);
       }
@@ -258,46 +284,54 @@ export class StatisticsService {
     return result;
   }
 
-  async getByStatus(filter: StatisticsFilterDto): Promise<Record<string, number>> {
-    const matchStage = this.buildMatchStage(filter);
-    const stats = await this.requestModel.aggregate([
-      { $match: matchStage },
-      { $group: { _id: '$status', count: { $sum: 1 } } },
-    ]);
-
-    return stats.reduce((acc, curr) => ({ ...acc, [curr._id]: curr.count }), {});
-  }
-
-  async getByMaintenanceType(
-    filter: StatisticsFilterDto,
+  async getByStatus(
+    filter: StatisticsFilterDto
   ): Promise<Record<string, number>> {
     const matchStage = this.buildMatchStage(filter);
     const stats = await this.requestModel.aggregate([
       { $match: matchStage },
-      { $group: { _id: '$maintenanceType', count: { $sum: 1 } } },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
     ]);
 
-    return stats.reduce((acc, curr) => ({ ...acc, [curr._id]: curr.count }), {});
+    return stats.reduce(
+      (acc, curr) => ({ ...acc, [curr._id]: curr.count }),
+      {}
+    );
+  }
+
+  async getByMaintenanceType(
+    filter: StatisticsFilterDto
+  ): Promise<Record<string, number>> {
+    const matchStage = this.buildMatchStage(filter);
+    const stats = await this.requestModel.aggregate([
+      { $match: matchStage },
+      { $group: { _id: "$maintenanceType", count: { $sum: 1 } } },
+    ]);
+
+    return stats.reduce(
+      (acc, curr) => ({ ...acc, [curr._id]: curr.count }),
+      {}
+    );
   }
 
   async getByLocation(filter: StatisticsFilterDto): Promise<any[]> {
     const matchStage = this.buildMatchStage(filter);
     return this.requestModel.aggregate([
       { $match: matchStage },
-      { $group: { _id: '$locationId', count: { $sum: 1 } } },
+      { $group: { _id: "$locationId", count: { $sum: 1 } } },
       {
         $lookup: {
-          from: 'locations',
-          localField: '_id',
-          foreignField: '_id',
-          as: 'location',
+          from: "locations",
+          localField: "_id",
+          foreignField: "_id",
+          as: "location",
         },
       },
-      { $unwind: '$location' },
+      { $unwind: "$location" },
       {
         $project: {
-          locationId: '$_id',
-          locationName: '$location.name',
+          locationId: "$_id",
+          locationName: "$location.name",
           count: 1,
         },
       },
@@ -309,20 +343,20 @@ export class StatisticsService {
     const matchStage = this.buildMatchStage(filter);
     return this.requestModel.aggregate([
       { $match: matchStage },
-      { $group: { _id: '$departmentId', count: { $sum: 1 } } },
+      { $group: { _id: "$departmentId", count: { $sum: 1 } } },
       {
         $lookup: {
-          from: 'departments',
-          localField: '_id',
-          foreignField: '_id',
-          as: 'department',
+          from: "departments",
+          localField: "_id",
+          foreignField: "_id",
+          as: "department",
         },
       },
-      { $unwind: '$department' },
+      { $unwind: "$department" },
       {
         $project: {
-          departmentId: '$_id',
-          departmentName: '$department.name',
+          departmentId: "$_id",
+          departmentName: "$department.name",
           count: 1,
         },
       },
@@ -334,20 +368,20 @@ export class StatisticsService {
     const matchStage = this.buildMatchStage(filter);
     return this.requestModel.aggregate([
       { $match: matchStage },
-      { $group: { _id: '$systemId', count: { $sum: 1 } } },
+      { $group: { _id: "$systemId", count: { $sum: 1 } } },
       {
         $lookup: {
-          from: 'systems',
-          localField: '_id',
-          foreignField: '_id',
-          as: 'system',
+          from: "systems",
+          localField: "_id",
+          foreignField: "_id",
+          as: "system",
         },
       },
-      { $unwind: '$system' },
+      { $unwind: "$system" },
       {
         $project: {
-          systemId: '$_id',
-          systemName: '$system.name',
+          systemId: "$_id",
+          systemName: "$system.name",
           count: 1,
         },
       },
@@ -357,41 +391,41 @@ export class StatisticsService {
 
   async getTopFailingMachines(
     filter: StatisticsFilterDto,
-    limit: number = 10,
+    limit: number = 10
   ): Promise<TopFailingMachine[]> {
     const matchStage = this.buildMatchStage(filter);
     const stats = await this.requestModel.aggregate([
       { $match: matchStage },
       {
         $group: {
-          _id: '$machineId',
+          _id: "$machineId",
           failureCount: { $sum: 1 },
-          lastFailure: { $max: '$createdAt' },
+          lastFailure: { $max: "$createdAt" },
         },
       },
       {
         $lookup: {
-          from: 'machines',
-          localField: '_id',
-          foreignField: '_id',
-          as: 'machine',
+          from: "machines",
+          localField: "_id",
+          foreignField: "_id",
+          as: "machine",
         },
       },
-      { $unwind: '$machine' },
+      { $unwind: "$machine" },
       {
         $lookup: {
-          from: 'systems',
-          localField: 'machine.systemId',
-          foreignField: '_id',
-          as: 'system',
+          from: "systems",
+          localField: "machine.systemId",
+          foreignField: "_id",
+          as: "system",
         },
       },
-      { $unwind: '$system' },
+      { $unwind: "$system" },
       {
         $project: {
-          machineId: '$_id',
-          machineName: '$machine.name',
-          systemName: '$system.name',
+          machineId: "$_id",
+          machineName: "$machine.name",
+          systemName: "$system.name",
           failureCount: 1,
           lastFailure: 1,
         },
@@ -418,31 +452,45 @@ export class StatisticsService {
 
     let dateFormat: string;
     switch (filter.period) {
-      case 'daily':
-        dateFormat = '%Y-%m-%d';
+      case "daily":
+        dateFormat = "%Y-%m-%d";
         break;
-      case 'weekly':
-        dateFormat = '%Y-W%V';
+      case "weekly":
+        dateFormat = "%Y-W%V";
         break;
-      case 'monthly':
+      case "monthly":
       default:
-        dateFormat = '%Y-%m';
+        dateFormat = "%Y-%m";
     }
 
     const pipeline: PipelineStage[] = [
       { $match: matchStage },
       {
         $group: {
-          _id: { $dateToString: { format: dateFormat, date: '$createdAt' } },
+          _id: { $dateToString: { format: dateFormat, date: "$createdAt" } },
           total: { $sum: 1 },
           emergency: {
-            $sum: { $cond: [{ $eq: ['$maintenanceType', MaintenanceType.EMERGENCY] }, 1, 0] },
+            $sum: {
+              $cond: [
+                { $eq: ["$maintenanceType", MaintenanceType.EMERGENCY] },
+                1,
+                0,
+              ],
+            },
           },
           preventive: {
-            $sum: { $cond: [{ $eq: ['$maintenanceType', MaintenanceType.PREVENTIVE] }, 1, 0] },
+            $sum: {
+              $cond: [
+                { $eq: ["$maintenanceType", MaintenanceType.PREVENTIVE] },
+                1,
+                0,
+              ],
+            },
           },
           completed: {
-            $sum: { $cond: [{ $eq: ['$status', RequestStatus.COMPLETED] }, 1, 0] },
+            $sum: {
+              $cond: [{ $eq: ["$status", RequestStatus.COMPLETED] }, 1, 0],
+            },
           },
         },
       },
@@ -477,15 +525,15 @@ export class StatisticsService {
       },
       {
         $project: {
-          completionTime: { $subtract: ['$closedAt', '$openedAt'] },
+          completionTime: { $subtract: ["$closedAt", "$openedAt"] },
         },
       },
       {
         $group: {
           _id: null,
-          avgCompletionTime: { $avg: '$completionTime' },
-          minCompletionTime: { $min: '$completionTime' },
-          maxCompletionTime: { $max: '$completionTime' },
+          avgCompletionTime: { $avg: "$completionTime" },
+          minCompletionTime: { $min: "$completionTime" },
+          maxCompletionTime: { $max: "$completionTime" },
         },
       },
     ]);
@@ -504,13 +552,18 @@ export class StatisticsService {
   private buildMatchStage(
     filter: StatisticsFilterDto,
     userRole?: string,
-    userId?: string,
+    userId?: string
   ): Record<string, any> {
     const matchStage: Record<string, any> = {};
 
     // Engineers can only see their own statistics
     if (userRole === Role.ENGINEER && userId) {
-      matchStage.engineerId = userId;
+      // Convert string userId to ObjectId for proper MongoDB aggregation matching
+      if (Types.ObjectId.isValid(userId)) {
+        matchStage.engineerId = new Types.ObjectId(userId);
+      } else {
+        matchStage.engineerId = userId;
+      }
     }
 
     if (filter.engineerId) {
@@ -546,7 +599,3 @@ export class StatisticsService {
     return matchStage;
   }
 }
-
-
-
-
