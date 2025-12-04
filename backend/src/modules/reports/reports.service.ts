@@ -15,7 +15,8 @@ import { ReportFilterDto } from "./dto/report-filter.dto";
 import { StatisticsService } from "../statistics/statistics.service";
 
 // Arabic character ranges
-const ARABIC_REGEX = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+const ARABIC_REGEX =
+  /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
 
 // Arabic letter forms mapping (isolated, final, initial, medial)
 const ARABIC_FORMS: Record<string, string[]> = {
@@ -59,32 +60,43 @@ const ARABIC_FORMS: Record<string, string[]> = {
 
 // Letters that don't connect to the next letter
 const NON_JOINING = new Set([
-  "\u0627", "\u062F", "\u0630", "\u0631", "\u0632", "\u0648",
-  "\u0622", "\u0623", "\u0624", "\u0625", "\u0629", "\u0649",
+  "\u0627",
+  "\u062F",
+  "\u0630",
+  "\u0631",
+  "\u0632",
+  "\u0648",
+  "\u0622",
+  "\u0623",
+  "\u0624",
+  "\u0625",
+  "\u0629",
+  "\u0649",
 ]);
 
 // Reshape Arabic text (connect letters properly)
 function reshapeArabic(text: string): string {
   if (!text) return text;
-  
+
   const result: string[] = [];
   const chars = [...text];
-  
+
   for (let i = 0; i < chars.length; i++) {
     const char = chars[i];
     const forms = ARABIC_FORMS[char];
-    
+
     if (!forms) {
       result.push(char);
       continue;
     }
-    
+
     const prevChar = i > 0 ? chars[i - 1] : null;
     const nextChar = i < chars.length - 1 ? chars[i + 1] : null;
-    
-    const prevJoins = prevChar && ARABIC_FORMS[prevChar] && !NON_JOINING.has(prevChar);
+
+    const prevJoins =
+      prevChar && ARABIC_FORMS[prevChar] && !NON_JOINING.has(prevChar);
     const nextJoins = nextChar && ARABIC_FORMS[nextChar];
-    
+
     let formIndex: number;
     if (prevJoins && nextJoins) {
       formIndex = 3; // medial
@@ -95,10 +107,10 @@ function reshapeArabic(text: string): string {
     } else {
       formIndex = 0; // isolated
     }
-    
+
     result.push(forms[formIndex]);
   }
-  
+
   return result.join("");
 }
 
@@ -106,36 +118,40 @@ function reshapeArabic(text: string): string {
 function processArabicText(text: string): string {
   if (!text) return text;
   if (!ARABIC_REGEX.test(text)) return text;
-  
+
   // Split text into segments (Arabic vs non-Arabic)
   const segments: Array<{ text: string; isArabic: boolean }> = [];
   let currentText = "";
   let currentIsArabic: boolean | null = null;
-  
+
   for (const char of text) {
     const charIsArabic = ARABIC_REGEX.test(char) || char === " ";
-    
+
     // Space handling: attach to current segment
     if (char === " " && currentText) {
       currentText += char;
       continue;
     }
-    
-    if (currentIsArabic !== null && charIsArabic !== currentIsArabic && currentText.trim()) {
+
+    if (
+      currentIsArabic !== null &&
+      charIsArabic !== currentIsArabic &&
+      currentText.trim()
+    ) {
       segments.push({ text: currentText.trim(), isArabic: currentIsArabic });
       currentText = "";
     }
-    
+
     currentText += char;
     if (char !== " ") {
       currentIsArabic = charIsArabic;
     }
   }
-  
+
   if (currentText.trim() && currentIsArabic !== null) {
     segments.push({ text: currentText.trim(), isArabic: currentIsArabic });
   }
-  
+
   // Process each segment
   const processedSegments = segments.map((seg) => {
     if (seg.isArabic) {
@@ -145,7 +161,7 @@ function processArabicText(text: string): string {
     }
     return seg.text;
   });
-  
+
   // Reverse segment order for RTL
   return processedSegments.reverse().join(" ");
 }
