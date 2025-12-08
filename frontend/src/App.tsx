@@ -1,13 +1,14 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { MainLayout } from '@/components/layout/MainLayout';
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import Login from '@/pages/Login';
-import Dashboard from '@/pages/Dashboard';
-import RequestsList from '@/pages/requests/RequestsList';
-import NewRequest from '@/pages/requests/NewRequest';
-import RequestDetails from '@/pages/requests/RequestDetails';
-import Statistics from '@/pages/Statistics';
-import Reports from '@/pages/Reports';
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { Toaster } from "@/components/ui/toaster";
+import Login from "@/pages/Login";
+import Dashboard from "@/pages/Dashboard";
+import RequestsList from "@/pages/requests/RequestsList";
+import NewRequest from "@/pages/requests/NewRequest";
+import RequestDetails from "@/pages/requests/RequestDetails";
+import Statistics from "@/pages/Statistics";
+import Reports from "@/pages/Reports";
 import {
   UsersManagement,
   LocationsPage,
@@ -15,12 +16,13 @@ import {
   SystemsPage,
   MachinesPage,
   AuditLogs,
-} from '@/pages/admin';
-import { Role } from '@/types';
+} from "@/pages/admin";
+import { Role } from "@/types";
 
 function App() {
   return (
     <BrowserRouter>
+      <Toaster />
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<Login />} />
@@ -36,7 +38,7 @@ function App() {
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
-          
+
           {/* Requests */}
           <Route path="requests" element={<RequestsList />} />
           <Route
@@ -49,21 +51,33 @@ function App() {
           />
           <Route path="requests/:id" element={<RequestDetails />} />
 
-          {/* Statistics - Admin & Consultant */}
+          {/* Statistics - Admin, Consultant & Maintenance Manager */}
           <Route
             path="statistics"
             element={
-              <ProtectedRoute allowedRoles={[Role.ADMIN, Role.CONSULTANT]}>
+              <ProtectedRoute
+                allowedRoles={[
+                  Role.ADMIN,
+                  Role.CONSULTANT,
+                  Role.MAINTENANCE_MANAGER,
+                ]}
+              >
                 <Statistics />
               </ProtectedRoute>
             }
           />
 
-          {/* Reports - Admin & Consultant */}
+          {/* Reports - Admin, Consultant & Maintenance Manager */}
           <Route
             path="reports"
             element={
-              <ProtectedRoute allowedRoles={[Role.ADMIN, Role.CONSULTANT]}>
+              <ProtectedRoute
+                allowedRoles={[
+                  Role.ADMIN,
+                  Role.CONSULTANT,
+                  Role.MAINTENANCE_MANAGER,
+                ]}
+              >
                 <Reports />
               </ProtectedRoute>
             }
@@ -128,6 +142,3 @@ function App() {
 }
 
 export default App;
-
-
-

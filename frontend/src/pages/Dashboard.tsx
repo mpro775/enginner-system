@@ -29,16 +29,16 @@ import { statisticsService } from "@/services/statistics";
 import { useAuthStore } from "@/store/auth";
 import { Role } from "@/types";
 
-// TNC Brand Colors palette
+// KSU Brand Colors palette
 const STATUS_COLORS = {
-  in_progress: "#1E3A5F", // TNC Navy - in progress
+  in_progress: "#0099B7", // KSU Teal - in progress
   completed: "#22c55e", // Green - completed
   stopped: "#f97316", // Orange - stopped
 };
 
 const TYPE_COLORS = {
   emergency: "#ef4444", // Red - emergency
-  preventive: "#1E3A5F", // TNC Navy - preventive
+  preventive: "#0099B7", // KSU Teal - preventive
 };
 
 // Custom label for pie chart - only show percentage inside
@@ -174,20 +174,20 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Stats Cards - TNC Brand Colors */}
+      {/* Stats Cards - KSU Brand Colors */}
       <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="إجمالي الطلبات"
           value={stats?.totalRequests || 0}
           icon={FileText}
           description={`${stats?.todayRequests || 0} طلب اليوم`}
-          iconClassName="bg-[#1E3A5F]/10 text-[#1E3A5F] dark:bg-[#1E3A5F]/30 dark:text-[#6B9CD8]"
+          iconClassName="bg-[#0099B7]/10 text-[#0099B7] dark:bg-[#0099B7]/30 dark:text-[#00B8DB]"
         />
         <StatCard
           title="قيد التنفيذ"
           value={stats?.inProgress || 0}
           icon={Activity}
-          iconClassName="bg-[#1E3A5F]/10 text-[#2C4A6B] dark:bg-[#1E3A5F]/30 dark:text-[#8BB0D8]"
+          iconClassName="bg-[#0099B7]/10 text-[#007A94] dark:bg-[#0099B7]/30 dark:text-[#00B8DB]"
         />
         <StatCard
           title="مكتملة"
@@ -203,7 +203,7 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Secondary Stats - TNC Brand Colors */}
+      {/* Secondary Stats - KSU Brand Colors */}
       <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="طلبات طارئة"
@@ -215,19 +215,19 @@ export default function Dashboard() {
           title="طلبات وقائية"
           value={stats?.preventiveRequests || 0}
           icon={Wrench}
-          iconClassName="bg-[#1E3A5F]/10 text-[#1E3A5F] dark:bg-[#1E3A5F]/30 dark:text-[#6B9CD8]"
+          iconClassName="bg-[#0099B7]/10 text-[#0099B7] dark:bg-[#0099B7]/30 dark:text-[#00B8DB]"
         />
         <StatCard
           title="هذا الأسبوع"
           value={stats?.thisWeekRequests || 0}
           icon={Calendar}
-          iconClassName="bg-[#C4A052]/15 text-[#B8860B] dark:bg-[#C4A052]/25 dark:text-[#D4B876]"
+          iconClassName="bg-[#007A94]/15 text-[#007A94] dark:bg-[#007A94]/25 dark:text-[#00B8DB]"
         />
         <StatCard
           title="متوسط وقت الإنجاز"
           value={`${stats?.avgCompletionTimeHours || 0} س`}
           icon={TrendingUp}
-          iconClassName="bg-[#1E3A5F]/10 text-[#2C4A6B] dark:bg-[#1E3A5F]/30 dark:text-[#8BB0D8]"
+          iconClassName="bg-[#0099B7]/10 text-[#007A94] dark:bg-[#0099B7]/30 dark:text-[#00B8DB]"
         />
       </div>
 
@@ -378,7 +378,7 @@ export default function Dashboard() {
                   <Bar
                     dataKey="total"
                     name="إجمالي"
-                    fill="#1E3A5F"
+                    fill="#0099B7"
                     radius={[4, 4, 0, 0]}
                   />
                   <Bar
@@ -390,7 +390,7 @@ export default function Dashboard() {
                   <Bar
                     dataKey="preventive"
                     name="وقائية"
-                    fill="#C4A052"
+                    fill="#007A94"
                     radius={[4, 4, 0, 0]}
                   />
                 </BarChart>

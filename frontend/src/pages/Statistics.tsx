@@ -20,13 +20,14 @@ import { statisticsService } from "@/services/statistics";
 import { useAuthStore } from "@/store/auth";
 import { Role } from "@/types";
 
+// KSU Brand Colors palette
 const COLORS = [
-  "#3b82f6",
-  "#22c55e",
-  "#eab308",
-  "#ef4444",
-  "#8b5cf6",
-  "#06b6d4",
+  "#0099B7", // KSU Teal (Primary)
+  "#22c55e", // Green
+  "#007A94", // KSU Teal Dark
+  "#ef4444", // Red
+  "#00B8DB", // KSU Teal Light
+  "#f97316", // Orange
 ];
 
 // Custom label for pie chart - only show percentage inside
@@ -63,7 +64,7 @@ const renderCustomLabel = ({
 // Custom legend component for pie charts
 const CustomLegend = ({ payload }: any) => {
   return (
-    <div className="flex flex-wrap justify-center gap-3 mt-4">
+    <div className="flex flex-wrap justify-center gap-3 pb-2">
       {payload?.map((entry: any, index: number) => (
         <div key={`legend-${index}`} className="flex items-center gap-2">
           <div
@@ -166,18 +167,23 @@ export default function Statistics() {
               <BarChart
                 data={engineerChartData}
                 layout="vertical"
-                margin={{ top: 5, right: 30, left: 120, bottom: 5 }}
+                margin={{ top: 5, right: 30, left: 170, bottom: 20 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" />
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 12 }}
+                  className="fill-foreground"
+                />
                 <YAxis
                   dataKey="name"
                   type="category"
-                  width={120}
+                  width={160}
                   tick={{ fontSize: 12 }}
                   tickLine={false}
                   axisLine={false}
-                  className="fill-muted-foreground"
+                  className="fill-foreground"
+                  style={{ zIndex: 100 }}
                 />
                 <Tooltip
                   contentStyle={{
@@ -187,7 +193,7 @@ export default function Statistics() {
                   }}
                 />
                 <Legend
-                  wrapperStyle={{ paddingTop: 16 }}
+                  wrapperStyle={{ paddingTop: 8, paddingBottom: 0 }}
                   formatter={(value) => (
                     <span className="text-xs sm:text-sm text-foreground">
                       {value}
@@ -204,7 +210,7 @@ export default function Statistics() {
                   dataKey="pending"
                   name="قيد الإنجاز"
                   stackId="a"
-                  fill="#3b82f6"
+                  fill="#0099B7"
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -219,7 +225,7 @@ export default function Statistics() {
             <CardHeader>
               <CardTitle>الطلبات حسب الموقع</CardTitle>
             </CardHeader>
-            <CardContent className="pb-4">
+            <CardContent>
               {locationChartData.length > 0 ? (
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -227,7 +233,7 @@ export default function Statistics() {
                       <Pie
                         data={locationChartData}
                         cx="50%"
-                        cy="45%"
+                        cy="40%"
                         innerRadius={50}
                         outerRadius={90}
                         paddingAngle={3}
@@ -269,7 +275,7 @@ export default function Statistics() {
             <CardHeader>
               <CardTitle>الطلبات حسب النظام</CardTitle>
             </CardHeader>
-            <CardContent className="pb-4">
+            <CardContent>
               {systemChartData.length > 0 ? (
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -277,7 +283,7 @@ export default function Statistics() {
                       <Pie
                         data={systemChartData}
                         cx="50%"
-                        cy="45%"
+                        cy="40%"
                         innerRadius={50}
                         outerRadius={90}
                         paddingAngle={3}
@@ -327,7 +333,7 @@ export default function Statistics() {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
                   data={trends}
-                  margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                  margin={{ top: 10, right: 30, left: 0, bottom: 20 }}
                 >
                   <CartesianGrid
                     strokeDasharray="3 3"
@@ -356,7 +362,7 @@ export default function Statistics() {
                     labelStyle={{ color: "hsl(var(--foreground))" }}
                   />
                   <Legend
-                    wrapperStyle={{ paddingTop: 16 }}
+                    wrapperStyle={{ paddingTop: 8, paddingBottom: 0 }}
                     formatter={(value) => (
                       <span className="text-xs sm:text-sm text-foreground">
                         {value}
@@ -367,7 +373,7 @@ export default function Statistics() {
                     type="monotone"
                     dataKey="total"
                     name="إجمالي"
-                    stroke="#3b82f6"
+                    stroke="#0099B7"
                     strokeWidth={2}
                     dot={{ r: 4 }}
                     activeDot={{ r: 6 }}
@@ -418,7 +424,7 @@ export default function Statistics() {
                     <td className="font-medium">{machine.machineName}</td>
                     <td>{machine.systemName}</td>
                     <td>
-                      <span className="inline-flex items-center justify-center rounded-full bg-red-100 px-2.5 py-0.5 text-red-800 font-semibold">
+                      <span className="inline-flex items-center justify-center rounded-full bg-[#0099B7]/10 px-2.5 py-0.5 text-[#0099B7] font-semibold">
                         {machine.failureCount}
                       </span>
                     </td>

@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   Calendar,
@@ -14,10 +14,10 @@ import {
   MessageSquarePlus,
   Loader2,
   AlertTriangle,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -25,13 +25,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { StatusBadge, MaintenanceTypeBadge } from '@/components/shared/StatusBadge';
-import { PageLoader } from '@/components/shared/LoadingSpinner';
-import { requestsService } from '@/services/requests';
-import { useAuthStore } from '@/store/auth';
-import { formatDateTime } from '@/lib/utils';
-import { RequestStatus, Role } from '@/types';
+} from "@/components/ui/dialog";
+import {
+  StatusBadge,
+  MaintenanceTypeBadge,
+} from "@/components/shared/StatusBadge";
+import { PageLoader } from "@/components/shared/LoadingSpinner";
+import { requestsService } from "@/services/requests";
+import { useAuthStore } from "@/store/auth";
+import { formatDateTime } from "@/lib/utils";
+import { RequestStatus, Role } from "@/types";
 
 export default function RequestDetails() {
   const { id } = useParams<{ id: string }>();
@@ -41,40 +44,42 @@ export default function RequestDetails() {
 
   const [showStopDialog, setShowStopDialog] = useState(false);
   const [showNoteDialog, setShowNoteDialog] = useState(false);
-  const [stopReason, setStopReason] = useState('');
-  const [consultantNotes, setConsultantNotes] = useState('');
+  const [stopReason, setStopReason] = useState("");
+  const [consultantNotes, setConsultantNotes] = useState("");
 
   const { data: request, isLoading } = useQuery({
-    queryKey: ['request', id],
+    queryKey: ["request", id],
     queryFn: () => requestsService.getById(id!),
     enabled: !!id,
   });
 
   const stopMutation = useMutation({
-    mutationFn: (reason: string) => requestsService.stop(id!, { stopReason: reason }),
+    mutationFn: (reason: string) =>
+      requestsService.stop(id!, { stopReason: reason }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['request', id] });
-      queryClient.invalidateQueries({ queryKey: ['requests'] });
+      queryClient.invalidateQueries({ queryKey: ["request", id] });
+      queryClient.invalidateQueries({ queryKey: ["requests"] });
       setShowStopDialog(false);
-      setStopReason('');
+      setStopReason("");
     },
   });
 
   const addNoteMutation = useMutation({
-    mutationFn: (notes: string) => requestsService.addNote(id!, { consultantNotes: notes }),
+    mutationFn: (notes: string) =>
+      requestsService.addNote(id!, { consultantNotes: notes }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['request', id] });
-      queryClient.invalidateQueries({ queryKey: ['requests'] });
+      queryClient.invalidateQueries({ queryKey: ["request", id] });
+      queryClient.invalidateQueries({ queryKey: ["requests"] });
       setShowNoteDialog(false);
-      setConsultantNotes('');
+      setConsultantNotes("");
     },
   });
 
   const completeMutation = useMutation({
     mutationFn: () => requestsService.complete(id!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['request', id] });
-      queryClient.invalidateQueries({ queryKey: ['requests'] });
+      queryClient.invalidateQueries({ queryKey: ["request", id] });
+      queryClient.invalidateQueries({ queryKey: ["requests"] });
     },
   });
 
@@ -92,19 +97,22 @@ export default function RequestDetails() {
 
   const isEngineer = user?.role === Role.ENGINEER;
   const isConsultant = user?.role === Role.CONSULTANT;
+  const isMaintenanceManager = user?.role === Role.MAINTENANCE_MANAGER;
   const isAdmin = user?.role === Role.ADMIN;
   const isOwner = isEngineer && request.engineerId?.id === user?.id;
-  
+
   const canStop = isOwner && request.status === RequestStatus.IN_PROGRESS;
   const canComplete = isOwner && request.status === RequestStatus.IN_PROGRESS;
-  const canAddNote = (isConsultant || isAdmin) && request.status !== RequestStatus.STOPPED;
+  const canAddNote =
+    (isConsultant || isMaintenanceManager || isAdmin) &&
+    request.status !== RequestStatus.STOPPED;
 
   const handleStop = () => {
     setShowStopDialog(true);
   };
 
   const handleAddNote = () => {
-    setConsultantNotes(request.consultantNotes || '');
+    setConsultantNotes(request.consultantNotes || "");
     setShowNoteDialog(true);
   };
 
@@ -128,7 +136,9 @@ export default function RequestDetails() {
             <ArrowRight className="h-5 w-5" />
           </Button>
           <div>
-            <h2 className="text-3xl font-bold tracking-tight">{request.requestCode}</h2>
+            <h2 className="text-3xl font-bold tracking-tight">
+              {request.requestCode}
+            </h2>
             <p className="text-muted-foreground">تفاصيل طلب الصيانة</p>
           </div>
         </div>
@@ -182,33 +192,44 @@ export default function RequestDetails() {
               </div>
 
               <div className="border-t pt-4">
-                <p className="text-sm text-muted-foreground mb-2">سبب طلب الصيانة</p>
+                <p className="text-sm text-muted-foreground mb-2">
+                  سبب طلب الصيانة
+                </p>
                 <p className="font-medium">{request.reasonText}</p>
               </div>
 
               {request.engineerNotes && (
                 <div className="border-t pt-4">
-                  <p className="text-sm text-muted-foreground mb-2">ملاحظات المهندس</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    ملاحظات المهندس
+                  </p>
                   <p>{request.engineerNotes}</p>
                 </div>
               )}
 
               {request.consultantNotes && (
                 <div className="border-t pt-4">
-                  <p className="text-sm text-muted-foreground mb-2">ملاحظات المكتب الاستشاري</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    ملاحظات المكتب الاستشاري
+                  </p>
                   <p>{request.consultantNotes}</p>
                 </div>
               )}
 
-              {request.status === RequestStatus.STOPPED && request.stopReason && (
-                <div className="border-t pt-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertTriangle className="h-4 w-4 text-orange-500" />
-                    <p className="text-sm text-orange-600 font-medium">سبب الإيقاف</p>
+              {request.status === RequestStatus.STOPPED &&
+                request.stopReason && (
+                  <div className="border-t pt-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertTriangle className="h-4 w-4 text-orange-500" />
+                      <p className="text-sm text-orange-600 font-medium">
+                        سبب الإيقاف
+                      </p>
+                    </div>
+                    <p className="text-orange-700 bg-orange-50 p-3 rounded-lg">
+                      {request.stopReason}
+                    </p>
                   </div>
-                  <p className="text-orange-700 bg-orange-50 p-3 rounded-lg">{request.stopReason}</p>
-                </div>
-              )}
+                )}
             </CardContent>
           </Card>
 
@@ -251,7 +272,9 @@ export default function RequestDetails() {
                       className="flex-1"
                     >
                       <MessageSquarePlus className="ml-2 h-4 w-4" />
-                      {request.consultantNotes ? 'تعديل الملاحظة' : 'إضافة ملاحظة'}
+                      {request.consultantNotes
+                        ? "تعديل الملاحظة"
+                        : "إضافة ملاحظة"}
                     </Button>
                   )}
                 </div>
@@ -272,15 +295,21 @@ export default function RequestDetails() {
                 <Calendar className="h-5 w-5 text-muted-foreground" />
                 <div>
                   <p className="text-sm text-muted-foreground">تاريخ الفتح</p>
-                  <p className="font-medium">{formatDateTime(request.openedAt)}</p>
+                  <p className="font-medium">
+                    {formatDateTime(request.openedAt)}
+                  </p>
                 </div>
               </div>
               {request.closedAt && (
                 <div className="flex items-center gap-3">
                   <CheckCircle2 className="h-5 w-5 text-green-600" />
                   <div>
-                    <p className="text-sm text-muted-foreground">تاريخ الإكمال</p>
-                    <p className="font-medium">{formatDateTime(request.closedAt)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      تاريخ الإكمال
+                    </p>
+                    <p className="font-medium">
+                      {formatDateTime(request.closedAt)}
+                    </p>
                   </div>
                 </div>
               )}
@@ -288,8 +317,12 @@ export default function RequestDetails() {
                 <div className="flex items-center gap-3">
                   <StopCircle className="h-5 w-5 text-orange-500" />
                   <div>
-                    <p className="text-sm text-muted-foreground">تاريخ الإيقاف</p>
-                    <p className="font-medium">{formatDateTime(request.stoppedAt)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      تاريخ الإيقاف
+                    </p>
+                    <p className="font-medium">
+                      {formatDateTime(request.stoppedAt)}
+                    </p>
                   </div>
                 </div>
               )}
@@ -307,7 +340,9 @@ export default function RequestDetails() {
                 <div>
                   <p className="text-sm text-muted-foreground">المهندس</p>
                   <p className="font-medium">{request.engineerId?.name}</p>
-                  <p className="text-xs text-muted-foreground">{request.engineerId?.email}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {request.engineerId?.email}
+                  </p>
                 </div>
               </div>
               {request.consultantId && (
@@ -316,7 +351,9 @@ export default function RequestDetails() {
                   <div>
                     <p className="text-sm text-muted-foreground">الاستشاري</p>
                     <p className="font-medium">{request.consultantId?.name}</p>
-                    <p className="text-xs text-muted-foreground">{request.consultantId?.email}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {request.consultantId?.email}
+                    </p>
                   </div>
                 </div>
               )}
@@ -358,7 +395,7 @@ export default function RequestDetails() {
               {stopMutation.isPending ? (
                 <Loader2 className="ml-2 h-4 w-4 animate-spin" />
               ) : (
-                'إيقاف الطلب'
+                "إيقاف الطلب"
               )}
             </Button>
           </DialogFooter>
@@ -370,13 +407,13 @@ export default function RequestDetails() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>إضافة ملاحظة</DialogTitle>
-            <DialogDescription>
-              أضف ملاحظاتك على هذا الطلب
-            </DialogDescription>
+            <DialogDescription>أضف ملاحظاتك على هذا الطلب</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium">ملاحظات المكتب الاستشاري *</label>
+              <label className="text-sm font-medium">
+                ملاحظات المكتب الاستشاري *
+              </label>
               <Textarea
                 placeholder="أدخل ملاحظاتك هنا..."
                 value={consultantNotes}
@@ -397,7 +434,7 @@ export default function RequestDetails() {
               {addNoteMutation.isPending ? (
                 <Loader2 className="ml-2 h-4 w-4 animate-spin" />
               ) : (
-                'حفظ الملاحظة'
+                "حفظ الملاحظة"
               )}
             </Button>
           </DialogFooter>

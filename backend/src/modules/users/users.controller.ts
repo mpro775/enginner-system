@@ -10,16 +10,19 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
-} from '@nestjs/common';
-import { UsersService } from './users.service';
-import { CreateUserDto, UpdateUserDto, FilterUsersDto } from './dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { CurrentUser, CurrentUserData } from '../../common/decorators/current-user.decorator';
-import { Role } from '../../common/enums';
+} from "@nestjs/common";
+import { UsersService } from "./users.service";
+import { CreateUserDto, UpdateUserDto, FilterUsersDto } from "./dto";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { RolesGuard } from "../../common/guards/roles.guard";
+import { Roles } from "../../common/decorators/roles.decorator";
+import {
+  CurrentUser,
+  CurrentUserData,
+} from "../../common/decorators/current-user.decorator";
+import { Role } from "../../common/enums";
 
-@Controller('users')
+@Controller("users")
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
@@ -29,7 +32,7 @@ export class UsersController {
   @HttpCode(HttpStatus.CREATED)
   async create(
     @Body() createUserDto: CreateUserDto,
-    @CurrentUser() user: CurrentUserData,
+    @CurrentUser() user: CurrentUserData
   ) {
     const newUser = await this.usersService.create(createUserDto, {
       userId: user.userId,
@@ -37,7 +40,7 @@ export class UsersController {
     });
     return {
       data: newUser,
-      message: 'User created successfully',
+      message: "User created successfully",
     };
   }
 
@@ -48,46 +51,46 @@ export class UsersController {
     return {
       data: result.data,
       meta: result.meta,
-      message: 'Users retrieved successfully',
+      message: "Users retrieved successfully",
     };
   }
 
-  @Get('engineers')
-  @Roles(Role.ADMIN, Role.CONSULTANT)
+  @Get("engineers")
+  @Roles(Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER)
   async getEngineers() {
     const engineers = await this.usersService.getEngineers();
     return {
       data: engineers,
-      message: 'Engineers retrieved successfully',
+      message: "Engineers retrieved successfully",
     };
   }
 
-  @Get('consultants')
+  @Get("consultants")
   @Roles(Role.ADMIN)
   async getConsultants() {
     const consultants = await this.usersService.getConsultants();
     return {
       data: consultants,
-      message: 'Consultants retrieved successfully',
+      message: "Consultants retrieved successfully",
     };
   }
 
-  @Get(':id')
+  @Get(":id")
   @Roles(Role.ADMIN)
-  async findOne(@Param('id') id: string) {
+  async findOne(@Param("id") id: string) {
     const user = await this.usersService.findOne(id);
     return {
       data: user,
-      message: 'User retrieved successfully',
+      message: "User retrieved successfully",
     };
   }
 
-  @Patch(':id')
+  @Patch(":id")
   @Roles(Role.ADMIN)
   async update(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() updateUserDto: UpdateUserDto,
-    @CurrentUser() user: CurrentUserData,
+    @CurrentUser() user: CurrentUserData
   ) {
     const updatedUser = await this.usersService.update(id, updateUserDto, {
       userId: user.userId,
@@ -95,15 +98,15 @@ export class UsersController {
     });
     return {
       data: updatedUser,
-      message: 'User updated successfully',
+      message: "User updated successfully",
     };
   }
 
-  @Patch(':id/toggle-status')
+  @Patch(":id/toggle-status")
   @Roles(Role.ADMIN)
   async toggleStatus(
-    @Param('id') id: string,
-    @CurrentUser() user: CurrentUserData,
+    @Param("id") id: string,
+    @CurrentUser() user: CurrentUserData
   ) {
     const updatedUser = await this.usersService.toggleStatus(id, {
       userId: user.userId,
@@ -111,30 +114,21 @@ export class UsersController {
     });
     return {
       data: updatedUser,
-      message: `User ${updatedUser.isActive ? 'activated' : 'deactivated'} successfully`,
+      message: `User ${updatedUser.isActive ? "activated" : "deactivated"} successfully`,
     };
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.OK)
-  async remove(
-    @Param('id') id: string,
-    @CurrentUser() user: CurrentUserData,
-  ) {
+  async remove(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
     await this.usersService.remove(id, {
       userId: user.userId,
       name: user.name,
     });
     return {
       data: null,
-      message: 'User deleted successfully',
+      message: "User deleted successfully",
     };
   }
 }
-
-
-
-
-
-

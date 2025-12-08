@@ -6,8 +6,8 @@ import {
   IsOptional,
   IsMongoId,
   IsBoolean,
-} from 'class-validator';
-import { Role } from '../../../common/enums';
+} from "class-validator";
+import { Role } from "../../../common/enums";
 
 export class UpdateUserDto {
   @IsOptional()
@@ -15,29 +15,25 @@ export class UpdateUserDto {
   name?: string;
 
   @IsOptional()
-  @IsEmail({}, { message: 'Please provide a valid email address' })
+  @IsEmail({}, { message: "Please provide a valid email address" })
   email?: string;
 
   @IsOptional()
   @IsString()
-  @MinLength(6, { message: 'Password must be at least 6 characters' })
+  @MinLength(6, { message: "Password must be at least 6 characters" })
   password?: string;
 
   @IsOptional()
-  @IsEnum(Role, { message: 'Role must be admin, consultant, or engineer' })
+  @IsEnum(Role, {
+    message: "Role must be admin, consultant, maintenance_manager, or engineer",
+  })
   role?: Role;
 
   @IsOptional()
-  @IsMongoId({ message: 'Invalid department ID' })
+  @IsMongoId({ message: "Invalid department ID" })
   departmentId?: string;
 
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 }
-
-
-
-
-
-

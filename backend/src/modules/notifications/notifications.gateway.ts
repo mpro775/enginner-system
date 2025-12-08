@@ -4,12 +4,12 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   SubscribeMessage,
-} from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import { Logger } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
-import { MaintenanceRequestDocument } from '../maintenance-requests/schemas/maintenance-request.schema';
+} from "@nestjs/websockets";
+import { Server, Socket } from "socket.io";
+import { Logger } from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import { ConfigService } from "@nestjs/config";
+import { MaintenanceRequestDocument } from "../maintenance-requests/schemas/maintenance-request.schema";
 
 interface AuthenticatedSocket extends Socket {
   user?: {
@@ -21,10 +21,10 @@ interface AuthenticatedSocket extends Socket {
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: "*",
     credentials: true,
   },
-  namespace: '/notifications',
+  namespace: "/notifications",
 })
 export class NotificationsGateway
   implements OnGatewayConnection, OnGatewayDisconnect
@@ -36,13 +36,14 @@ export class NotificationsGateway
 
   constructor(
     private jwtService: JwtService,
-    private configService: ConfigService,
+    private configService: ConfigService
   ) {}
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
-      const token = client.handshake.auth?.token || 
-        client.handshake.headers?.authorization?.split(' ')[1];
+      const token =
+        client.handshake.auth?.token ||
+        client.handshake.headers?.authorization?.split(" ")[1];
 
       if (!token) {
         this.logger.warn(`Client ${client.id} connected without token`);
@@ -51,7 +52,7 @@ export class NotificationsGateway
       }
 
       const payload = this.jwtService.verify(token, {
-        secret: this.configService.get<string>('JWT_SECRET'),
+        secret: this.configService.get<string>("JWT_SECRET"),
       });
 
       client.user = {
@@ -65,7 +66,7 @@ export class NotificationsGateway
       await client.join(`user:${payload.sub}`);
 
       this.logger.log(
-        `Client ${client.id} connected - User: ${payload.name} (${payload.role})`,
+        `Client ${client.id} connected - User: ${payload.name} (${payload.role})`
       );
     } catch (error) {
       this.logger.error(`Connection error: ${error.message}`);
@@ -77,15 +78,15 @@ export class NotificationsGateway
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
-  @SubscribeMessage('ping')
+  @SubscribeMessage("ping")
   handlePing(client: Socket): string {
-    return 'pong';
+    return "pong";
   }
 
   // Notify when a new request is created
   notifyRequestCreated(request: MaintenanceRequestDocument) {
     const notification = {
-      type: 'request:created',
+      type: "request:created",
       data: {
         id: request._id,
         requestCode: request.requestCode,
@@ -99,9 +100,10 @@ export class NotificationsGateway
       timestamp: new Date().toISOString(),
     };
 
-    // Notify consultants and admins
-    this.server.to('consultant').emit('notification', notification);
-    this.server.to('admin').emit('notification', notification);
+    // Notify consultants, maintenance managers, and admins
+    this.server.to("consultant").emit("notification", notification);
+    this.server.to("maintenance_manager").emit("notification", notification);
+    this.server.to("admin").emit("notification", notification);
 
     this.logger.log(`Notified about new request: ${request.requestCode}`);
   }
@@ -109,7 +111,7 @@ export class NotificationsGateway
   // Notify when a request is stopped
   notifyRequestStopped(request: MaintenanceRequestDocument) {
     const notification = {
-      type: 'request:stopped',
+      type: "request:stopped",
       data: {
         id: request._id,
         requestCode: request.requestCode,
@@ -122,9 +124,10 @@ export class NotificationsGateway
       timestamp: new Date().toISOString(),
     };
 
-    // Notify consultants and admins
-    this.server.to('consultant').emit('notification', notification);
-    this.server.to('admin').emit('notification', notification);
+    // Notify consultants, maintenance managers, and admins
+    this.server.to("consultant").emit("notification", notification);
+    this.server.to("maintenance_manager").emit("notification", notification);
+    this.server.to("admin").emit("notification", notification);
 
     this.logger.log(`Notified about stopped request: ${request.requestCode}`);
   }
@@ -132,7 +135,7 @@ export class NotificationsGateway
   // Notify when a request is completed
   notifyRequestCompleted(request: MaintenanceRequestDocument) {
     const notification = {
-      type: 'request:completed',
+      type: "request:completed",
       data: {
         id: request._id,
         requestCode: request.requestCode,
@@ -144,9 +147,10 @@ export class NotificationsGateway
       timestamp: new Date().toISOString(),
     };
 
-    // Notify consultants and admins
-    this.server.to('consultant').emit('notification', notification);
-    this.server.to('admin').emit('notification', notification);
+    // Notify consultants, maintenance managers, and admins
+    this.server.to("consultant").emit("notification", notification);
+    this.server.to("maintenance_manager").emit("notification", notification);
+    this.server.to("admin").emit("notification", notification);
 
     this.logger.log(`Notified about completed request: ${request.requestCode}`);
   }
@@ -154,7 +158,7 @@ export class NotificationsGateway
   // Notify when a request is updated
   notifyRequestUpdated(request: MaintenanceRequestDocument) {
     const notification = {
-      type: 'request:updated',
+      type: "request:updated",
       data: {
         id: request._id,
         requestCode: request.requestCode,
@@ -165,13 +169,11 @@ export class NotificationsGateway
       timestamp: new Date().toISOString(),
     };
 
-    // Notify consultants and admins
-    this.server.to('consultant').emit('notification', notification);
-    this.server.to('admin').emit('notification', notification);
+    // Notify consultants, maintenance managers, and admins
+    this.server.to("consultant").emit("notification", notification);
+    this.server.to("maintenance_manager").emit("notification", notification);
+    this.server.to("admin").emit("notification", notification);
 
     this.logger.log(`Notified about updated request: ${request.requestCode}`);
   }
 }
-
-
-

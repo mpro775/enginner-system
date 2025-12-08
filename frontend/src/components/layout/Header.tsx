@@ -1,9 +1,9 @@
-import { Bell, Sun, Moon, Monitor, Menu } from "lucide-react";
+import { Sun, Moon, Monitor, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/auth";
-import { useNotificationsStore } from "@/store/notifications";
 import { getRoleLabel } from "@/lib/utils";
 import { useTheme } from "@/hooks/useTheme";
+import { NotificationDropdown } from "./NotificationDropdown";
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -11,14 +11,13 @@ interface HeaderProps {
 
 export function Header({ onMenuClick }: HeaderProps) {
   const { user } = useAuthStore();
-  const { unreadCount, markAllAsRead } = useNotificationsStore();
   const { theme, toggleTheme } = useTheme();
 
   const getThemeIcon = () => {
     switch (theme) {
-      case 'light':
+      case "light":
         return <Sun className="h-5 w-5" />;
-      case 'dark':
+      case "dark":
         return <Moon className="h-5 w-5" />;
       default:
         return <Monitor className="h-5 w-5" />;
@@ -27,12 +26,12 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   const getThemeTooltip = () => {
     switch (theme) {
-      case 'light':
-        return 'الوضع الفاتح';
-      case 'dark':
-        return 'الوضع الداكن';
+      case "light":
+        return "الوضع الفاتح";
+      case "dark":
+        return "الوضع الداكن";
       default:
-        return 'تلقائي (النظام)';
+        return "تلقائي (النظام)";
     }
   };
 
@@ -71,19 +70,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           {getThemeIcon()}
         </Button>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative h-9 w-9 sm:h-10 sm:w-10 text-muted-foreground hover:text-foreground"
-          onClick={markAllAsRead}
-        >
-          <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
-            <span className="absolute -top-0.5 -left-0.5 sm:-top-1 sm:-left-1 flex h-4 w-4 sm:h-5 sm:w-5 items-center justify-center rounded-full bg-destructive text-[9px] sm:text-[10px] text-destructive-foreground font-medium">
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
-          )}
-        </Button>
+        <NotificationDropdown />
       </div>
     </header>
   );

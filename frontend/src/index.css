@@ -4,94 +4,88 @@
 
 @layer base {
   :root {
-    /* TNC Brand Colors - Tabrak Najed Contracting */
-    /* Primary: Navy Blue #1E3A5F | Accent: Gold #C4A052 */
-    
-    --background: 210 25% 97%;
-    --foreground: 213 52% 20%;
+    /* KSU Brand Colors - King Saud University */
+    /* Primary: Teal #0099B7 | Secondary: White */
+
+    --background: 190 25% 97%;
+    --foreground: 190 52% 20%;
     --card: 0 0% 100%;
-    --card-foreground: 213 52% 20%;
+    --card-foreground: 190 52% 20%;
     --popover: 0 0% 100%;
-    --popover-foreground: 213 52% 20%;
-    
-    /* Primary - TNC Navy Blue */
-    --primary: 213 52% 25%;
-    --primary-foreground: 45 43% 96%;
-    
-    /* Secondary - Lighter Navy */
-    --secondary: 213 30% 92%;
-    --secondary-foreground: 213 52% 20%;
-    
-    --muted: 213 20% 94%;
-    --muted-foreground: 213 15% 45%;
-    
-    /* Accent - TNC Gold */
-    --accent: 43 49% 55%;
-    --accent-foreground: 213 52% 15%;
-    
+    --popover-foreground: 190 52% 20%;
+
+    /* Primary - KSU Teal */
+    --primary: 190 100% 36%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - Lighter Teal */
+    --secondary: 190 30% 92%;
+    --secondary-foreground: 190 52% 20%;
+
+    --muted: 190 20% 94%;
+    --muted-foreground: 190 15% 45%;
+
+    /* Accent - Darker Teal */
+    --accent: 190 80% 45%;
+    --accent-foreground: 0 0% 100%;
+
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     --success: 142 76% 36%;
     --success-foreground: 0 0% 100%;
     --warning: 43 92% 50%;
-    --warning-foreground: 213 52% 15%;
-    
-    --border: 213 25% 88%;
-    --input: 213 25% 88%;
-    --ring: 213 52% 25%;
+    --warning-foreground: 190 52% 15%;
+
+    --border: 190 25% 88%;
+    --input: 190 25% 88%;
+    --ring: 190 100% 36%;
     --radius: 0.5rem;
-    
-    /* Custom TNC Colors */
-    --tnc-navy: 213 52% 25%;
-    --tnc-navy-light: 213 45% 35%;
-    --tnc-navy-dark: 213 55% 18%;
-    --tnc-gold: 43 49% 55%;
-    --tnc-gold-light: 43 55% 70%;
-    --tnc-gold-dark: 43 45% 40%;
+
+    /* Custom KSU Colors */
+    --ksu-teal: 190 100% 36%;
+    --ksu-teal-light: 190 80% 50%;
+    --ksu-teal-dark: 190 100% 28%;
   }
 
   .dark {
-    /* TNC Brand Colors - Dark Mode */
-    --background: 213 55% 8%;
-    --foreground: 45 30% 95%;
-    --card: 213 50% 12%;
-    --card-foreground: 45 30% 95%;
-    --popover: 213 50% 12%;
-    --popover-foreground: 45 30% 95%;
-    
-    /* Primary - TNC Navy Blue (lighter in dark mode) */
-    --primary: 213 65% 55%;
-    --primary-foreground: 213 55% 8%;
-    
+    /* KSU Brand Colors - Dark Mode */
+    --background: 190 55% 8%;
+    --foreground: 0 0% 95%;
+    --card: 190 50% 12%;
+    --card-foreground: 0 0% 95%;
+    --popover: 190 50% 12%;
+    --popover-foreground: 0 0% 95%;
+
+    /* Primary - KSU Teal (lighter in dark mode) */
+    --primary: 190 80% 50%;
+    --primary-foreground: 190 55% 8%;
+
     /* Secondary */
-    --secondary: 213 40% 18%;
-    --secondary-foreground: 45 30% 95%;
-    
-    --muted: 213 35% 18%;
-    --muted-foreground: 213 20% 65%;
-    
-    /* Accent - TNC Gold */
-    --accent: 43 55% 58%;
-    --accent-foreground: 213 55% 8%;
-    
+    --secondary: 190 40% 18%;
+    --secondary-foreground: 0 0% 95%;
+
+    --muted: 190 35% 18%;
+    --muted-foreground: 190 20% 65%;
+
+    /* Accent - KSU Teal */
+    --accent: 190 70% 55%;
+    --accent-foreground: 190 55% 8%;
+
     --destructive: 0 65% 45%;
     --destructive-foreground: 0 0% 100%;
     --success: 142 70% 45%;
     --success-foreground: 0 0% 100%;
     --warning: 43 85% 55%;
-    --warning-foreground: 213 55% 8%;
-    
-    --border: 213 35% 22%;
-    --input: 213 35% 22%;
-    --ring: 213 65% 55%;
-    
-    /* Custom TNC Colors - Dark Mode */
-    --tnc-navy: 213 65% 55%;
-    --tnc-navy-light: 213 60% 65%;
-    --tnc-navy-dark: 213 50% 45%;
-    --tnc-gold: 43 55% 58%;
-    --tnc-gold-light: 43 60% 70%;
-    --tnc-gold-dark: 43 50% 45%;
+    --warning-foreground: 190 55% 8%;
+
+    --border: 190 35% 22%;
+    --input: 190 35% 22%;
+    --ring: 190 80% 50%;
+
+    /* Custom KSU Colors - Dark Mode */
+    --ksu-teal: 190 80% 50%;
+    --ksu-teal-light: 190 70% 60%;
+    --ksu-teal-dark: 190 70% 40%;
   }
 }
 
@@ -124,7 +118,7 @@
   }
 
   .stat-card::before {
-    content: '';
+    content: "";
     @apply absolute inset-0 bg-gradient-to-br opacity-10;
   }
 
@@ -133,23 +127,23 @@
   }
 
   .sidebar-link.active {
-    @apply bg-[#1E3A5F] text-white hover:bg-[#2C4A6B] hover:text-white shadow-md;
-    box-shadow: 0 2px 8px rgba(30, 58, 95, 0.25);
+    @apply bg-[#0099B7] text-white hover:bg-[#007A94] hover:text-white shadow-md;
+    box-shadow: 0 2px 8px rgba(0, 153, 183, 0.25);
   }
 
   .sidebar-link.active::after {
-    content: '';
+    content: "";
     @apply absolute right-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-l;
-    background: linear-gradient(to bottom, #C4A052, #B8860B);
+    background: linear-gradient(to bottom, #00b8db, #007a94);
   }
 
   .dark .sidebar-link {
-    @apply hover:bg-[#1E3A5F]/20;
+    @apply hover:bg-[#0099B7]/20;
   }
 
   .dark .sidebar-link.active {
-    @apply bg-[#1E3A5F] shadow-lg;
-    box-shadow: 0 4px 12px rgba(30, 58, 95, 0.4);
+    @apply bg-[#0099B7] shadow-lg;
+    box-shadow: 0 4px 12px rgba(0, 153, 183, 0.4);
   }
 
   .data-table {
@@ -208,11 +202,73 @@
   animation: fade-in 0.3s ease-out;
 }
 
-.stagger-1 { animation-delay: 0.1s; }
-.stagger-2 { animation-delay: 0.2s; }
-.stagger-3 { animation-delay: 0.3s; }
-.stagger-4 { animation-delay: 0.4s; }
+.stagger-1 {
+  animation-delay: 0.1s;
+}
+.stagger-2 {
+  animation-delay: 0.2s;
+}
+.stagger-3 {
+  animation-delay: 0.3s;
+}
+.stagger-4 {
+  animation-delay: 0.4s;
+}
 
+/* Recharts text visibility fixes */
+.recharts-wrapper {
+  position: relative;
+}
 
+.recharts-wrapper svg {
+  overflow: visible;
+}
 
+.recharts-text {
+  fill: hsl(var(--foreground)) !important;
+  font-size: 12px;
+  pointer-events: none;
+}
 
+.recharts-cartesian-axis-tick text {
+  fill: hsl(var(--foreground)) !important;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.recharts-legend-wrapper {
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+.recharts-tooltip-wrapper {
+  z-index: 1000 !important;
+  position: relative !important;
+}
+
+.recharts-active-dot,
+.recharts-dot {
+  pointer-events: auto;
+}
+
+/* Ensure pie chart labels are visible */
+.recharts-pie-label-text {
+  fill: white !important;
+  font-weight: 600;
+  font-size: 12px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+/* Bar chart Y-axis text visibility */
+.recharts-cartesian-axis.yAxis text {
+  fill: hsl(var(--foreground)) !important;
+  font-size: 12px;
+  text-anchor: end;
+  dominant-baseline: middle;
+}
+
+/* Ensure all chart text is visible */
+.recharts-layer text {
+  pointer-events: none;
+}

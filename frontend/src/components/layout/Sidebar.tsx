@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   FileText,
@@ -12,11 +12,11 @@ import {
   History,
   LogOut,
   X,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useAuthStore } from '@/store/auth';
-import { Role } from '@/types';
-import { Button } from '@/components/ui/button';
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/store/auth";
+import { Role } from "@/types";
+import { Button } from "@/components/ui/button";
 
 interface NavItem {
   icon: React.ElementType;
@@ -28,60 +28,60 @@ interface NavItem {
 const navItems: NavItem[] = [
   {
     icon: LayoutDashboard,
-    label: 'لوحة التحكم',
-    href: '/dashboard',
+    label: "لوحة التحكم",
+    href: "/dashboard",
   },
   {
     icon: FileText,
-    label: 'طلبات الصيانة',
-    href: '/requests',
+    label: "طلبات الصيانة",
+    href: "/requests",
   },
   {
     icon: BarChart3,
-    label: 'الإحصائيات',
-    href: '/statistics',
-    roles: [Role.ADMIN, Role.CONSULTANT],
+    label: "الإحصائيات",
+    href: "/statistics",
+    roles: [Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER],
   },
   {
     icon: FileSpreadsheet,
-    label: 'التقارير',
-    href: '/reports',
-    roles: [Role.ADMIN, Role.CONSULTANT],
+    label: "التقارير",
+    href: "/reports",
+    roles: [Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER],
   },
   {
     icon: Users,
-    label: 'المستخدمين',
-    href: '/admin/users',
+    label: "المستخدمين",
+    href: "/admin/users",
     roles: [Role.ADMIN],
   },
   {
     icon: MapPin,
-    label: 'المواقع',
-    href: '/admin/locations',
+    label: "المواقع",
+    href: "/admin/locations",
     roles: [Role.ADMIN],
   },
   {
     icon: Building2,
-    label: 'الأقسام',
-    href: '/admin/departments',
+    label: "الأقسام",
+    href: "/admin/departments",
     roles: [Role.ADMIN],
   },
   {
     icon: Cog,
-    label: 'الأنظمة',
-    href: '/admin/systems',
+    label: "الأنظمة",
+    href: "/admin/systems",
     roles: [Role.ADMIN],
   },
   {
     icon: Wrench,
-    label: 'الآلات',
-    href: '/admin/machines',
+    label: "الآلات",
+    href: "/admin/machines",
     roles: [Role.ADMIN],
   },
   {
     icon: History,
-    label: 'سجل العمليات',
-    href: '/admin/audit-logs',
+    label: "سجل العمليات",
+    href: "/admin/audit-logs",
     roles: [Role.ADMIN],
   },
 ];
@@ -111,8 +111,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Overlay for mobile */}
       <div
         className={cn(
-          'fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-300 lg:hidden',
-          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          "fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-300 lg:hidden",
+          isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
         )}
         onClick={onClose}
         aria-hidden="true"
@@ -121,22 +121,26 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed right-0 top-0 z-50 h-screen w-72 border-l bg-card shadow-xl transition-transform duration-300 ease-in-out lg:w-64 lg:shadow-none lg:translate-x-0',
-          isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
+          "fixed right-0 top-0 z-50 h-screen w-72 border-l bg-card shadow-xl transition-transform duration-300 ease-in-out lg:w-64 lg:shadow-none",
+          isOpen
+            ? "translate-x-0"
+            : "translate-x-full lg:translate-x-0 pointer-events-none lg:pointer-events-auto"
         )}
+        aria-hidden={!isOpen}
       >
         <div className="flex h-full flex-col">
-          {/* Logo & Close Button - TNC Brand */}
-          <div className="flex h-14 sm:h-16 items-center justify-between border-b border-border/50 px-4 sm:px-6 bg-gradient-to-l from-transparent to-[#1E3A5F]/5 dark:to-[#1E3A5F]/20">
+          {/* Logo & Close Button - KSU Brand */}
+          <div className="flex h-14 sm:h-16 items-center justify-between border-b border-border/50 px-4 sm:px-6 bg-gradient-to-l from-transparent to-[#0099B7]/5 dark:to-[#0099B7]/20 flex-shrink-0">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1E3A5F] text-white relative overflow-hidden shadow-md">
-                {/* Gold accent stripe */}
-                <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-[#C4A052] to-[#B8860B]" />
-                <Building2 className="h-5 w-5 relative z-10" />
-              </div>
+              <img
+                src="/assets/logo.png"
+                alt="جامعة الملك سعود"
+                className="h-10 w-auto object-contain"
+              />
               <div className="flex flex-col">
-                <span className="font-bold text-sm text-foreground leading-tight">تبراك نجد</span>
-                <span className="text-[10px] text-[#C4A052] font-medium">نظام الصيانة</span>
+                <span className="text-[10px] text-[#0099B7] font-medium">
+                  نظام الصيانة
+                </span>
               </div>
             </div>
             {/* Close button - only visible on mobile */}
@@ -152,11 +156,12 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto p-3 sm:p-4">
+          <nav className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
             <ul className="space-y-1">
               {filteredNavItems.map((item) => {
-                const isActive = location.pathname === item.href ||
-                  location.pathname.startsWith(item.href + '/');
+                const isActive =
+                  location.pathname === item.href ||
+                  location.pathname.startsWith(item.href + "/");
                 const Icon = item.icon;
 
                 return (
@@ -164,10 +169,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                     <Link
                       to={item.href}
                       onClick={handleLinkClick}
-                      className={cn(
-                        'sidebar-link',
-                        isActive && 'active'
-                      )}
+                      className={cn("sidebar-link", isActive && "active")}
                     >
                       <Icon className="h-5 w-5 flex-shrink-0" />
                       <span className="truncate">{item.label}</span>
@@ -179,10 +181,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </nav>
 
           {/* User info & Logout */}
-          <div className="border-t border-border/50 p-3 sm:p-4">
+          <div className="border-t border-border/50 p-3 sm:p-4 flex-shrink-0">
             <div className="mb-3 rounded-lg bg-muted/50 dark:bg-muted/30 p-3">
-              <p className="font-medium text-sm sm:text-base text-foreground truncate">{user?.name}</p>
-              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+              <p className="font-medium text-sm sm:text-base text-foreground truncate">
+                {user?.name}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {user?.email}
+              </p>
             </div>
             <Button
               variant="outline"

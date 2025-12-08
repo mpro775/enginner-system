@@ -9,7 +9,7 @@ import { Role } from "../../common/enums";
 
 @Controller("reports")
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN, Role.CONSULTANT)
+@Roles(Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER)
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
