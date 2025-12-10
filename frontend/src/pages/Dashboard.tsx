@@ -10,11 +10,6 @@ import {
   StopCircle,
 } from "lucide-react";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   PieChart,
@@ -390,7 +385,9 @@ export default function Dashboard() {
                       )?.preventive;
                       return [
                         value,
-                        `إجمالي (${emergency ?? 0} طارئة / ${preventive ?? 0} وقائية)`,
+                        `إجمالي (${emergency ?? 0} طارئة / ${
+                          preventive ?? 0
+                        } وقائية)`,
                       ];
                     }}
                   />

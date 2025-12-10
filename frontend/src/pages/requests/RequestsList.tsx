@@ -24,7 +24,7 @@ export default function RequestsList() {
   const { user } = useAuthStore();
   const isEngineer = user?.role === Role.ENGINEER;
 
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState<Date>(new Date());
 
   const [filters, setFilters] = useState({
     page: 1,
@@ -57,7 +57,7 @@ export default function RequestsList() {
   });
 
   useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 1000);
+    const interval = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -66,7 +66,7 @@ export default function RequestsList() {
       request.status === RequestStatus.COMPLETED ||
       request.status === RequestStatus.STOPPED;
 
-    const endTime =
+    const endTime: Date | string =
       (isClosed && (request.closedAt || request.stoppedAt || request.updatedAt)) || now;
 
     return formatDuration(request.createdAt, endTime);
