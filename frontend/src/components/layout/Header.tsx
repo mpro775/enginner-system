@@ -1,4 +1,4 @@
-import { Sun, Moon, Monitor, Menu } from "lucide-react";
+import { Sun, Moon, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/auth";
 import { getRoleLabel } from "@/lib/utils";
@@ -14,25 +14,15 @@ export function Header({ onMenuClick }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
 
   const getThemeIcon = () => {
-    switch (theme) {
-      case "light":
-        return <Sun className="h-5 w-5" />;
-      case "dark":
-        return <Moon className="h-5 w-5" />;
-      default:
-        return <Monitor className="h-5 w-5" />;
-    }
+    return theme === "dark" ? (
+      <Moon className="h-5 w-5" />
+    ) : (
+      <Sun className="h-5 w-5" />
+    );
   };
 
   const getThemeTooltip = () => {
-    switch (theme) {
-      case "light":
-        return "الوضع الفاتح";
-      case "dark":
-        return "الوضع الداكن";
-      default:
-        return "تلقائي (النظام)";
-    }
+    return theme === "dark" ? "الوضع الداكن" : "الوضع الفاتح";
   };
 
   return (

@@ -128,11 +128,12 @@ export default function Statistics() {
   }
 
   const engineerChartData =
-    engineerStats?.map((stat) => ({
+    engineerStats?.map((stat, index) => ({
       name: stat.engineerName,
-      total: stat.totalRequests,
+      value: stat.totalRequests,
       completed: stat.byStatus.completed,
       pending: stat.byStatus.inProgress,
+      color: COLORS[index % COLORS.length],
     })) || [];
 
   const locationChartData =
@@ -149,6 +150,9 @@ export default function Statistics() {
       color: COLORS[index % COLORS.length],
     })) || [];
 
+  const trendsChartData = trends || [];
+  const isFewTrendPoints = trendsChartData.length <= 2;
+
   return (
     <div className="space-y-6 animate-in">
       <div>
@@ -162,30 +166,39 @@ export default function Statistics() {
           <CardTitle>إحصائيات المهندسين</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-[400px]">
+          <div className="h-[360px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={engineerChartData}
-                layout="vertical"
-                margin={{ top: 5, right: 30, left: 170, bottom: 20 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  type="number"
-                  tick={{ fontSize: 12 }}
-                  className="fill-foreground"
-                />
-                <YAxis
-                  dataKey="name"
-                  type="category"
-                  width={160}
-                  tick={{ fontSize: 12 }}
-                  tickLine={false}
-                  axisLine={false}
-                  className="fill-foreground"
-                  style={{ zIndex: 100 }}
-                />
+              <PieChart>
+                <Pie
+                  data={engineerChartData}
+                  cx="50%"
+                  cy="45%"
+                  innerRadius={70}
+                  outerRadius={120}
+                  paddingAngle={3}
+                  dataKey="value"
+                  nameKey="name"
+                  labelLine={false}
+                  label={renderCustomLabel}
+                >
+                  {engineerChartData.map((entry, index) => (
+                    <Cell
+                      key={`engineer-${index}`}
+                      fill={entry.color}
+                      className="transition-opacity hover:opacity-80"
+                    />
+                  ))}
+                </Pie>
                 <Tooltip
+                  formatter={(value: number, _name, props: any) => {
+                    const { payload } = props || {};
+                    return [
+                      value,
+                      `إجمالي (${payload?.completed || 0} مكتمل / ${
+                        payload?.pending || 0
+                      } قيد التنفيذ)`,
+                    ];
+                  }}
                   contentStyle={{
                     backgroundColor: "hsl(var(--popover))",
                     border: "1px solid hsl(var(--border))",
@@ -194,25 +207,13 @@ export default function Statistics() {
                 />
                 <Legend
                   wrapperStyle={{ paddingTop: 8, paddingBottom: 0 }}
-                  formatter={(value) => (
+                  formatter={(value, entry: any) => (
                     <span className="text-xs sm:text-sm text-foreground">
-                      {value}
+                      {value}: {entry?.payload?.value || 0}
                     </span>
                   )}
                 />
-                <Bar
-                  dataKey="completed"
-                  name="مكتمل"
-                  stackId="a"
-                  fill="#22c55e"
-                />
-                <Bar
-                  dataKey="pending"
-                  name="قيد الإنجاز"
-                  stackId="a"
-                  fill="#0099B7"
-                />
-              </BarChart>
+              </PieChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
@@ -331,72 +332,113 @@ export default function Statistics() {
           <CardContent>
             <div className="h-[350px]">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={trends}
-                  margin={{ top: 10, right: 30, left: 0, bottom: 20 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    className="stroke-border/50"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="period"
-                    tick={{ fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                    className="fill-muted-foreground"
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                    className="fill-muted-foreground"
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--popover))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                    }}
-                    labelStyle={{ color: "hsl(var(--foreground))" }}
-                  />
-                  <Legend
-                    wrapperStyle={{ paddingTop: 8, paddingBottom: 0 }}
-                    formatter={(value) => (
-                      <span className="text-xs sm:text-sm text-foreground">
-                        {value}
-                      </span>
-                    )}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="total"
-                    name="إجمالي"
-                    stroke="#0099B7"
-                    strokeWidth={2}
-                    dot={{ r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="completed"
-                    name="مكتمل"
-                    stroke="#22c55e"
-                    strokeWidth={2}
-                    dot={{ r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="emergency"
-                    name="طارئ"
-                    stroke="#ef4444"
-                    strokeWidth={2}
-                    dot={{ r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
+                {isFewTrendPoints ? (
+                  <BarChart
+                    data={trendsChartData}
+                    margin={{ top: 10, right: 30, left: 0, bottom: 20 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                    <XAxis
+                      dataKey="period"
+                      tick={{ fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                      className="fill-muted-foreground"
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                      className="fill-muted-foreground"
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--popover))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                      labelStyle={{ color: "hsl(var(--foreground))" }}
+                    />
+                    <Legend
+                      wrapperStyle={{ paddingTop: 8, paddingBottom: 0 }}
+                      formatter={(value) => (
+                        <span className="text-xs sm:text-sm text-foreground">
+                          {value}
+                        </span>
+                      )}
+                    />
+                    <Bar dataKey="total" name="إجمالي" fill="#0099B7" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="completed" name="مكتمل" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="emergency" name="طارئ" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                ) : (
+                  <LineChart
+                    data={trendsChartData}
+                    margin={{ top: 10, right: 30, left: 0, bottom: 20 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      className="stroke-border/50"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="period"
+                      tick={{ fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                      className="fill-muted-foreground"
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                      className="fill-muted-foreground"
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--popover))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                      labelStyle={{ color: "hsl(var(--foreground))" }}
+                    />
+                    <Legend
+                      wrapperStyle={{ paddingTop: 8, paddingBottom: 0 }}
+                      formatter={(value) => (
+                        <span className="text-xs sm:text-sm text-foreground">
+                          {value}
+                        </span>
+                      )}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="total"
+                      name="إجمالي"
+                      stroke="#0099B7"
+                      strokeWidth={2}
+                      dot={{ r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="completed"
+                      name="مكتمل"
+                      stroke="#22c55e"
+                      strokeWidth={2}
+                      dot={{ r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="emergency"
+                      name="طارئ"
+                      stroke="#ef4444"
+                      strokeWidth={2}
+                      dot={{ r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </LineChart>
+                )}
               </ResponsiveContainer>
             </div>
           </CardContent>

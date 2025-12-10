@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileSpreadsheet, FileText, Filter, Search } from 'lucide-react';
+import { FileSpreadsheet, FileText, Filter, Search, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -103,23 +103,35 @@ export default function Reports() {
             الفلاتر
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent dir="rtl">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <div>
               <label className="text-sm font-medium mb-2 block">من تاريخ</label>
-              <Input
-                type="date"
-                value={filters.fromDate || ''}
-                onChange={(e) => handleFilterChange('fromDate', e.target.value || undefined)}
-              />
+              <div className="relative">
+                <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  type="date"
+                  className="pr-10 text-right"
+                  value={filters.fromDate || ''}
+                  onChange={(e) => handleFilterChange('fromDate', e.target.value || undefined)}
+                  aria-label="تاريخ البداية"
+                />
+              </div>
+              <span className="text-xs text-muted-foreground mt-1 block">التنسيق: يوم - شهر - سنة</span>
             </div>
             <div>
               <label className="text-sm font-medium mb-2 block">إلى تاريخ</label>
-              <Input
-                type="date"
-                value={filters.toDate || ''}
-                onChange={(e) => handleFilterChange('toDate', e.target.value || undefined)}
-              />
+              <div className="relative">
+                <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  type="date"
+                  className="pr-10 text-right"
+                  value={filters.toDate || ''}
+                  onChange={(e) => handleFilterChange('toDate', e.target.value || undefined)}
+                  aria-label="تاريخ النهاية"
+                />
+              </div>
+              <span className="text-xs text-muted-foreground mt-1 block">التنسيق: يوم - شهر - سنة</span>
             </div>
             <div>
               <label className="text-sm font-medium mb-2 block">المهندس</label>
@@ -127,7 +139,7 @@ export default function Reports() {
                 value={filters.engineerId || 'all'}
                 onValueChange={(value) => handleFilterChange('engineerId', value === 'all' ? undefined : value)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="justify-between text-right">
                   <SelectValue placeholder="جميع المهندسين" />
                 </SelectTrigger>
                 <SelectContent>
@@ -146,7 +158,7 @@ export default function Reports() {
                 value={filters.consultantId || 'all'}
                 onValueChange={(value) => handleFilterChange('consultantId', value === 'all' ? undefined : value)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="justify-between text-right">
                   <SelectValue placeholder="جميع الاستشاريين" />
                 </SelectTrigger>
                 <SelectContent>
@@ -165,7 +177,7 @@ export default function Reports() {
                 value={filters.locationId || 'all'}
                 onValueChange={(value) => handleFilterChange('locationId', value === 'all' ? undefined : value)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="justify-between text-right">
                   <SelectValue placeholder="جميع المواقع" />
                 </SelectTrigger>
                 <SelectContent>
@@ -184,7 +196,7 @@ export default function Reports() {
                 value={filters.departmentId || 'all'}
                 onValueChange={(value) => handleFilterChange('departmentId', value === 'all' ? undefined : value)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="justify-between text-right">
                   <SelectValue placeholder="جميع الأقسام" />
                 </SelectTrigger>
                 <SelectContent>
@@ -203,7 +215,7 @@ export default function Reports() {
                 value={filters.systemId || 'all'}
                 onValueChange={(value) => handleFilterChange('systemId', value === 'all' ? undefined : value)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="justify-between text-right">
                   <SelectValue placeholder="جميع الأنظمة" />
                 </SelectTrigger>
                 <SelectContent>
@@ -222,7 +234,7 @@ export default function Reports() {
                 value={filters.maintenanceType || 'all'}
                 onValueChange={(value) => handleFilterChange('maintenanceType', value === 'all' ? undefined : value as MaintenanceType)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="justify-between text-right">
                   <SelectValue placeholder="جميع الأنواع" />
                 </SelectTrigger>
                 <SelectContent>
@@ -238,7 +250,7 @@ export default function Reports() {
                 value={filters.status || 'all'}
                 onValueChange={(value) => handleFilterChange('status', value === 'all' ? undefined : value as RequestStatus)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="justify-between text-right">
                   <SelectValue placeholder="جميع الحالات" />
                 </SelectTrigger>
                 <SelectContent>

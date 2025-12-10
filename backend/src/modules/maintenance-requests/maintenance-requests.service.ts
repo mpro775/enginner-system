@@ -17,7 +17,12 @@ import {
   InvalidOperationException,
   ForbiddenAccessException,
 } from "../../common/exceptions";
-import { RequestStatus, Role, AuditAction } from "../../common/enums";
+import {
+  RequestStatus,
+  Role,
+  AuditAction,
+  MaintenanceType,
+} from "../../common/enums";
 import {
   createPaginationMeta,
   getSkipAndLimit,
@@ -43,7 +48,7 @@ export class MaintenanceRequestsService {
     user: { userId: string; name: string }
   ): Promise<MaintenanceRequestDocument> {
     // Generate request code
-    const requestCode = await this.generateRequestCode();
+    const requestCode = await this.generateRequestCode(createDto.maintenanceType);
 
     const request = new this.requestModel({
       ...createDto,
@@ -318,15 +323,24 @@ export class MaintenanceRequestsService {
     return updated;
   }
 
-  private async generateRequestCode(): Promise<string> {
+  private async generateRequestCode(
+    maintenanceType: MaintenanceType
+  ): Promise<string> {
     const date = new Date();
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
 
+    const prefix =
+      maintenanceType === MaintenanceType.PREVENTIVE
+        ? "PM"
+        : maintenanceType === MaintenanceType.EMERGENCY
+        ? "EM"
+        : "MR";
+
     // Find the last request of this month
     const lastRequest = await this.requestModel
       .findOne({
-        requestCode: { $regex: `^MR-${year}${month}` },
+        requestCode: { $regex: `^${prefix}-${year}${month}` },
       })
       .sort({ requestCode: -1 });
 
@@ -336,7 +350,7 @@ export class MaintenanceRequestsService {
       sequence = lastSequence + 1;
     }
 
-    return `MR-${year}${month}-${String(sequence).padStart(4, "0")}`;
+    return `${prefix}-${year}${month}-${String(sequence).padStart(4, "0")}`;
   }
 
   private buildFilter(

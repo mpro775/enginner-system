@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Filter, Eye, Calendar, MapPin, Building2, User, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Filter, Eye, Calendar, MapPin, Building2, User, FileText, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -16,13 +16,15 @@ import { PageLoader } from '@/components/shared/LoadingSpinner';
 import { requestsService } from '@/services/requests';
 import { locationsService, departmentsService } from '@/services/reference-data';
 import { useAuthStore } from '@/store/auth';
-import { formatDate } from '@/lib/utils';
-import { RequestStatus, MaintenanceType, Role } from '@/types';
+import { formatDate, formatDuration } from '@/lib/utils';
+import { RequestStatus, MaintenanceType, Role, MaintenanceRequest } from '@/types';
 
 export default function RequestsList() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const isEngineer = user?.role === Role.ENGINEER;
+
+  const [now, setNow] = useState(Date.now());
 
   const [filters, setFilters] = useState({
     page: 1,
@@ -53,6 +55,22 @@ export default function RequestsList() {
     queryKey: ['departments'],
     queryFn: () => departmentsService.getAll(),
   });
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const getRequestDuration = (request: MaintenanceRequest) => {
+    const isClosed =
+      request.status === RequestStatus.COMPLETED ||
+      request.status === RequestStatus.STOPPED;
+
+    const endTime =
+      (isClosed && (request.closedAt || request.stoppedAt || request.updatedAt)) || now;
+
+    return formatDuration(request.createdAt, endTime);
+  };
 
   if (isLoading) {
     return <PageLoader />;
@@ -225,6 +243,10 @@ export default function RequestsList() {
                     <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
                     <span>{formatDate(request.createdAt)}</span>
                   </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span>{getRequestDuration(request)}</span>
+                  </div>
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-border/50">
@@ -261,13 +283,14 @@ export default function RequestsList() {
                   <th className="text-foreground/80">القسم</th>
                   {!isEngineer && <th className="text-foreground/80">المهندس</th>}
                   <th className="text-foreground/80">تاريخ الإنشاء</th>
+                  <th className="text-foreground/80">المدة</th>
                   <th className="text-foreground/80">الإجراءات</th>
                 </tr>
               </thead>
               <tbody>
                 {!data || !data.data || data.data.length === 0 ? (
                   <tr>
-                    <td colSpan={isEngineer ? 7 : 8} className="text-center py-12 text-muted-foreground">
+                    <td colSpan={isEngineer ? 8 : 9} className="text-center py-12 text-muted-foreground">
                       <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
                       <p>لا توجد طلبات</p>
                     </td>
@@ -290,6 +313,7 @@ export default function RequestsList() {
                       <td className="text-foreground/80">{request.departmentId?.name || '—'}</td>
                       {!isEngineer && <td className="text-foreground/80">{request.engineerId?.name || '—'}</td>}
                       <td className="text-foreground/70">{formatDate(request.createdAt)}</td>
+                      <td className="text-foreground/70">{getRequestDuration(request)}</td>
                       <td>
                         <Button
                           variant="ghost"

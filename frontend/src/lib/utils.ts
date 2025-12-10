@@ -24,6 +24,39 @@ export function formatDateTime(date: string | Date): string {
   });
 }
 
+export function formatDuration(
+  from: string | Date,
+  to?: string | Date
+): string {
+  const start = new Date(from).getTime();
+  const end = to ? new Date(to).getTime() : Date.now();
+
+  if (Number.isNaN(start) || Number.isNaN(end)) {
+    return "-";
+  }
+
+  const diffMs = Math.max(0, end - start);
+  const totalSeconds = Math.floor(diffMs / 1000);
+
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const pad = (n: number) => n.toString().padStart(2, "0");
+
+  // يظهر الأيام فقط عند الحاجة، مع تنسيق متصاعد (يوم/ساعة/دقيقة/ثانية)
+  if (days > 0) {
+    return `${days}ي ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  }
+
+  if (hours > 0) {
+    return `${hours}:${pad(minutes)}:${pad(seconds)}`;
+  }
+
+  return `${minutes}:${pad(seconds)}`;
+}
+
 export function getStatusLabel(status: RequestStatus): string {
   const labels: Record<RequestStatus, string> = {
     [RequestStatus.IN_PROGRESS]: "قيد التنفيذ",

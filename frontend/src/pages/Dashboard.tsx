@@ -41,6 +41,15 @@ const TYPE_COLORS = {
   preventive: "#0099B7", // KSU Teal - preventive
 };
 
+const TREND_COLORS = [
+  "#0099B7",
+  "#22c55e",
+  "#ef4444",
+  "#00B8DB",
+  "#f97316",
+  "#007A94",
+];
+
 // Custom label for pie chart - only show percentage inside
 const renderCustomLabel = ({
   cx,
@@ -161,6 +170,12 @@ export default function Dashboard() {
   // Check if there's any data to show
   const hasStatusData = statusChartData.some((item) => item.value > 0);
   const hasTypeData = typeChartData.some((item) => item.value > 0);
+  const trendsPieData =
+    trendsData?.map((item, index) => ({
+      name: item.period,
+      value: item.total,
+      color: TREND_COLORS[index % TREND_COLORS.length],
+    })) || [];
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-in">
@@ -326,8 +341,8 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Trends Chart - Admin Only */}
-      {(isAdmin || isConsultant) && trendsData && trendsData.length > 0 && (
+      {/* Trends Chart - Admin/Consultant */}
+      {(isAdmin || isConsultant) && trendsPieData.length > 0 && (
         <Card className="dark:border-border/50">
           <CardHeader className="pb-2 sm:pb-4">
             <CardTitle className="text-base sm:text-lg">
@@ -337,28 +352,27 @@ export default function Dashboard() {
           <CardContent>
             <div className="h-[280px] sm:h-[350px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={trendsData}
-                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    className="stroke-border/50"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="period"
-                    tick={{ fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                    className="fill-muted-foreground"
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                    className="fill-muted-foreground"
-                  />
+                <PieChart>
+                  <Pie
+                    data={trendsPieData}
+                    cx="50%"
+                    cy="45%"
+                    innerRadius={70}
+                    outerRadius={110}
+                    paddingAngle={3}
+                    dataKey="value"
+                    nameKey="name"
+                    labelLine={false}
+                    label={renderCustomLabel}
+                  >
+                    {trendsPieData.map((entry, index) => (
+                      <Cell
+                        key={`trend-${index}`}
+                        fill={entry.color}
+                        className="transition-opacity hover:opacity-80"
+                      />
+                    ))}
+                  </Pie>
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "hsl(var(--popover))",
@@ -366,6 +380,19 @@ export default function Dashboard() {
                       borderRadius: "8px",
                     }}
                     labelStyle={{ color: "hsl(var(--foreground))" }}
+                    formatter={(value: number, _name, props: any) => {
+                      const item = props?.payload;
+                      const emergency = trendsData?.find(
+                        (t) => t.period === item?.name
+                      )?.emergency;
+                      const preventive = trendsData?.find(
+                        (t) => t.period === item?.name
+                      )?.preventive;
+                      return [
+                        value,
+                        `إجمالي (${emergency ?? 0} طارئة / ${preventive ?? 0} وقائية)`,
+                      ];
+                    }}
                   />
                   <Legend
                     wrapperStyle={{ paddingTop: 16 }}
@@ -375,25 +402,7 @@ export default function Dashboard() {
                       </span>
                     )}
                   />
-                  <Bar
-                    dataKey="total"
-                    name="إجمالي"
-                    fill="#0099B7"
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="emergency"
-                    name="طارئة"
-                    fill="#ef4444"
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="preventive"
-                    name="وقائية"
-                    fill="#007A94"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
+                </PieChart>
               </ResponsiveContainer>
             </div>
           </CardContent>

@@ -1,54 +1,28 @@
 import { useState, useEffect } from 'react';
 
-type Theme = 'light' | 'dark' | 'system';
+type Theme = 'light' | 'dark';
 
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window !== 'undefined') {
-      return (localStorage.getItem('theme') as Theme) || 'system';
+      const stored = localStorage.getItem('theme');
+      return stored === 'dark' ? 'dark' : 'light';
     }
-    return 'system';
+    return 'light';
   });
 
   useEffect(() => {
     const root = window.document.documentElement;
-
-    const applyTheme = (selectedTheme: Theme) => {
-      root.classList.remove('light', 'dark');
-
-      if (selectedTheme === 'system') {
-        const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
-          ? 'dark'
-          : 'light';
-        root.classList.add(systemTheme);
-      } else {
-        root.classList.add(selectedTheme);
-      }
-    };
-
-    applyTheme(theme);
+    root.classList.remove('light', 'dark');
+    root.classList.add(theme);
     localStorage.setItem('theme', theme);
-
-    // Listen to system theme changes when using system theme
-    if (theme === 'system') {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handleChange = () => applyTheme('system');
-      mediaQuery.addEventListener('change', handleChange);
-      return () => mediaQuery.removeEventListener('change', handleChange);
-    }
   }, [theme]);
 
   const toggleTheme = () => {
-    setTheme((prev) => {
-      if (prev === 'light') return 'dark';
-      if (prev === 'dark') return 'system';
-      return 'light';
-    });
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
 
-  const isDark = 
-    theme === 'dark' || 
-    (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const isDark = theme === 'dark';
 
   return { theme, setTheme, toggleTheme, isDark };
 }

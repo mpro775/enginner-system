@@ -183,7 +183,7 @@ async function seed() {
   const requests = await requestModel.insertMany([
     // In Progress requests
     {
-      requestCode: 'MR-202412-0001',
+      requestCode: 'EM-202412-0001',
       engineerId: engineer1!._id,
       maintenanceType: MaintenanceType.EMERGENCY,
       locationId: locations[0]._id, // كلية الحاسوب
@@ -197,7 +197,7 @@ async function seed() {
       openedAt: twoDaysAgo,
     },
     {
-      requestCode: 'MR-202412-0002',
+      requestCode: 'PM-202412-0001',
       engineerId: engineer2!._id,
       maintenanceType: MaintenanceType.PREVENTIVE,
       locationId: locations[1]._id, // كلية الهندسة
@@ -209,7 +209,7 @@ async function seed() {
       openedAt: oneDayAgo,
     },
     {
-      requestCode: 'MR-202412-0003',
+      requestCode: 'EM-202412-0002',
       engineerId: engineer3!._id,
       maintenanceType: MaintenanceType.EMERGENCY,
       locationId: locations[2]._id, // الورش
@@ -225,7 +225,7 @@ async function seed() {
     },
     // Completed requests
     {
-      requestCode: 'MR-202412-0004',
+      requestCode: 'PM-202412-0002',
       engineerId: engineer1!._id,
       maintenanceType: MaintenanceType.PREVENTIVE,
       locationId: locations[3]._id, // الإسكان
@@ -239,7 +239,7 @@ async function seed() {
       closedAt: twoDaysAgo,
     },
     {
-      requestCode: 'MR-202412-0005',
+      requestCode: 'EM-202412-0003',
       engineerId: engineer2!._id,
       maintenanceType: MaintenanceType.EMERGENCY,
       locationId: locations[4]._id, // المكتبة
@@ -255,7 +255,7 @@ async function seed() {
     },
     // Stopped request
     {
-      requestCode: 'MR-202412-0006',
+      requestCode: 'PM-202412-0003',
       engineerId: engineer3!._id,
       maintenanceType: MaintenanceType.PREVENTIVE,
       locationId: locations[5]._id, // مبنى الإدارة

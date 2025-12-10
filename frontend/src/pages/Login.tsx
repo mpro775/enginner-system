@@ -96,6 +96,9 @@ export default function Login() {
       <div className="w-full max-w-md relative z-10 p-4">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
+          <p className="text-white/90 dark:text-white/85 text-base font-semibold mb-1">
+            المملكة العربية السعودية
+          </p>
           <div className="flex h-24 w-auto items-center justify-center mb-4">
             <img
               src="/assets/logo.png"
@@ -104,16 +107,20 @@ export default function Login() {
             />
           </div>
 
-          <p className="text-white/90 dark:text-white/85 mt-1 font-medium">
-            نظام إدارة طلبات الصيانة
+          <p className="text-white/90 dark:text-white/85 text-sm">
+            نائب رئيس الجامعة للمشاريع
           </p>
-          <p className="text-white/70 dark:text-white/70 text-sm mt-1">
-            فرع المزاحمية
+          <p className="text-white/80 dark:text-white/75 text-xs mt-1">
+            إدارة التشغيل والصيانة لكليات الجامعة - فرع المزاحمية
           </p>
+
         </div>
 
         <Card className="border-0 shadow-2xl bg-card/95 dark:bg-card/90 backdrop-blur-sm">
           <CardHeader className="space-y-1 text-center pb-4">
+          <p className="text-sm text-primary/80 mb-1">
+              نظام إدارة طلبات الصيانة
+            </p>
             <CardTitle className="text-2xl text-primary">
               تسجيل الدخول
             </CardTitle>
@@ -228,8 +235,8 @@ export default function Login() {
         </Card>
 
         {/* Footer */}
-        <p className="text-center text-white/70 dark:text-white/60 text-xs mt-6">
-          © 2025 جامعة الملك سعود - فرع المزاحمية - جميع الحقوق محفوظة
+        <p className="text-center text-white/70 dark:text-white/60 text-xs mt-3">
+          © 2025 جامعة الملك سعود - جميع الحقوق محفوظة
         </p>
       </div>
     </div>
