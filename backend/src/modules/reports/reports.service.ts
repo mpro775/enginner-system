@@ -40,6 +40,40 @@ function convertLogoToBase64(): string {
   }
 }
 
+// Convert date to English numerals format (YYYY/MM/DD)
+function formatDateEnglish(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}/${month}/${day}`;
+}
+
+// Convert font file to base64 for embedding in HTML
+function convertFontToBase64(fontFileName: string): string {
+  try {
+    const fontPath = path.join(
+      __dirname,
+      "..",
+      "..",
+      "assets",
+      "fonts",
+      fontFileName
+    );
+    if (!fs.existsSync(fontPath)) {
+      console.warn("Font file not found at:", fontPath);
+      return "";
+    }
+
+    const fontBuffer = fs.readFileSync(fontPath);
+    const base64 = fontBuffer.toString("base64");
+    const fontFormat = fontFileName.endsWith(".ttf") ? "truetype" : "opentype";
+    return `data:font/${fontFormat};charset=utf-8;base64,${base64}`;
+  } catch (error) {
+    console.error("Error converting font to base64:", error);
+    return "";
+  }
+}
+
 // Helper function to escape HTML characters
 function escapeHtml(text: string): string {
   if (!text) return "";
@@ -326,14 +360,15 @@ export class ReportsService {
     // 1. تجهيز الصور والبيانات
     const logoBase64 = convertLogoToBase64();
     const reportNumber = `REP-${Date.now().toString().slice(-6)}`;
-    const reportDate = new Date().toLocaleDateString("ar-SA");
+    const reportDate = formatDateEnglish(new Date()); // استخدام أرقام إنجليزية
     const reportContent = generateReportContent(data, stats);
 
     // 2. تصميم الهيدر (HTML + CSS مدمج)
+    // استخدام خطوط النظام المتاحة في Docker (font-noto-arabic)
     // قمنا بتقليل margin و line-height لحل مشكلة التباعد
     // كبرنا الشعار إلى 100px
     const headerTemplate = `
-    <div style="font-family: 'Tajawal', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: flex-start; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
+    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: flex-start; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
         
         <div style="text-align: right; width: 30%;">
             <p style="margin: 2px 0; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
@@ -347,16 +382,17 @@ export class ReportsService {
             <img src="${logoBase64}" style="width: 100px; height: auto;" />
         </div>
 
-        <div style="text-align: left; width: 30%; padding-top: 15px; direction: ltr;">
-            <p style="margin: 2px 0;"><strong>Report No:</strong> ${reportNumber}</p>
-            <p style="margin: 2px 0;"><strong>Date:</strong> ${reportDate}</p>
+        <div style="text-align: left; width: 30%; padding-top: 15px; direction: rtl;">
+            <p style="margin: 2px 0;"><strong>رقم التقرير:</strong> ${reportNumber}</p>
+            <p style="margin: 2px 0;"><strong>التاريخ:</strong> ${reportDate}</p>
         </div>
     </div>`;
 
     // 3. تصميم الفوتر (HTML + CSS مدمج)
     // استخدمنا Flexbox لتوزيع العناصر الـ 4 بالتساوي
+    // استخدام خطوط النظام المتاحة في Docker
     const footerTemplate = `
-    <div style="font-family: 'Tajawal', sans-serif; width: 100%; font-size: 8px; padding: 0 40px; border-top: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center; direction: rtl;">
+    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 8px; padding: 0 40px; border-top: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center; direction: rtl;">
         
         <div style="text-align: right;">
             <p style="margin: 1px 0;">المملكة العربية السعودية</p>
