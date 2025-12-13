@@ -54,12 +54,10 @@ RUN npm ci --only=production && npm cache clean --force
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
 
-# 2. ####### هام جداً: نسخ مجلدات القوالب والصور يدوياً #######
-# افترضت هنا أن القوالب موجودة في src/reports/templates
-# والصور في assets
-# عدل المسارات حسب مكانها الفعلي في مشروعك
-COPY --from=builder /app/src/reports/templates ./dist/reports/templates
-COPY --from=builder /app/assets ./assets
+# نسخ إضافي للقوالب والصور كإجراء احتياطي
+# (nest-cli.json ينسخها تلقائياً، لكن هذا يضمن وجودها)
+COPY --from=builder /app/src/modules/reports/templates ./dist/modules/reports/templates
+COPY --from=builder /app/src/assets ./dist/assets
 
 # Set Puppeteer environment variables
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
