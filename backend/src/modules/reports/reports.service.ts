@@ -3,6 +3,7 @@ import { InjectModel } from "@nestjs/mongoose";
 import { Model, FilterQuery } from "mongoose";
 import * as ExcelJS from "exceljs";
 import * as PDFDocument from "pdfkit";
+import * as puppeteer from "puppeteer";
 import { Response } from "express";
 import * as path from "path";
 import * as fs from "fs";
@@ -127,6 +128,138 @@ function processArabicText(text: string): string {
   // Don't reverse text - let align:right handle the positioning
   // This should work better with proper Arabic fonts
   return reshapeArabic(text);
+}
+
+// Convert logo to base64 for embedding in HTML
+function convertLogoToBase64(): string {
+  try {
+    const logoPath = path.join(__dirname, "..", "..", "assets", "image", "logo.png");
+    if (!fs.existsSync(logoPath)) {
+      console.warn("Logo file not found at:", logoPath);
+      return "";
+    }
+
+    const logoBuffer = fs.readFileSync(logoPath);
+    const base64 = logoBuffer.toString('base64');
+    return `data:image/png;base64,${base64}`;
+  } catch (error) {
+    console.error("Error converting logo to base64:", error);
+    return "";
+  }
+}
+
+// Generate HTML content for the report (summary + table)
+function generateReportContent(data: RequestReportData[], stats: any): string {
+  let html = '';
+
+  // Summary section
+  html += `
+    <div class="content-section">
+      <h2 class="section-title">ملخص الإحصائيات</h2>
+      <div class="summary-grid">
+        <div class="summary-card">
+          <div class="summary-value">${stats?.totalRequests || 0}</div>
+          <div class="summary-label">إجمالي الطلبات</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-value">${stats?.inProgress || 0}</div>
+          <div class="summary-label">قيد التنفيذ</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-value">${stats?.completed || 0}</div>
+          <div class="summary-label">مكتملة</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-value">${stats?.stopped || 0}</div>
+          <div class="summary-label">متوقفة</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-value">${stats?.emergencyRequests || 0}</div>
+          <div class="summary-label">طوارئ</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-value">${stats?.preventiveRequests || 0}</div>
+          <div class="summary-label">وقائية</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-value">${stats?.avgCompletionTimeHours || 0}</div>
+          <div class="summary-label">متوسط وقت الإنجاز (ساعة)</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Table section
+  html += `
+    <div class="content-section">
+      <h2 class="section-title">تفاصيل الطلبات</h2>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>التاريخ</th>
+            <th>الموقع</th>
+            <th>الحالة</th>
+            <th>النوع</th>
+            <th>المهندس</th>
+            <th>الكود</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  // Status translation map
+  const statusMap: Record<string, string> = {
+    in_progress: "قيد التنفيذ",
+    completed: "مكتملة",
+    stopped: "متوقفة",
+    pending: "معلقة",
+  };
+
+  // Maintenance type translation map
+  const typeMap: Record<string, string> = {
+    emergency: "طوارئ",
+    preventive: "وقائية",
+  };
+
+  // Add table rows (limit to 30 rows for performance)
+  const limitedData = data.slice(0, 30);
+  limitedData.forEach((row) => {
+    const statusKey = String(row.status || "").toLowerCase().replace(/_/g, "_");
+    const statusText = statusMap[statusKey] || row.status || "N/A";
+
+    const typeKey = String(row.maintenanceType || "").toLowerCase();
+    const typeText = typeMap[typeKey] || row.maintenanceType || "N/A";
+
+    const openedDate = row.openedAt
+      ? new Date(row.openedAt).toLocaleDateString("ar-SA")
+      : "N/A";
+
+    html += `
+      <tr>
+        <td>${openedDate}</td>
+        <td>${row.locationName || "N/A"}</td>
+        <td>${statusText}</td>
+        <td>${typeText}</td>
+        <td>${row.engineerName || "N/A"}</td>
+        <td>${row.requestCode || "N/A"}</td>
+      </tr>
+    `;
+  });
+
+  html += `
+        </tbody>
+      </table>
+  `;
+
+  if (data.length > 30) {
+    html += `<p style="text-align: center; margin-top: 10px;">... و ${data.length - 30} طلبات أخرى</p>`;
+  }
+
+  html += `
+    </div>
+  `;
+
+  return html;
 }
 
 export interface RequestReportData {
@@ -289,258 +422,76 @@ export class ReportsService {
         "admin"
       );
 
-      const doc = new PDFDocument({ margin: 50, size: "A4" });
-
-      // Register Arabic font (Cairo or Amiri as fallback)
-      // Try multiple possible paths for fonts directory
-      const possibleFontsDirs = [
-        path.join(__dirname, "..", "..", "..", "assets", "fonts"),
-        path.join(__dirname, "..", "..", "assets", "fonts"),
-        path.join(process.cwd(), "dist", "assets", "fonts"),
-        path.join(process.cwd(), "assets", "fonts"),
-        path.join(process.cwd(), "src", "assets", "fonts"),
-      ];
-
-      // Font configurations to try (Cairo first, then Amiri)
-      const fontConfigs = [
-        { regular: "Cairo-Regular.ttf", bold: "Cairo-Bold.ttf", name: "Cairo" },
-        { regular: "Amiri-Regular.ttf", bold: "Amiri-Bold.ttf", name: "Amiri" },
-      ];
-
-      let fontsDir = "";
-      let selectedFont = null;
-
-      // Find available fonts
-      for (const dir of possibleFontsDirs) {
-        for (const config of fontConfigs) {
-          if (
-            fs.existsSync(path.join(dir, config.regular)) &&
-            fs.existsSync(path.join(dir, config.bold))
-          ) {
-            fontsDir = dir;
-            selectedFont = config;
-            break;
-          }
-        }
-        if (selectedFont) break;
+      // Read HTML template
+      const templatePath = path.join(__dirname, "templates", "report-template.html");
+      if (!fs.existsSync(templatePath)) {
+        throw new Error(`Template file not found at: ${templatePath}`);
       }
+      let htmlTemplate = fs.readFileSync(templatePath, "utf-8");
 
-      let hasArabicFont = false;
-      if (fontsDir && selectedFont) {
-        const arabicFontPath = path.join(fontsDir, selectedFont.regular);
-        const arabicBoldFontPath = path.join(fontsDir, selectedFont.bold);
-        try {
-          doc.registerFont("Arabic", arabicFontPath);
-          doc.registerFont("Arabic-Bold", arabicBoldFontPath);
-          hasArabicFont = true;
-          console.log(
-            `Arabic fonts (${selectedFont.name}) registered successfully from:`,
-            fontsDir
-          );
-        } catch (fontError) {
-          console.warn("Failed to register Arabic fonts:", fontError);
-        }
-      } else {
-        console.warn(
-          "Arabic font files not found. Searched in:",
-          possibleFontsDirs
-        );
-      }
+      // Prepare template data
+      const reportNumber = `REP-${Date.now().toString().slice(-6)}`;
+      const reportDate = new Date().toLocaleDateString("ar-SA");
+      const logoUrl = convertLogoToBase64();
+      const reportContent = generateReportContent(data, stats);
 
-      // Handle PDF generation errors before piping
-      doc.on("error", (err) => {
-        console.error("PDF generation error:", err);
-        if (!res.headersSent) {
-          res.status(500).json({
-            message: "Failed to generate PDF report",
-            error: err.message,
-          });
-        } else {
-          res.end();
-        }
+      // Replace template placeholders
+      htmlTemplate = htmlTemplate
+        .replace(/{{report_number}}/g, reportNumber)
+        .replace(/{{report_date}}/g, reportDate)
+        .replace(/{{logo_url}}/g, logoUrl)
+        .replace(/{{{report_content}}}/g, reportContent);
+
+      // Generate PDF using Puppeteer
+      const browser = await puppeteer.launch({
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--no-zygote',
+          '--single-process',
+          '--disable-gpu'
+        ]
       });
 
+      const page = await browser.newPage();
+
+      // Set viewport and page format
+      await page.setViewport({ width: 794, height: 1123 }); // A4 dimensions in pixels
+      await page.setContent(htmlTemplate, {
+        waitUntil: 'networkidle0',
+        timeout: 30000
+      });
+
+      // Generate PDF
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: {
+          top: '0.5in',
+          right: '0.5in',
+          bottom: '0.5in',
+          left: '0.5in'
+        },
+        preferCSSPageSize: true,
+        displayHeaderFooter: false,
+      });
+
+      await browser.close();
+
+      // Set response headers
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
         "Content-Disposition",
         `attachment; filename=maintenance-report-${Date.now()}.pdf`
       );
 
-      doc.pipe(res);
+      // Send PDF buffer
+      res.send(pdfBuffer);
 
-      // Use Arabic font if available
-      const mainFont = hasArabicFont ? "Arabic" : "Helvetica";
-      const boldFont = hasArabicFont ? "Arabic-Bold" : "Helvetica-Bold";
-
-      // Title (Arabic)
-      doc
-        .font(boldFont)
-        .fontSize(20)
-        .text(processArabicText("تقرير طلبات الصيانة"), { align: "center" })
-        .moveDown();
-
-      // Date range
-      const fromDate = filter.fromDate || "جميع الفترات";
-      const toDate = filter.toDate || "الآن";
-      doc
-        .font(mainFont)
-        .fontSize(12)
-        .text(processArabicText(`الفترة: من ${fromDate} إلى ${toDate}`), {
-          align: "center",
-        })
-        .moveDown(2);
-
-      // Summary statistics (Arabic)
-      doc
-        .font(boldFont)
-        .fontSize(14)
-        .text(processArabicText("ملخص الإحصائيات"), { align: "right" })
-        .moveDown();
-      doc.font(mainFont).fontSize(10);
-      doc.text(
-        processArabicText(`إجمالي الطلبات: ${stats?.totalRequests || 0}`),
-        { align: "right" }
-      );
-      doc.text(processArabicText(`قيد التنفيذ: ${stats?.inProgress || 0}`), {
-        align: "right",
-      });
-      doc.text(processArabicText(`مكتملة: ${stats?.completed || 0}`), {
-        align: "right",
-      });
-      doc.text(processArabicText(`متوقفة: ${stats?.stopped || 0}`), {
-        align: "right",
-      });
-      doc.text(processArabicText(`طوارئ: ${stats?.emergencyRequests || 0}`), {
-        align: "right",
-      });
-      doc.text(processArabicText(`وقائية: ${stats?.preventiveRequests || 0}`), {
-        align: "right",
-      });
-      doc.text(
-        processArabicText(
-          `متوسط وقت الإنجاز: ${stats?.avgCompletionTimeHours || 0} ساعة`
-        ),
-        { align: "right" }
-      );
-      doc.moveDown(2);
-
-      // Requests table
-      if (data && data.length > 0) {
-        doc
-          .font(boldFont)
-          .fontSize(14)
-          .text(processArabicText("تفاصيل الطلبات"), { align: "right" })
-          .moveDown();
-
-        // Table headers (Arabic - reversed for RTL)
-        const tableTop = doc.y;
-        const headers = [
-          "التاريخ",
-          "الموقع",
-          "الحالة",
-          "النوع",
-          "المهندس",
-          "الكود",
-        ];
-        const colWidths = [70, 90, 70, 60, 90, 70];
-        let x = 50;
-
-        doc.font(boldFont).fontSize(9);
-        headers.forEach((header, i) => {
-          doc.text(processArabicText(header), x, tableTop, {
-            width: colWidths[i],
-            align: "right",
-          });
-          x += colWidths[i];
-        });
-
-        doc.font(mainFont).fontSize(8);
-        let y = tableTop + 25;
-
-        // Status translation map
-        const statusMap: Record<string, string> = {
-          in_progress: "قيد التنفيذ",
-          completed: "مكتملة",
-          stopped: "متوقفة",
-          pending: "معلقة",
-        };
-
-        // Maintenance type translation map
-        const typeMap: Record<string, string> = {
-          emergency: "طوارئ",
-          preventive: "وقائية",
-        };
-
-        data.slice(0, 30).forEach((row) => {
-          if (y > 750) {
-            doc.addPage();
-            y = 50;
-          }
-
-          x = 50;
-          const statusKey = row.status
-            ? String(row.status).toLowerCase().replace(/_/g, "_")
-            : "";
-          const statusText = statusMap[statusKey] || row.status || "N/A";
-
-          const typeKey = row.maintenanceType
-            ? String(row.maintenanceType).toLowerCase()
-            : "";
-          const typeText = typeMap[typeKey] || row.maintenanceType || "N/A";
-
-          const openedDate = row.openedAt
-            ? new Date(row.openedAt).toLocaleDateString("ar-SA")
-            : "N/A";
-
-          // Data in reversed order for RTL (Date, Location, Status, Type, Engineer, Code)
-          const rowData = [
-            openedDate,
-            row.locationName || "N/A",
-            statusText,
-            typeText,
-            row.engineerName || "N/A",
-            row.requestCode || "N/A",
-          ];
-
-          rowData.forEach((cell, i) => {
-            const cellText = String(cell || "N/A");
-            doc.text(processArabicText(cellText), x, y, {
-              width: colWidths[i] - 5,
-              align: "right",
-            });
-            x += colWidths[i];
-          });
-
-          y += 20;
-        });
-
-        if (data.length > 30) {
-          doc.moveDown();
-          doc.text(processArabicText(`... و ${data.length - 30} طلبات أخرى`), {
-            align: "center",
-          });
-        }
-      } else {
-        doc
-          .font(mainFont)
-          .fontSize(12)
-          .text(processArabicText("لا توجد بيانات"), { align: "center" });
-      }
-
-      // Footer
-      doc
-        .font(mainFont)
-        .fontSize(8)
-        .text(
-          processArabicText(
-            `تم إنشاء التقرير في ${new Date().toLocaleString("ar-SA")}`
-          ),
-          50,
-          doc.page.height - 50,
-          { align: "center" }
-        );
-
-      doc.end();
     } catch (error) {
       console.error("Error generating PDF report:", error);
       if (!res.headersSent) {
