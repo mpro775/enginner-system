@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileSpreadsheet, FileText, Filter, Search, Calendar } from 'lucide-react';
+import { FileSpreadsheet, FileText, Filter, Search, Calendar, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -26,6 +26,8 @@ export default function Reports() {
   const isAdmin = user?.role === Role.ADMIN;
 
   const [filters, setFilters] = useState<ReportFilter>({});
+  const [downloadingExcel, setDownloadingExcel] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const { data: reportData, isLoading, isError, refetch } = useQuery({
     queryKey: ['reports', filters],
@@ -64,11 +66,30 @@ export default function Reports() {
   });
 
   const handleDownload = async (format: 'excel' | 'pdf') => {
+    // منع الضغط المتكرر
+    if (downloadingExcel || downloadingPdf) {
+      return;
+    }
+
     try {
+      // تعيين حالة التحميل
+      if (format === 'excel') {
+        setDownloadingExcel(true);
+      } else {
+        setDownloadingPdf(true);
+      }
+
       await reportsService.downloadRequestsReport(filters, format);
     } catch (error) {
       console.error('Error downloading report:', error);
       alert('حدث خطأ أثناء تحميل التقرير');
+    } finally {
+      // إعادة تعيين حالة التحميل
+      if (format === 'excel') {
+        setDownloadingExcel(false);
+      } else {
+        setDownloadingPdf(false);
+      }
     }
   };
 
@@ -267,13 +288,39 @@ export default function Reports() {
               <Search className="ml-2 h-4 w-4" />
               بحث
             </Button>
-            <Button variant="outline" onClick={() => handleDownload('excel')}>
-              <FileSpreadsheet className="ml-2 h-4 w-4" />
-              تحميل Excel
+            <Button 
+              variant="outline" 
+              onClick={() => handleDownload('excel')}
+              disabled={downloadingExcel || downloadingPdf}
+            >
+              {downloadingExcel ? (
+                <>
+                  <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                  جاري التحميل...
+                </>
+              ) : (
+                <>
+                  <FileSpreadsheet className="ml-2 h-4 w-4" />
+                  تحميل Excel
+                </>
+              )}
             </Button>
-            <Button variant="outline" onClick={() => handleDownload('pdf')}>
-              <FileText className="ml-2 h-4 w-4" />
-              تحميل PDF
+            <Button 
+              variant="outline" 
+              onClick={() => handleDownload('pdf')}
+              disabled={downloadingExcel || downloadingPdf}
+            >
+              {downloadingPdf ? (
+                <>
+                  <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                  جاري التحميل...
+                </>
+              ) : (
+                <>
+                  <FileText className="ml-2 h-4 w-4" />
+                  تحميل PDF
+                </>
+              )}
             </Button>
           </div>
         </CardContent>
