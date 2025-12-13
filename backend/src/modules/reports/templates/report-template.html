@@ -1,262 +1,107 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <title>تقرير طلبات الصيانة</title>
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
-
+  <head>
+    <meta charset="UTF-8" />
+    <title>Report</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
     <style>
-        /* إعدادات الصفحة والخطوط */
+      body {
+        font-family: "Tajawal", sans-serif;
+        margin: 0;
+        padding: 0;
+        /* الخلفية بيضاء لضمان نظافة التقرير */
+        background: white;
+      }
+
+      /* تنسيقات الجدول والإحصائيات */
+      .content {
+        /* لا نحتاج حدود هنا، سنعتمد على الهوامش */
+        direction: rtl;
+      }
+
+      /* أقسام المحتوى */
+      .content-section {
+        margin-bottom: 20px;
+      }
+
+      .section-title {
+        font-size: 14px;
+        font-weight: bold;
+        color: #0f5b7a;
+        margin-bottom: 15px;
+        border-bottom: 1px solid #0f5b7a;
+        padding-bottom: 5px;
+      }
+
+      /* ملخص الإحصائيات */
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+      }
+
+      .summary-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+      }
+
+      .summary-value {
+        font-size: 18px;
+        font-weight: bold;
+        color: #0f5b7a;
+        margin-bottom: 5px;
+      }
+
+      .summary-label {
+        font-size: 10px;
+        color: #6c757d;
+      }
+
+      /* جدول البيانات */
+      .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 10px;
+      }
+
+      .data-table th,
+      .data-table td {
+        border: 1px solid #dee2e6;
+        padding: 8px;
+        text-align: right;
+      }
+
+      .data-table th {
+        background-color: #0f5b7a;
+        color: white;
+        font-weight: bold;
+      }
+
+      .data-table tbody tr:nth-child(even) {
+        background-color: #f8f9fa;
+      }
+
+      .data-table tbody tr:hover {
+        background-color: #e3f2fd;
+      }
+
+      /* تنسيقات إضافية للطباعة */
+      @media print {
         body {
-            font-family: 'Tajawal', sans-serif;
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            background-color: #fff;
-            color: #333;
-            font-size: 12px;
-            line-height: 1.4;
+          -webkit-print-color-adjust: exact;
+          color-adjust: exact;
         }
-
-        /* تحديد مقاس الصفحة A4 وضبط الهوامش للطباعة */
-        @page {
-            size: A4;
-            margin: 0; /* سنجعل الهامش 0 ونتحكم به داخل الـ container */
-        }
-
-        /* حاوية الصفحة الرئيسية */
-        .page-container {
-            width: 210mm;
-            min-height: 297mm;
-            padding: 15mm 15mm 5mm 15mm; /* هوامش الصفحة: أعلى يمين أسفل يسار */
-            margin: 0 auto;
-            position: relative;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between; /* لدفع الفوتر للأسفل */
-            border: 1px solid #fff; /* حدود وهمية */
-        }
-
-        /* --- تصميم الترويسة (Header) --- */
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            border-bottom: 2px solid #0f5b7a; /* خط فاصل لوني مثل الهوية */
-            padding-bottom: 15px;
-            margin-bottom: 20px;
-        }
-
-        .header-right, .header-left, .header-center {
-            flex: 1;
-        }
-
-        /* الجزء الأيمن: بيانات الجامعة */
-        .header-right {
-            text-align: right;
-            font-size: 12px;
-            font-weight: bold;
-            line-height: 1.6;
-            color: #0f5b7a;
-        }
-
-        /* الجزء الأوسط: البسملة والشعار */
-        .header-center {
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .basmala {
-            font-size: 14px;
-            margin-bottom: 10px;
-            color: #0f5b7a;
-            font-weight: bold;
-        }
-        .logo {
-            width: 80px;
-            height: auto;
-            object-fit: contain;
-        }
-
-        /* الجزء الأيسر: بيانات التقرير */
-        .header-left {
-            text-align: left;
-            font-size: 12px;
-            font-weight: bold;
-            line-height: 1.8;
-            padding-top: 15px; /* محاذاة بصرية */
-            direction: ltr;
-        }
-
-        /* --- محتوى التقرير (Body) --- */
-        .content {
-            flex-grow: 1; /* يأخذ المساحة المتبقية */
-            border: 1px solid #0f5b7a; /* الإطار الخارجي الأزرق كما في الصورة */
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 10px;
-        }
-
-        /* أقسام المحتوى */
-        .content-section {
-            margin-bottom: 20px;
-        }
-
-        .section-title {
-            font-size: 14px;
-            font-weight: bold;
-            color: #0f5b7a;
-            margin-bottom: 15px;
-            border-bottom: 1px solid #0f5b7a;
-            padding-bottom: 5px;
-        }
-
-        /* ملخص الإحصائيات */
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .summary-card {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 15px;
-            text-align: center;
-        }
-
-        .summary-value {
-            font-size: 18px;
-            font-weight: bold;
-            color: #0f5b7a;
-            margin-bottom: 5px;
-        }
-
-        .summary-label {
-            font-size: 10px;
-            color: #6c757d;
-        }
-
-        /* جدول البيانات */
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 10px;
-        }
-
-        .data-table th,
-        .data-table td {
-            border: 1px solid #dee2e6;
-            padding: 8px;
-            text-align: right;
-        }
-
-        .data-table th {
-            background-color: #0f5b7a;
-            color: white;
-            font-weight: bold;
-        }
-
-        .data-table tbody tr:nth-child(even) {
-            background-color: #f8f9fa;
-        }
-
-        .data-table tbody tr:hover {
-            background-color: #e3f2fd;
-        }
-
-        /* --- تصميم التذييل (Footer) --- */
-        .footer {
-            font-size: 10px;
-            color: #333;
-            border-top: 1px solid #ccc; /* خط رفيع فاصل */
-            padding-top: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .footer-section {
-            margin: 0 5px;
-        }
-
-        .footer-section p {
-            margin: 2px 0;
-        }
-
-        /* تنسيق البيانات في الفوتر لتطابق الصورة */
-        .footer-right { text-align: right; }
-        .footer-center-right { text-align: center; }
-        .footer-center-left { text-align: center; }
-        .footer-left { text-align: left; direction: ltr; } /* للإنجليزي والإيميل */
-
-        /* تنسيقات إضافية للطباعة */
-        @media print {
-            .page-container {
-                margin: 0;
-                padding: 15mm;
-            }
-            body {
-                -webkit-print-color-adjust: exact;
-                color-adjust: exact;
-            }
-        }
+      }
     </style>
-</head>
-<body>
-
-    <div class="page-container">
-
-        <header class="header">
-            <div class="header-right">
-                <p>المملكة العربية السعودية</p>
-                <p>جامعة الملك سعود</p>
-                <p>إدارة التشغيل والصيانة</p>
-                <p>بكليات الجامعة - فرع المزاحمية</p>
-            </div>
-
-            <div class="header-center">
-                <p class="basmala">بسم الله الرحمن الرحيم</p>
-                <img src="{{logo_url}}" class="logo" alt="شعار جامعة الملك سعود">
-            </div>
-
-            <div class="header-left">
-                <p>رقم التقرير : <span>{{report_number}}</span></p>
-                <p>التاريخ : <span>{{report_date}}</span></p>
-            </div>
-        </header>
-
-        <main class="content">
-            {{{report_content}}}
-        </main>
-
-        <footer class="footer">
-            <div class="footer-right footer-section">
-                <p>المملكة العربية السعودية</p>
-                <p>ص.ب 2454 الرياض 11451</p>
-            </div>
-
-            <div class="footer-center-right footer-section">
-                <p>العنوان الوطني</p>
-                <p>RGSA8707</p>
-            </div>
-
-            <div class="footer-center-left footer-section">
-                <p>هاتف 4686275 11 966+</p>
-            </div>
-
-            <div class="footer-left footer-section">
-                <p>الموقع الإلكتروني: www.ksu.edu.sa</p>
-                <p>البريد الإلكتروني: hm@ksu.edu.sa</p>
-            </div>
-        </footer>
-
-    </div>
-
-</body>
+  </head>
+  <body>
+    <div class="content">{{{report_content}}}</div>
+  </body>
 </html>

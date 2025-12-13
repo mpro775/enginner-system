@@ -323,7 +323,62 @@ export class ReportsService {
       "admin"
     );
 
-    // Read HTML template
+    // 1. تجهيز الصور والبيانات
+    const logoBase64 = convertLogoToBase64();
+    const reportNumber = `REP-${Date.now().toString().slice(-6)}`;
+    const reportDate = new Date().toLocaleDateString("ar-SA");
+    const reportContent = generateReportContent(data, stats);
+
+    // 2. تصميم الهيدر (HTML + CSS مدمج)
+    // قمنا بتقليل margin و line-height لحل مشكلة التباعد
+    // كبرنا الشعار إلى 100px
+    const headerTemplate = `
+    <div style="font-family: 'Tajawal', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: flex-start; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
+        
+        <div style="text-align: right; width: 30%;">
+            <p style="margin: 2px 0; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
+            <p style="margin: 2px 0; font-weight: bold; color: #0f5b7a;">جامعة الملك سعود</p>
+            <p style="margin: 2px 0;">إدارة التشغيل والصيانة</p>
+            <p style="margin: 2px 0;">بكليات الجامعة - فرع المزاحمية</p>
+        </div>
+
+        <div style="text-align: center; width: 30%;">
+            <p style="margin: 0 0 5px 0; font-size: 12px; color: #0f5b7a;">بسم الله الرحمن الرحيم</p>
+            <img src="${logoBase64}" style="width: 100px; height: auto;" />
+        </div>
+
+        <div style="text-align: left; width: 30%; padding-top: 15px; direction: ltr;">
+            <p style="margin: 2px 0;"><strong>Report No:</strong> ${reportNumber}</p>
+            <p style="margin: 2px 0;"><strong>Date:</strong> ${reportDate}</p>
+        </div>
+    </div>`;
+
+    // 3. تصميم الفوتر (HTML + CSS مدمج)
+    // استخدمنا Flexbox لتوزيع العناصر الـ 4 بالتساوي
+    const footerTemplate = `
+    <div style="font-family: 'Tajawal', sans-serif; width: 100%; font-size: 8px; padding: 0 40px; border-top: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center; direction: rtl;">
+        
+        <div style="text-align: right;">
+            <p style="margin: 1px 0;">المملكة العربية السعودية</p>
+            <p style="margin: 1px 0;">ص.ب 2454 الرياض 11451</p>
+        </div>
+
+        <div style="text-align: center;">
+            <p style="margin: 1px 0;">العنوان الوطني</p>
+            <p style="margin: 1px 0;">RGSA8707</p>
+        </div>
+
+        <div style="text-align: center;">
+             <p style="margin: 1px 0;">هاتف +966 11 4686275</p>
+        </div>
+
+        <div style="text-align: left; direction: ltr;">
+            <p style="margin: 1px 0;">www.ksu.edu.sa</p>
+            <p style="margin: 1px 0;">hm@ksu.edu.sa</p>
+        </div>
+    </div>`;
+
+    // Read HTML template (المحتوى فقط بدون هيدر وفوتر)
     const templatePath = path.join(
       __dirname,
       "templates",
@@ -332,26 +387,25 @@ export class ReportsService {
     if (!fs.existsSync(templatePath)) {
       throw new Error(`Template file not found at: ${templatePath}`);
     }
-    let htmlTemplate = fs.readFileSync(templatePath, "utf-8");
-
-    // Prepare template data
-    const reportNumber = `REP-${Date.now().toString().slice(-6)}`;
-    const reportDate = new Date().toLocaleDateString("ar-SA");
-    const logoUrl = convertLogoToBase64();
-    const reportContent = generateReportContent(data, stats);
-
-    // Replace template placeholders
-    htmlTemplate = htmlTemplate
-      .replace(/{{report_number}}/g, reportNumber)
-      .replace(/{{report_date}}/g, reportDate)
-      .replace(/{{logo_url}}/g, logoUrl)
-      .replace(/{{{report_content}}}/g, reportContent);
+    let htmlContent = fs.readFileSync(templatePath, "utf-8");
+    htmlContent = htmlContent.replace(/{{{report_content}}}/g, reportContent);
 
     // إعدادات المتصفح المحسنة للدوكر
     const browser = await puppeteer.launch({
       headless: true,
       executablePath:
         process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
+
+      // 1. أهم نقطة: إلغاء طباعة مدخلات ومخرجات كروم في الكونسول
+      dumpio: false,
+
+      // 2. إخفاء أخطاء DBus المزعجة
+      env: {
+        ...process.env,
+        // هذه تخدع المتصفح وتخبره أن عنوان الاتصال هو "لا شيء" فيتوقف عن البحث
+        DBUS_SESSION_BUS_ADDRESS: "autolaunch:",
+      },
+
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
@@ -359,8 +413,15 @@ export class ReportsService {
         "--disable-gpu",
         "--font-render-hinting=none", // تحسين ظهور الخطوط
         "--disable-web-security", // للسماح بتحميل الصور المحلية
+
+        // --- إضافات لمنع أخطاء Vulkan/GL ---
+        "--disable-software-rasterizer", // يمنع محاولة الرسم البرمجي للجرافيكس
+        "--disable-gl-drawing-for-tests",
+        "--use-gl=swiftshader", // يجبره على استخدام render برمجي خفيف جداً
+        "--mute-audio", // كتم الصوت (يقلل أخطاء Audio Service)
+        "--no-first-run",
+        "--disable-extensions",
       ],
-      dumpio: true, // طباعة أخطاء كروم في التيرمنال (للتشخيص)
     });
 
     try {
@@ -369,15 +430,25 @@ export class ReportsService {
       // ضبط المتصفح ليعرض محتوى الطباعة
       await page.emulateMediaType("print");
 
-      await page.setContent(htmlTemplate, {
+      // هنا نمرر فقط المحتوى (الجدول) بدون هيدر وفوتر
+      await page.setContent(htmlContent, {
         waitUntil: ["load", "networkidle0"], // انتظر حتى تحميل كل شيء بما فيه الصور
         timeout: 60000, // زيادة الوقت لـ 60 ثانية احتياطاً
       });
 
+      // 4. التوليد مع الهيدر والفوتر الأصليين (Native)
       const pdfBuffer = await page.pdf({
         format: "A4",
         printBackground: true,
-        margin: { top: "15mm", right: "10mm", bottom: "15mm", left: "10mm" },
+        displayHeaderFooter: true, // تفعيل الخاصية
+        headerTemplate: headerTemplate, // تمرير الهيدر
+        footerTemplate: footerTemplate, // تمرير الفوتر
+        margin: {
+          top: "160px", // مساحة كافية للهيدر حتى لا يغطي المحتوى
+          bottom: "80px", // مساحة كافية للفوتر
+          right: "20px",
+          left: "20px",
+        },
       });
 
       // Verify PDF buffer is valid
