@@ -419,112 +419,118 @@ export class ReportsService {
     await workbook.xlsx.write(res);
   }
 
+  async generatePdfBuffer(filter: ReportFilterDto): Promise<Buffer> {
+    const data = await this.getRequestsReport(filter);
+
+    // Convert ReportFilterDto to StatisticsFilterDto (remove format and consultantId)
+    const statsFilter = {
+      fromDate: filter.fromDate,
+      toDate: filter.toDate,
+      engineerId: filter.engineerId,
+      locationId: filter.locationId,
+      departmentId: filter.departmentId,
+      systemId: filter.systemId,
+      maintenanceType: filter.maintenanceType,
+    };
+
+    const stats = await this.statisticsService.getDashboardStatistics(
+      statsFilter as any,
+      "admin"
+    );
+
+    // Read HTML template
+    const templatePath = path.join(
+      __dirname,
+      "templates",
+      "report-template.html"
+    );
+    if (!fs.existsSync(templatePath)) {
+      throw new Error(`Template file not found at: ${templatePath}`);
+    }
+    let htmlTemplate = fs.readFileSync(templatePath, "utf-8");
+
+    // Prepare template data
+    const reportNumber = `REP-${Date.now().toString().slice(-6)}`;
+    const reportDate = new Date().toLocaleDateString("ar-SA");
+    const logoUrl = convertLogoToBase64();
+    const reportContent = generateReportContent(data, stats);
+
+    // Replace template placeholders
+    htmlTemplate = htmlTemplate
+      .replace(/{{report_number}}/g, reportNumber)
+      .replace(/{{report_date}}/g, reportDate)
+      .replace(/{{logo_url}}/g, logoUrl)
+      .replace(/{{{report_content}}}/g, reportContent);
+
+    // Generate PDF using Puppeteer
+    const browser = await puppeteer.launch({
+      headless: true,
+      executablePath:
+        process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-accelerated-2d-canvas",
+        "--no-first-run",
+        "--no-zygote",
+        "--disable-gpu",
+        "--disable-web-security",
+        "--disable-features=VizDisplayCompositor",
+      ],
+    });
+
+    const page = await browser.newPage();
+
+    // Set viewport and page format
+    await page.setViewport({ width: 794, height: 1123 }); // A4 dimensions in pixels
+    await page.setContent(htmlTemplate, {
+      waitUntil: "networkidle0",
+      timeout: 30000,
+    });
+
+    // Generate PDF
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: {
+        top: "0.5in",
+        right: "0.5in",
+        bottom: "0.5in",
+        left: "0.5in",
+      },
+      preferCSSPageSize: true,
+      displayHeaderFooter: false,
+    });
+
+    await browser.close();
+
+    // Verify PDF buffer is valid
+    if (!pdfBuffer || pdfBuffer.length === 0) {
+      throw new Error("Generated PDF buffer is empty or invalid");
+    }
+
+    // Check if buffer starts with PDF header
+    const pdfHeader = String.fromCharCode(
+      pdfBuffer[0],
+      pdfBuffer[1],
+      pdfBuffer[2],
+      pdfBuffer[3]
+    );
+    if (pdfHeader !== "%PDF") {
+      console.error("Invalid PDF format, header:", pdfHeader);
+      throw new Error("Generated PDF is not in valid PDF format");
+    }
+
+    return Buffer.from(pdfBuffer);
+  }
+
   async generatePdfReport(
     filter: ReportFilterDto,
     res: Response
   ): Promise<void> {
     try {
-      const data = await this.getRequestsReport(filter);
-
-      // Convert ReportFilterDto to StatisticsFilterDto (remove format and consultantId)
-      const statsFilter = {
-        fromDate: filter.fromDate,
-        toDate: filter.toDate,
-        engineerId: filter.engineerId,
-        locationId: filter.locationId,
-        departmentId: filter.departmentId,
-        systemId: filter.systemId,
-        maintenanceType: filter.maintenanceType,
-      };
-
-      const stats = await this.statisticsService.getDashboardStatistics(
-        statsFilter as any,
-        "admin"
-      );
-
-      // Read HTML template
-      const templatePath = path.join(
-        __dirname,
-        "templates",
-        "report-template.html"
-      );
-      if (!fs.existsSync(templatePath)) {
-        throw new Error(`Template file not found at: ${templatePath}`);
-      }
-      let htmlTemplate = fs.readFileSync(templatePath, "utf-8");
-
-      // Prepare template data
-      const reportNumber = `REP-${Date.now().toString().slice(-6)}`;
-      const reportDate = new Date().toLocaleDateString("ar-SA");
-      const logoUrl = convertLogoToBase64();
-      const reportContent = generateReportContent(data, stats);
-
-      // Replace template placeholders
-      htmlTemplate = htmlTemplate
-        .replace(/{{report_number}}/g, reportNumber)
-        .replace(/{{report_date}}/g, reportDate)
-        .replace(/{{logo_url}}/g, logoUrl)
-        .replace(/{{{report_content}}}/g, reportContent);
-
-      // Generate PDF using Puppeteer
-      const browser = await puppeteer.launch({
-        headless: true,
-        executablePath:
-          process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-accelerated-2d-canvas",
-          "--no-first-run",
-          "--no-zygote",
-          "--disable-gpu",
-          "--disable-web-security",
-          "--disable-features=VizDisplayCompositor",
-        ],
-      });
-
-      const page = await browser.newPage();
-
-      // Set viewport and page format
-      await page.setViewport({ width: 794, height: 1123 }); // A4 dimensions in pixels
-      await page.setContent(htmlTemplate, {
-        waitUntil: "networkidle0",
-        timeout: 30000,
-      });
-
-      // Generate PDF
-      const pdfBuffer = await page.pdf({
-        format: "A4",
-        printBackground: true,
-        margin: {
-          top: "0.5in",
-          right: "0.5in",
-          bottom: "0.5in",
-          left: "0.5in",
-        },
-        preferCSSPageSize: true,
-        displayHeaderFooter: false,
-      });
-
-      await browser.close();
-
-      // Verify PDF buffer is valid
-      if (!pdfBuffer || pdfBuffer.length === 0) {
-        throw new Error("Generated PDF buffer is empty or invalid");
-      }
-
-      // Check if buffer starts with PDF header
-      const pdfHeader = String.fromCharCode(
-        pdfBuffer[0],
-        pdfBuffer[1],
-        pdfBuffer[2],
-        pdfBuffer[3]
-      );
-      if (pdfHeader !== "%PDF") {
-        console.error("Invalid PDF format, header:", pdfHeader);
-        throw new Error("Generated PDF is not in valid PDF format");
-      }
+      const pdfBuffer = await this.generatePdfBuffer(filter);
 
       // Set response headers
       res.setHeader("Content-Type", "application/pdf");

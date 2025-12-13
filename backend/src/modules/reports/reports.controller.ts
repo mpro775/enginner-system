@@ -1,4 +1,12 @@
-import { Controller, Get, Query, Param, UseGuards, Res } from "@nestjs/common";
+import {
+  Controller,
+  Get,
+  Query,
+  Param,
+  UseGuards,
+  Res,
+  StreamableFile,
+} from "@nestjs/common";
 import { Response } from "express";
 import { ReportsService } from "./reports.service";
 import { ReportFilterDto } from "./dto/report-filter.dto";
@@ -16,15 +24,24 @@ export class ReportsController {
   @Get("requests")
   async getRequestsReport(
     @Query() filter: ReportFilterDto,
-    @Res() res: Response
+    @Res({ passthrough: true }) res: Response
   ) {
     if (filter.format === "excel" || filter.format === "pdf") {
       if (filter.format === "excel") {
         await this.reportsService.generateExcelReport(filter, res);
+        return;
       } else {
-        await this.reportsService.generatePdfReport(filter, res);
+        // استخدام StreamableFile للـ PDF (الطريقة المعتمدة في NestJS)
+        const buffer = await this.reportsService.generatePdfBuffer(filter);
+
+        res.set({
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename=maintenance-report-${Date.now()}.pdf`,
+          "Content-Length": buffer.length.toString(),
+        });
+
+        return new StreamableFile(buffer);
       }
-      return;
     }
 
     const data = await this.reportsService.getRequestsReport(filter);
