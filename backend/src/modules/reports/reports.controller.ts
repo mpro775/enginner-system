@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  Query,
-  Param,
-  UseGuards,
-  Res,
-  StreamableFile,
-} from "@nestjs/common";
+import { Controller, Get, Query, Param, UseGuards, Res } from "@nestjs/common";
 import { Response } from "express";
 import { ReportsService } from "./reports.service";
 import { ReportFilterDto } from "./dto/report-filter.dto";
@@ -24,34 +16,46 @@ export class ReportsController {
   @Get("requests")
   async getRequestsReport(
     @Query() filter: ReportFilterDto,
-    @Res({ passthrough: true }) res: Response
+    @Res() res: Response // لاحظ: أزلنا passthrough: true للتحكم الكامل
   ) {
-    if (filter.format === "excel" || filter.format === "pdf") {
+    try {
       if (filter.format === "excel") {
         await this.reportsService.generateExcelReport(filter, res);
-        return;
-      } else {
-        // استخدام StreamableFile للـ PDF (الطريقة المعتمدة في NestJS)
+        return; // ExcelJS يغلق الرد بنفسه
+      }
+
+      if (filter.format === "pdf") {
         const buffer = await this.reportsService.generatePdfBuffer(filter);
 
         res.set({
           "Content-Type": "application/pdf",
           "Content-Disposition": `attachment; filename=maintenance-report-${Date.now()}.pdf`,
           "Content-Length": buffer.length.toString(),
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
         });
 
-        return new StreamableFile(buffer);
+        // إرسال البفر مباشرة وإغلاق الاتصال
+        res.end(buffer);
+        return;
+      }
+
+      // JSON Response
+      const data = await this.reportsService.getRequestsReport(filter);
+      res.json({
+        success: true,
+        statusCode: 200,
+        message: "Requests report generated successfully",
+        data,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Report Generation Error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Failed to generate report" });
       }
     }
-
-    const data = await this.reportsService.getRequestsReport(filter);
-    return res.json({
-      success: true,
-      statusCode: 200,
-      message: "Requests report generated successfully",
-      data,
-      timestamp: new Date().toISOString(),
-    });
   }
 
   @Get("engineer/:id")

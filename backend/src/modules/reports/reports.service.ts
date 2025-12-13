@@ -1,4 +1,4 @@
-import { Injectable, StreamableFile } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, FilterQuery } from "mongoose";
 import * as ExcelJS from "exceljs";
@@ -14,121 +14,6 @@ import {
 import { User, UserDocument } from "../users/schemas/user.schema";
 import { ReportFilterDto } from "./dto/report-filter.dto";
 import { StatisticsService } from "../statistics/statistics.service";
-
-// Arabic character ranges
-const ARABIC_REGEX =
-  /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
-
-// Arabic letter forms mapping (isolated, final, initial, medial)
-const ARABIC_FORMS: Record<string, string[]> = {
-  "\u0627": ["\uFE8D", "\uFE8E", "\uFE8D", "\uFE8E"], // ا alef
-  "\u0628": ["\uFE8F", "\uFE90", "\uFE91", "\uFE92"], // ب ba
-  "\u062A": ["\uFE95", "\uFE96", "\uFE97", "\uFE98"], // ت ta
-  "\u062B": ["\uFE99", "\uFE9A", "\uFE9B", "\uFE9C"], // ث tha
-  "\u062C": ["\uFE9D", "\uFE9E", "\uFE9F", "\uFEA0"], // ج jim
-  "\u062D": ["\uFEA1", "\uFEA2", "\uFEA3", "\uFEA4"], // ح ha
-  "\u062E": ["\uFEA5", "\uFEA6", "\uFEA7", "\uFEA8"], // خ kha
-  "\u062F": ["\uFEA9", "\uFEAA", "\uFEA9", "\uFEAA"], // د dal
-  "\u0630": ["\uFEAB", "\uFEAC", "\uFEAB", "\uFEAC"], // ذ dhal
-  "\u0631": ["\uFEAD", "\uFEAE", "\uFEAD", "\uFEAE"], // ر ra
-  "\u0632": ["\uFEAF", "\uFEB0", "\uFEAF", "\uFEB0"], // ز zay
-  "\u0633": ["\uFEB1", "\uFEB2", "\uFEB3", "\uFEB4"], // س sin
-  "\u0634": ["\uFEB5", "\uFEB6", "\uFEB7", "\uFEB8"], // ش shin
-  "\u0635": ["\uFEB9", "\uFEBA", "\uFEBB", "\uFEBC"], // ص sad
-  "\u0636": ["\uFEBD", "\uFEBE", "\uFEBF", "\uFEC0"], // ض dad
-  "\u0637": ["\uFEC1", "\uFEC2", "\uFEC3", "\uFEC4"], // ط ta
-  "\u0638": ["\uFEC5", "\uFEC6", "\uFEC7", "\uFEC8"], // ظ za
-  "\u0639": ["\uFEC9", "\uFECA", "\uFECB", "\uFECC"], // ع ain
-  "\u063A": ["\uFECD", "\uFECE", "\uFECF", "\uFED0"], // غ ghain
-  "\u0641": ["\uFED1", "\uFED2", "\uFED3", "\uFED4"], // ف fa
-  "\u0642": ["\uFED5", "\uFED6", "\uFED7", "\uFED8"], // ق qaf
-  "\u0643": ["\uFED9", "\uFEDA", "\uFEDB", "\uFEDC"], // ك kaf
-  "\u0644": ["\uFEDD", "\uFEDE", "\uFEDF", "\uFEE0"], // ل lam
-  "\u0645": ["\uFEE1", "\uFEE2", "\uFEE3", "\uFEE4"], // م mim
-  "\u0646": ["\uFEE5", "\uFEE6", "\uFEE7", "\uFEE8"], // ن nun
-  "\u0647": ["\uFEE9", "\uFEEA", "\uFEEB", "\uFEEC"], // ه ha
-  "\u0648": ["\uFEED", "\uFEEE", "\uFEED", "\uFEEE"], // و waw
-  "\u064A": ["\uFEF1", "\uFEF2", "\uFEF3", "\uFEF4"], // ي ya
-  "\u0649": ["\uFEEF", "\uFEF0", "\uFEEF", "\uFEF0"], // ى alef maqsura
-  "\u0621": ["\uFE80", "\uFE80", "\uFE80", "\uFE80"], // ء hamza
-  "\u0622": ["\uFE81", "\uFE82", "\uFE81", "\uFE82"], // آ alef madda
-  "\u0623": ["\uFE83", "\uFE84", "\uFE83", "\uFE84"], // أ alef hamza above
-  "\u0624": ["\uFE85", "\uFE86", "\uFE85", "\uFE86"], // ؤ waw hamza
-  "\u0625": ["\uFE87", "\uFE88", "\uFE87", "\uFE88"], // إ alef hamza below
-  "\u0626": ["\uFE89", "\uFE8A", "\uFE8B", "\uFE8C"], // ئ ya hamza
-  "\u0629": ["\uFE93", "\uFE94", "\uFE93", "\uFE94"], // ة ta marbuta
-};
-
-// Letters that don't connect to the next letter
-const NON_JOINING = new Set([
-  "\u0627",
-  "\u062F",
-  "\u0630",
-  "\u0631",
-  "\u0632",
-  "\u0648",
-  "\u0622",
-  "\u0623",
-  "\u0624",
-  "\u0625",
-  "\u0629",
-  "\u0649",
-]);
-
-// Reshape Arabic text (connect letters properly)
-function reshapeArabic(text: string): string {
-  if (!text) return text;
-
-  const result: string[] = [];
-  const chars = [...text];
-
-  for (let i = 0; i < chars.length; i++) {
-    const char = chars[i];
-    const forms = ARABIC_FORMS[char];
-
-    if (!forms) {
-      result.push(char);
-      continue;
-    }
-
-    const prevChar = i > 0 ? chars[i - 1] : null;
-    const nextChar = i < chars.length - 1 ? chars[i + 1] : null;
-
-    const prevJoins =
-      prevChar && ARABIC_FORMS[prevChar] && !NON_JOINING.has(prevChar);
-    const nextJoins = nextChar && ARABIC_FORMS[nextChar];
-
-    let formIndex: number;
-    if (prevJoins && nextJoins) {
-      formIndex = 3; // medial
-    } else if (prevJoins) {
-      formIndex = 1; // final
-    } else if (nextJoins) {
-      formIndex = 2; // initial
-    } else {
-      formIndex = 0; // isolated
-    }
-
-    result.push(forms[formIndex]);
-  }
-
-  return result.join("");
-}
-
-// Process Arabic text for PDFKit RTL rendering
-// Note: PDFKit doesn't natively support RTL, so we reshape Arabic letters
-// and rely on align:right for proper display
-function processArabicText(text: string): string {
-  if (!text) return text;
-
-  // Check if text contains Arabic characters
-  if (!ARABIC_REGEX.test(text)) return text;
-
-  // Simply reshape Arabic letters to connect properly
-  // Don't reverse text - let align:right handle the positioning
-  // This should work better with proper Arabic fonts
-  return reshapeArabic(text);
-}
 
 // Convert logo to base64 for embedding in HTML
 function convertLogoToBase64(): string {
@@ -462,7 +347,7 @@ export class ReportsService {
       .replace(/{{logo_url}}/g, logoUrl)
       .replace(/{{{report_content}}}/g, reportContent);
 
-    // Generate PDF using Puppeteer
+    // إعدادات المتصفح المحسنة للدوكر
     const browser = await puppeteer.launch({
       headless: true,
       executablePath:
@@ -470,59 +355,56 @@ export class ReportsService {
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-accelerated-2d-canvas",
-        "--no-first-run",
-        "--no-zygote",
+        "--disable-dev-shm-usage", // ضروري جداً في الدوكر
         "--disable-gpu",
-        "--disable-web-security",
-        "--disable-features=VizDisplayCompositor",
+        "--font-render-hinting=none", // تحسين ظهور الخطوط
+        "--disable-web-security", // للسماح بتحميل الصور المحلية
       ],
+      dumpio: true, // طباعة أخطاء كروم في التيرمنال (للتشخيص)
     });
 
-    const page = await browser.newPage();
+    try {
+      const page = await browser.newPage();
 
-    // Set viewport and page format
-    await page.setViewport({ width: 794, height: 1123 }); // A4 dimensions in pixels
-    await page.setContent(htmlTemplate, {
-      waitUntil: "networkidle0",
-      timeout: 30000,
-    });
+      // ضبط المتصفح ليعرض محتوى الطباعة
+      await page.emulateMediaType("print");
 
-    // Generate PDF
-    const pdfBuffer = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      margin: {
-        top: "0.5in",
-        right: "0.5in",
-        bottom: "0.5in",
-        left: "0.5in",
-      },
-      preferCSSPageSize: true,
-      displayHeaderFooter: false,
-    });
+      await page.setContent(htmlTemplate, {
+        waitUntil: ["load", "networkidle0"], // انتظر حتى تحميل كل شيء بما فيه الصور
+        timeout: 60000, // زيادة الوقت لـ 60 ثانية احتياطاً
+      });
 
-    await browser.close();
+      const pdfBuffer = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        margin: { top: "15mm", right: "10mm", bottom: "15mm", left: "10mm" },
+      });
 
-    // Verify PDF buffer is valid
-    if (!pdfBuffer || pdfBuffer.length === 0) {
-      throw new Error("Generated PDF buffer is empty or invalid");
+      // Verify PDF buffer is valid
+      if (!pdfBuffer || pdfBuffer.length === 0) {
+        throw new Error("Generated PDF buffer is empty or invalid");
+      }
+
+      // Check if buffer starts with PDF header
+      const pdfHeader = String.fromCharCode(
+        pdfBuffer[0],
+        pdfBuffer[1],
+        pdfBuffer[2],
+        pdfBuffer[3]
+      );
+      if (pdfHeader !== "%PDF") {
+        console.error("Invalid PDF format, header:", pdfHeader);
+        throw new Error("Generated PDF is not in valid PDF format");
+      }
+
+      return Buffer.from(pdfBuffer);
+    } catch (e) {
+      console.error("Puppeteer Error:", e);
+      throw e;
+    } finally {
+      // ضمان إغلاق المتصفح دائماً
+      if (browser) await browser.close();
     }
-
-    // Check if buffer starts with PDF header
-    const pdfHeader = String.fromCharCode(
-      pdfBuffer[0],
-      pdfBuffer[1],
-      pdfBuffer[2],
-      pdfBuffer[3]
-    );
-    if (pdfHeader !== "%PDF") {
-      console.error("Invalid PDF format, header:", pdfHeader);
-      throw new Error("Generated PDF is not in valid PDF format");
-    }
-
-    return Buffer.from(pdfBuffer);
   }
 
   async generatePdfReport(

@@ -26,9 +26,7 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# 1. تثبيت Chromium + الخطوط العربية الهامة جداً
-# dumb-init: لإدارة العمليات ومنع تعليق كروم
-# font-noto-arabic: لدعم اللغة العربية بشكل سليم
+# 1. تثبيت المتطلبات أولاً
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -41,6 +39,10 @@ RUN apk add --no-cache \
     font-noto-emoji \
     dumb-init
 
+# 2. ضبط متغيرات البيئة *قبل* تثبيت الحزم لمنع تحميل كروم
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nestjs -u 1001
@@ -48,20 +50,15 @@ RUN addgroup -g 1001 -S nodejs && \
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies only
+# 3. الآن نثبت الحزم (Puppeteer سيحترم المتغير ولن يحمل كروم)
 RUN npm ci --only=production && npm cache clean --force
 
-# Copy built application from builder
+# Copy built application
 COPY --from=builder /app/dist ./dist
 
-# نسخ إضافي للقوالب والصور كإجراء احتياطي
-# (nest-cli.json ينسخها تلقائياً، لكن هذا يضمن وجودها)
+# Copy assets explicitly (Important!)
 COPY --from=builder /app/src/modules/reports/templates ./dist/modules/reports/templates
 COPY --from=builder /app/src/assets ./dist/assets
-
-# Set Puppeteer environment variables
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Change ownership
 RUN chown -R nestjs:nodejs /app
