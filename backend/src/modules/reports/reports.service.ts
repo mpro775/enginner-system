@@ -133,14 +133,21 @@ function processArabicText(text: string): string {
 // Convert logo to base64 for embedding in HTML
 function convertLogoToBase64(): string {
   try {
-    const logoPath = path.join(__dirname, "..", "..", "assets", "image", "logo.png");
+    const logoPath = path.join(
+      __dirname,
+      "..",
+      "..",
+      "assets",
+      "image",
+      "logo.png"
+    );
     if (!fs.existsSync(logoPath)) {
       console.warn("Logo file not found at:", logoPath);
       return "";
     }
 
     const logoBuffer = fs.readFileSync(logoPath);
-    const base64 = logoBuffer.toString('base64');
+    const base64 = logoBuffer.toString("base64");
     return `data:image/png;base64,${base64}`;
   } catch (error) {
     console.error("Error converting logo to base64:", error);
@@ -150,7 +157,7 @@ function convertLogoToBase64(): string {
 
 // Generate HTML content for the report (summary + table)
 function generateReportContent(data: RequestReportData[], stats: any): string {
-  let html = '';
+  let html = "";
 
   // Summary section
   html += `
@@ -224,7 +231,9 @@ function generateReportContent(data: RequestReportData[], stats: any): string {
   // Add table rows (limit to 30 rows for performance)
   const limitedData = data.slice(0, 30);
   limitedData.forEach((row) => {
-    const statusKey = String(row.status || "").toLowerCase().replace(/_/g, "_");
+    const statusKey = String(row.status || "")
+      .toLowerCase()
+      .replace(/_/g, "_");
     const statusText = statusMap[statusKey] || row.status || "N/A";
 
     const typeKey = String(row.maintenanceType || "").toLowerCase();
@@ -423,7 +432,11 @@ export class ReportsService {
       );
 
       // Read HTML template
-      const templatePath = path.join(__dirname, "templates", "report-template.html");
+      const templatePath = path.join(
+        __dirname,
+        "templates",
+        "report-template.html"
+      );
       if (!fs.existsSync(templatePath)) {
         throw new Error(`Template file not found at: ${templatePath}`);
       }
@@ -445,16 +458,19 @@ export class ReportsService {
       // Generate PDF using Puppeteer
       const browser = await puppeteer.launch({
         headless: true,
+        executablePath:
+          process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
         args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--single-process',
-          '--disable-gpu'
-        ]
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-accelerated-2d-canvas",
+          "--no-first-run",
+          "--no-zygote",
+          "--disable-gpu",
+          "--disable-web-security",
+          "--disable-features=VizDisplayCompositor",
+        ],
       });
 
       const page = await browser.newPage();
@@ -462,19 +478,19 @@ export class ReportsService {
       // Set viewport and page format
       await page.setViewport({ width: 794, height: 1123 }); // A4 dimensions in pixels
       await page.setContent(htmlTemplate, {
-        waitUntil: 'networkidle0',
-        timeout: 30000
+        waitUntil: "networkidle0",
+        timeout: 30000,
       });
 
       // Generate PDF
       const pdfBuffer = await page.pdf({
-        format: 'A4',
+        format: "A4",
         printBackground: true,
         margin: {
-          top: '0.5in',
-          right: '0.5in',
-          bottom: '0.5in',
-          left: '0.5in'
+          top: "0.5in",
+          right: "0.5in",
+          bottom: "0.5in",
+          left: "0.5in",
         },
         preferCSSPageSize: true,
         displayHeaderFooter: false,
@@ -491,7 +507,6 @@ export class ReportsService {
 
       // Send PDF buffer
       res.send(pdfBuffer);
-
     } catch (error) {
       console.error("Error generating PDF report:", error);
       if (!res.headersSent) {
