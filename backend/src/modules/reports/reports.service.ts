@@ -155,8 +155,20 @@ function convertLogoToBase64(): string {
   }
 }
 
+// Helper function to escape HTML characters
+function escapeHtml(text: string): string {
+  if (!text) return "";
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // Generate HTML content for the report (summary + table)
 function generateReportContent(data: RequestReportData[], stats: any): string {
+  console.log("Generating report content for", data.length, "records");
   let html = "";
 
   // Summary section
@@ -165,31 +177,31 @@ function generateReportContent(data: RequestReportData[], stats: any): string {
       <h2 class="section-title">ملخص الإحصائيات</h2>
       <div class="summary-grid">
         <div class="summary-card">
-          <div class="summary-value">${stats?.totalRequests || 0}</div>
+          <div class="summary-value">${escapeHtml(String(stats?.totalRequests || 0))}</div>
           <div class="summary-label">إجمالي الطلبات</div>
         </div>
         <div class="summary-card">
-          <div class="summary-value">${stats?.inProgress || 0}</div>
+          <div class="summary-value">${escapeHtml(String(stats?.inProgress || 0))}</div>
           <div class="summary-label">قيد التنفيذ</div>
         </div>
         <div class="summary-card">
-          <div class="summary-value">${stats?.completed || 0}</div>
+          <div class="summary-value">${escapeHtml(String(stats?.completed || 0))}</div>
           <div class="summary-label">مكتملة</div>
         </div>
         <div class="summary-card">
-          <div class="summary-value">${stats?.stopped || 0}</div>
+          <div class="summary-value">${escapeHtml(String(stats?.stopped || 0))}</div>
           <div class="summary-label">متوقفة</div>
         </div>
         <div class="summary-card">
-          <div class="summary-value">${stats?.emergencyRequests || 0}</div>
+          <div class="summary-value">${escapeHtml(String(stats?.emergencyRequests || 0))}</div>
           <div class="summary-label">طوارئ</div>
         </div>
         <div class="summary-card">
-          <div class="summary-value">${stats?.preventiveRequests || 0}</div>
+          <div class="summary-value">${escapeHtml(String(stats?.preventiveRequests || 0))}</div>
           <div class="summary-label">وقائية</div>
         </div>
         <div class="summary-card">
-          <div class="summary-value">${stats?.avgCompletionTimeHours || 0}</div>
+          <div class="summary-value">${escapeHtml(String(stats?.avgCompletionTimeHours || 0))}</div>
           <div class="summary-label">متوسط وقت الإنجاز (ساعة)</div>
         </div>
       </div>
@@ -245,12 +257,12 @@ function generateReportContent(data: RequestReportData[], stats: any): string {
 
     html += `
       <tr>
-        <td>${openedDate}</td>
-        <td>${row.locationName || "N/A"}</td>
-        <td>${statusText}</td>
-        <td>${typeText}</td>
-        <td>${row.engineerName || "N/A"}</td>
-        <td>${row.requestCode || "N/A"}</td>
+        <td>${escapeHtml(openedDate)}</td>
+        <td>${escapeHtml(row.locationName || "N/A")}</td>
+        <td>${escapeHtml(statusText)}</td>
+        <td>${escapeHtml(typeText)}</td>
+        <td>${escapeHtml(row.engineerName || "N/A")}</td>
+        <td>${escapeHtml(row.requestCode || "N/A")}</td>
       </tr>
     `;
   });
@@ -413,7 +425,9 @@ export class ReportsService {
     res: Response
   ): Promise<void> {
     try {
+      console.log("Starting PDF generation for filter:", filter);
       const data = await this.getRequestsReport(filter);
+      console.log("Retrieved", data.length, "records from database");
 
       // Convert ReportFilterDto to StatisticsFilterDto (remove format and consultantId)
       const statsFilter = {
@@ -430,6 +444,7 @@ export class ReportsService {
         statsFilter as any,
         "admin"
       );
+      console.log("Retrieved stats:", stats);
 
       // Read HTML template
       const templatePath = path.join(
@@ -437,25 +452,40 @@ export class ReportsService {
         "templates",
         "report-template.html"
       );
+      console.log("Template path:", templatePath);
+      console.log("Template exists:", fs.existsSync(templatePath));
+
       if (!fs.existsSync(templatePath)) {
         throw new Error(`Template file not found at: ${templatePath}`);
       }
       let htmlTemplate = fs.readFileSync(templatePath, "utf-8");
+      console.log("Template loaded, length:", htmlTemplate.length);
 
       // Prepare template data
       const reportNumber = `REP-${Date.now().toString().slice(-6)}`;
       const reportDate = new Date().toLocaleDateString("ar-SA");
+      console.log("Report number:", reportNumber, "Report date:", reportDate);
+
       const logoUrl = convertLogoToBase64();
+      console.log("Logo base64 length:", logoUrl.length);
+
       const reportContent = generateReportContent(data, stats);
+      console.log("Report content length:", reportContent.length);
 
       // Replace template placeholders
+      console.log("Replacing template placeholders...");
       htmlTemplate = htmlTemplate
         .replace(/{{report_number}}/g, reportNumber)
         .replace(/{{report_date}}/g, reportDate)
         .replace(/{{logo_url}}/g, logoUrl)
         .replace(/{{{report_content}}}/g, reportContent);
+      console.log(
+        "Template placeholders replaced, final HTML length:",
+        htmlTemplate.length
+      );
 
       // Generate PDF using Puppeteer
+      console.log("Launching Puppeteer...");
       const browser = await puppeteer.launch({
         headless: true,
         executablePath:
@@ -472,17 +502,24 @@ export class ReportsService {
           "--disable-features=VizDisplayCompositor",
         ],
       });
+      console.log("Browser launched successfully");
 
       const page = await browser.newPage();
+      console.log("New page created");
 
       // Set viewport and page format
       await page.setViewport({ width: 794, height: 1123 }); // A4 dimensions in pixels
+      console.log("Viewport set");
+
+      console.log("Setting page content...");
       await page.setContent(htmlTemplate, {
         waitUntil: "networkidle0",
         timeout: 30000,
       });
+      console.log("Page content set");
 
       // Generate PDF
+      console.log("Generating PDF...");
       const pdfBuffer = await page.pdf({
         format: "A4",
         printBackground: true,
@@ -495,8 +532,23 @@ export class ReportsService {
         preferCSSPageSize: true,
         displayHeaderFooter: false,
       });
+      console.log("PDF generated, buffer length:", pdfBuffer.length);
 
       await browser.close();
+      console.log("Browser closed");
+
+      // Verify PDF buffer is valid
+      if (!pdfBuffer || pdfBuffer.length === 0) {
+        throw new Error("Generated PDF buffer is empty or invalid");
+      }
+
+      // Check if buffer starts with PDF header
+      const pdfHeader = pdfBuffer.subarray(0, 4).toString();
+      console.log("PDF header:", pdfHeader);
+      if (pdfHeader !== "%PDF") {
+        console.error("Invalid PDF format, header:", pdfHeader);
+        throw new Error("Generated PDF is not in valid PDF format");
+      }
 
       // Set response headers
       res.setHeader("Content-Type", "application/pdf");
@@ -505,6 +557,7 @@ export class ReportsService {
         `attachment; filename=maintenance-report-${Date.now()}.pdf`
       );
 
+      console.log("Sending PDF response...");
       // Send PDF buffer
       res.send(pdfBuffer);
     } catch (error) {
