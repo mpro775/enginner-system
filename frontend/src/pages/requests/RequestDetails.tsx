@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import {
   ArrowRight,
   Calendar,
@@ -14,9 +17,19 @@ import {
   MessageSquarePlus,
   Loader2,
   AlertTriangle,
+  Edit,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -32,9 +45,30 @@ import {
 } from "@/components/shared/StatusBadge";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
 import { requestsService } from "@/services/requests";
+import {
+  locationsService,
+  departmentsService,
+  systemsService,
+  machinesService,
+} from "@/services/reference-data";
 import { useAuthStore } from "@/store/auth";
 import { formatDateTime } from "@/lib/utils";
-import { RequestStatus, Role } from "@/types";
+import { RequestStatus, Role, MaintenanceType } from "@/types";
+
+const updateRequestSchema = z.object({
+  maintenanceType: z.nativeEnum(MaintenanceType, {
+    errorMap: () => ({ message: "اختر نوع الصيانة" }),
+  }),
+  locationId: z.string().min(1, "اختر الموقع"),
+  departmentId: z.string().min(1, "اختر القسم"),
+  systemId: z.string().min(1, "اختر النظام"),
+  machineId: z.string().min(1, "اختر الآلة"),
+  reasonText: z.string().min(10, "سبب الطلب يجب أن يكون 10 أحرف على الأقل"),
+  machineNumber: z.string().optional(),
+  engineerNotes: z.string().optional(),
+});
+
+type UpdateRequestFormData = z.infer<typeof updateRequestSchema>;
 
 export default function RequestDetails() {
   const { id } = useParams<{ id: string }>();
@@ -44,13 +78,52 @@ export default function RequestDetails() {
 
   const [showStopDialog, setShowStopDialog] = useState(false);
   const [showNoteDialog, setShowNoteDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [stopReason, setStopReason] = useState("");
   const [consultantNotes, setConsultantNotes] = useState("");
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<UpdateRequestFormData>({
+    resolver: zodResolver(updateRequestSchema),
+  });
+
+  const watchSystemId = watch("systemId");
 
   const { data: request, isLoading } = useQuery({
     queryKey: ["request", id],
     queryFn: () => requestsService.getById(id!),
     enabled: !!id,
+  });
+
+  const { data: locations } = useQuery({
+    queryKey: ["locations"],
+    queryFn: () => locationsService.getAll(),
+  });
+
+  const { data: departments } = useQuery({
+    queryKey: ["departments"],
+    queryFn: () => departmentsService.getAll(),
+  });
+
+  const { data: systems } = useQuery({
+    queryKey: ["systems"],
+    queryFn: () => systemsService.getAll(),
+  });
+
+  const {
+    data: machines,
+    isLoading: isLoadingMachines,
+    isError: isMachinesError,
+  } = useQuery({
+    queryKey: ["machines", watchSystemId],
+    queryFn: () => machinesService.getBySystem(watchSystemId),
+    enabled: !!watchSystemId,
   });
 
   const stopMutation = useMutation({
@@ -83,6 +156,16 @@ export default function RequestDetails() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: (data: UpdateRequestFormData) =>
+      requestsService.update(id!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["request", id] });
+      queryClient.invalidateQueries({ queryKey: ["requests"] });
+      setShowEditDialog(false);
+    },
+  });
+
   if (isLoading) {
     return <PageLoader />;
   }
@@ -101,6 +184,7 @@ export default function RequestDetails() {
   const isAdmin = user?.role === Role.ADMIN;
   const isOwner = isEngineer && request.engineerId?.id === user?.id;
 
+  const canEdit = isOwner && request.status === RequestStatus.IN_PROGRESS;
   const canStop = isOwner && request.status === RequestStatus.IN_PROGRESS;
   const canComplete = isOwner && request.status === RequestStatus.IN_PROGRESS;
   const canAddNote =
@@ -114,6 +198,31 @@ export default function RequestDetails() {
   const handleAddNote = () => {
     setConsultantNotes(request.consultantNotes || "");
     setShowNoteDialog(true);
+  };
+
+  const handleEdit = () => {
+    if (request) {
+      reset({
+        maintenanceType: request.maintenanceType,
+        locationId: request.locationId?.id || "",
+        departmentId: request.departmentId?.id || "",
+        systemId: request.systemId?.id || "",
+        machineId: request.machineId?.id || "",
+        reasonText: request.reasonText,
+        machineNumber: request.machineNumber || "",
+        engineerNotes: request.engineerNotes || "",
+      });
+      setShowEditDialog(true);
+    }
+  };
+
+  const handleSystemChange = (value: string) => {
+    setValue("systemId", value);
+    setValue("machineId", "");
+  };
+
+  const onSubmitEdit = (data: UpdateRequestFormData) => {
+    updateMutation.mutate(data);
   };
 
   const submitStop = () => {
@@ -234,13 +343,23 @@ export default function RequestDetails() {
           </Card>
 
           {/* Actions */}
-          {(canStop || canComplete || canAddNote) && (
+          {(canEdit || canStop || canComplete || canAddNote) && (
             <Card>
               <CardHeader>
                 <CardTitle>الإجراءات المتاحة</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-3">
+                  {canEdit && (
+                    <Button
+                      variant="outline"
+                      onClick={handleEdit}
+                      className="flex-1"
+                    >
+                      <Edit className="ml-2 h-4 w-4" />
+                      تعديل الطلب
+                    </Button>
+                  )}
                   {canComplete && (
                     <Button
                       onClick={() => completeMutation.mutate()}
@@ -438,6 +557,240 @@ export default function RequestDetails() {
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Request Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>تعديل الطلب</DialogTitle>
+            <DialogDescription>قم بتعديل تفاصيل الطلب</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit(onSubmitEdit)} className="space-y-4">
+            {updateMutation.isError && (
+              <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                حدث خطأ أثناء تعديل الطلب
+              </div>
+            )}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Maintenance Type */}
+              <div className="space-y-2">
+                <Label>نوع الصيانة *</Label>
+                <Select
+                  onValueChange={(value) =>
+                    setValue("maintenanceType", value as MaintenanceType)
+                  }
+                  defaultValue={request?.maintenanceType}
+                >
+                  <SelectTrigger
+                    className={
+                      errors.maintenanceType ? "border-destructive" : ""
+                    }
+                  >
+                    <SelectValue placeholder="اختر نوع الصيانة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={MaintenanceType.EMERGENCY}>
+                      طارئة
+                    </SelectItem>
+                    <SelectItem value={MaintenanceType.PREVENTIVE}>
+                      وقائية
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.maintenanceType && (
+                  <p className="text-xs text-destructive">
+                    {errors.maintenanceType.message}
+                  </p>
+                )}
+              </div>
+
+              {/* Location */}
+              <div className="space-y-2">
+                <Label>الموقع *</Label>
+                <Select
+                  onValueChange={(value) => setValue("locationId", value)}
+                  defaultValue={request?.locationId?.id}
+                >
+                  <SelectTrigger
+                    className={errors.locationId ? "border-destructive" : ""}
+                  >
+                    <SelectValue placeholder="اختر الموقع" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locations?.map((location) => (
+                      <SelectItem key={location.id} value={location.id}>
+                        {location.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.locationId && (
+                  <p className="text-xs text-destructive">
+                    {errors.locationId.message}
+                  </p>
+                )}
+              </div>
+
+              {/* Department */}
+              <div className="space-y-2">
+                <Label>القسم *</Label>
+                <Select
+                  onValueChange={(value) => setValue("departmentId", value)}
+                  defaultValue={request?.departmentId?.id}
+                >
+                  <SelectTrigger
+                    className={errors.departmentId ? "border-destructive" : ""}
+                  >
+                    <SelectValue placeholder="اختر القسم" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departments?.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.departmentId && (
+                  <p className="text-xs text-destructive">
+                    {errors.departmentId.message}
+                  </p>
+                )}
+              </div>
+
+              {/* System */}
+              <div className="space-y-2">
+                <Label>النظام *</Label>
+                <Select
+                  onValueChange={handleSystemChange}
+                  defaultValue={request?.systemId?.id}
+                >
+                  <SelectTrigger
+                    className={errors.systemId ? "border-destructive" : ""}
+                  >
+                    <SelectValue placeholder="اختر النظام" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {systems?.map((system) => (
+                      <SelectItem key={system.id} value={system.id}>
+                        {system.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.systemId && (
+                  <p className="text-xs text-destructive">
+                    {errors.systemId.message}
+                  </p>
+                )}
+              </div>
+
+              {/* Machine */}
+              <div className="space-y-2">
+                <Label>الآلة *</Label>
+                <Select
+                  disabled={!watchSystemId || isLoadingMachines}
+                  onValueChange={(value) => setValue("machineId", value)}
+                  value={watch("machineId") || undefined}
+                >
+                  <SelectTrigger
+                    className={errors.machineId ? "border-destructive" : ""}
+                  >
+                    <SelectValue
+                      placeholder={
+                        !watchSystemId
+                          ? "اختر النظام أولاً"
+                          : isLoadingMachines
+                          ? "جاري التحميل..."
+                          : isMachinesError
+                          ? "حدث خطأ في التحميل"
+                          : machines && machines.length === 0
+                          ? "لا توجد آلات متاحة"
+                          : "اختر الآلة"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {machines && machines.length > 0
+                      ? machines.map((machine) => (
+                          <SelectItem key={machine.id} value={machine.id}>
+                            {machine.name}
+                          </SelectItem>
+                        ))
+                      : null}
+                  </SelectContent>
+                </Select>
+                {errors.machineId && (
+                  <p className="text-xs text-destructive">
+                    {errors.machineId.message}
+                  </p>
+                )}
+                {isMachinesError && (
+                  <p className="text-xs text-destructive">
+                    حدث خطأ أثناء تحميل الآلات
+                  </p>
+                )}
+              </div>
+
+              {/* Machine Number */}
+              <div className="space-y-2">
+                <Label>رقم الآلة</Label>
+                <Input
+                  placeholder="رقم أو كود الآلة"
+                  {...register("machineNumber")}
+                />
+              </div>
+            </div>
+
+            {/* Reason */}
+            <div className="space-y-2">
+              <Label>سبب طلب الصيانة *</Label>
+              <Textarea
+                placeholder="وصف تفصيلي للمشكلة أو سبب طلب الصيانة"
+                rows={4}
+                className={errors.reasonText ? "border-destructive" : ""}
+                {...register("reasonText")}
+              />
+              {errors.reasonText && (
+                <p className="text-xs text-destructive">
+                  {errors.reasonText.message}
+                </p>
+              )}
+            </div>
+
+            {/* Engineer Notes */}
+            <div className="space-y-2">
+              <Label>ملاحظات المهندس</Label>
+              <Textarea
+                placeholder="أي ملاحظات إضافية..."
+                rows={3}
+                {...register("engineerNotes")}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowEditDialog(false)}
+              >
+                إلغاء
+              </Button>
+              <Button type="submit" disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? (
+                  <>
+                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                    جاري الحفظ...
+                  </>
+                ) : (
+                  "حفظ التعديلات"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
