@@ -21,8 +21,10 @@ import { Button } from "@/components/ui/button";
 interface NavItem {
   icon: React.ElementType;
   label: string;
-  href: string;
+  href?: string;
   roles?: Role[];
+  isAction?: boolean;
+  onClick?: () => void;
 }
 
 const navItems: NavItem[] = [
@@ -83,6 +85,11 @@ const navItems: NavItem[] = [
     label: "سجل العمليات",
     href: "/admin/audit-logs",
     roles: [Role.ADMIN],
+  },
+  {
+    icon: LogOut,
+    label: "تسجيل الخروج",
+    isAction: true,
   },
 ];
 
@@ -158,16 +165,39 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
             <ul className="space-y-1">
-              {filteredNavItems.map((item) => {
+              {filteredNavItems.map((item, index) => {
                 const isActive =
-                  location.pathname === item.href ||
-                  location.pathname.startsWith(item.href + "/");
+                  item.href &&
+                  (location.pathname === item.href ||
+                    location.pathname.startsWith(item.href + "/"));
                 const Icon = item.icon;
+
+                if (item.isAction) {
+                  return (
+                    <li key={`action-${index}`}>
+                      <button
+                        onClick={() => {
+                          if (item.onClick) {
+                            item.onClick();
+                          } else {
+                            logout();
+                            onClose();
+                          }
+                          handleLinkClick();
+                        }}
+                        className={cn("sidebar-link w-full text-right")}
+                      >
+                        <Icon className="h-5 w-5 flex-shrink-0" />
+                        <span className="truncate">{item.label}</span>
+                      </button>
+                    </li>
+                  );
+                }
 
                 return (
                   <li key={item.href}>
                     <Link
-                      to={item.href}
+                      to={item.href!}
                       onClick={handleLinkClick}
                       className={cn("sidebar-link", isActive && "active")}
                     >
@@ -180,9 +210,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             </ul>
           </nav>
 
-          {/* User info & Logout */}
+          {/* User info */}
           <div className="border-t border-border/50 p-3 sm:p-4 flex-shrink-0">
-            <div className="mb-3 rounded-lg bg-muted/50 dark:bg-muted/30 p-3">
+            <div className="rounded-lg bg-muted/50 dark:bg-muted/30 p-3">
               <p className="font-medium text-sm sm:text-base text-foreground truncate">
                 {user?.name}
               </p>
@@ -190,17 +220,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 {user?.email}
               </p>
             </div>
-            <Button
-              variant="outline"
-              className="w-full text-sm"
-              onClick={() => {
-                logout();
-                onClose();
-              }}
-            >
-              <LogOut className="ml-2 h-4 w-4" />
-              تسجيل الخروج
-            </Button>
           </div>
         </div>
       </aside>
