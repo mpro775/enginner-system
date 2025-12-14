@@ -48,12 +48,14 @@ export class MaintenanceRequestsService {
     user: { userId: string; name: string }
   ): Promise<MaintenanceRequestDocument> {
     // Generate request code
-    const requestCode = await this.generateRequestCode(createDto.maintenanceType);
+    const requestCode = await this.generateRequestCode(
+      createDto.maintenanceType
+    );
 
     const request = new this.requestModel({
       ...createDto,
       requestCode,
-      engineerId: user.userId,
+      engineerId: user.userId, // Mongoose will automatically convert string to ObjectId
       status: RequestStatus.IN_PROGRESS,
       openedAt: new Date(),
     });
@@ -89,6 +91,15 @@ export class MaintenanceRequestsService {
     const sortOptions = getSortOptions(filterDto);
 
     const filter = this.buildFilter(filterDto, user);
+
+    // Debug logging (remove in production)
+    if (user.role === Role.ENGINEER) {
+      console.log("[DEBUG] Engineer filter:", {
+        userId: user.userId,
+        engineerIdFilter: filter.engineerId,
+        filterType: filter.engineerId?.constructor?.name,
+      });
+    }
 
     const [requests, total] = await Promise.all([
       this.requestModel
@@ -334,8 +345,8 @@ export class MaintenanceRequestsService {
       maintenanceType === MaintenanceType.PREVENTIVE
         ? "PM"
         : maintenanceType === MaintenanceType.EMERGENCY
-        ? "EM"
-        : "MR";
+          ? "EM"
+          : "MR";
 
     // Find the last request of this month
     const lastRequest = await this.requestModel
@@ -361,10 +372,13 @@ export class MaintenanceRequestsService {
 
     // Engineers can only see their own requests
     if (user.role === Role.ENGINEER) {
-      // Convert string userId to ObjectId for proper MongoDB query matching
+      // Mongoose automatically handles string to ObjectId conversion in queries
+      // But we ensure it's properly converted for consistency
       if (Types.ObjectId.isValid(user.userId)) {
+        // Use ObjectId for exact match with stored values
         filter.engineerId = new Types.ObjectId(user.userId);
       } else {
+        // Fallback to string if ObjectId conversion fails
         filter.engineerId = user.userId;
       }
     }
@@ -374,27 +388,39 @@ export class MaintenanceRequestsService {
     }
 
     if (filterDto.engineerId && user.role !== Role.ENGINEER) {
-      filter.engineerId = filterDto.engineerId;
+      filter.engineerId = Types.ObjectId.isValid(filterDto.engineerId)
+        ? new Types.ObjectId(filterDto.engineerId)
+        : filterDto.engineerId;
     }
 
     if (filterDto.consultantId) {
-      filter.consultantId = filterDto.consultantId;
+      filter.consultantId = Types.ObjectId.isValid(filterDto.consultantId)
+        ? new Types.ObjectId(filterDto.consultantId)
+        : filterDto.consultantId;
     }
 
     if (filterDto.locationId) {
-      filter.locationId = filterDto.locationId;
+      filter.locationId = Types.ObjectId.isValid(filterDto.locationId)
+        ? new Types.ObjectId(filterDto.locationId)
+        : filterDto.locationId;
     }
 
     if (filterDto.departmentId) {
-      filter.departmentId = filterDto.departmentId;
+      filter.departmentId = Types.ObjectId.isValid(filterDto.departmentId)
+        ? new Types.ObjectId(filterDto.departmentId)
+        : filterDto.departmentId;
     }
 
     if (filterDto.systemId) {
-      filter.systemId = filterDto.systemId;
+      filter.systemId = Types.ObjectId.isValid(filterDto.systemId)
+        ? new Types.ObjectId(filterDto.systemId)
+        : filterDto.systemId;
     }
 
     if (filterDto.machineId) {
-      filter.machineId = filterDto.machineId;
+      filter.machineId = Types.ObjectId.isValid(filterDto.machineId)
+        ? new Types.ObjectId(filterDto.machineId)
+        : filterDto.machineId;
     }
 
     if (filterDto.maintenanceType) {
