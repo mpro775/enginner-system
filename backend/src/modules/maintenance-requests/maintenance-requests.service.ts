@@ -52,10 +52,15 @@ export class MaintenanceRequestsService {
       createDto.maintenanceType
     );
 
+    // Ensure engineerId is converted to ObjectId for consistent storage and querying
+    const engineerId = Types.ObjectId.isValid(user.userId)
+      ? new Types.ObjectId(user.userId)
+      : user.userId;
+
     const request = new this.requestModel({
       ...createDto,
       requestCode,
-      engineerId: user.userId, // Mongoose will automatically convert string to ObjectId
+      engineerId,
       status: RequestStatus.IN_PROGRESS,
       openedAt: new Date(),
     });
@@ -91,15 +96,6 @@ export class MaintenanceRequestsService {
     const sortOptions = getSortOptions(filterDto);
 
     const filter = this.buildFilter(filterDto, user);
-
-    // Debug logging (remove in production)
-    if (user.role === Role.ENGINEER) {
-      console.log("[DEBUG] Engineer filter:", {
-        userId: user.userId,
-        engineerIdFilter: filter.engineerId,
-        filterType: filter.engineerId?.constructor?.name,
-      });
-    }
 
     const [requests, total] = await Promise.all([
       this.requestModel
@@ -372,13 +368,11 @@ export class MaintenanceRequestsService {
 
     // Engineers can only see their own requests
     if (user.role === Role.ENGINEER) {
-      // Mongoose automatically handles string to ObjectId conversion in queries
-      // But we ensure it's properly converted for consistency
+      // Convert to ObjectId for consistent matching with stored values
+      // Mongoose will match ObjectId with both ObjectId and string formats in queries
       if (Types.ObjectId.isValid(user.userId)) {
-        // Use ObjectId for exact match with stored values
         filter.engineerId = new Types.ObjectId(user.userId);
       } else {
-        // Fallback to string if ObjectId conversion fails
         filter.engineerId = user.userId;
       }
     }
