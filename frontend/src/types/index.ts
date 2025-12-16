@@ -4,6 +4,7 @@ export enum Role {
   CONSULTANT = "consultant",
   MAINTENANCE_MANAGER = "maintenance_manager",
   ENGINEER = "engineer",
+  HEALTH_SAFETY_SUPERVISOR = "health_safety_supervisor",
 }
 
 export enum MaintenanceType {
@@ -74,6 +75,7 @@ export interface MaintenanceRequest {
   requestCode: string;
   engineerId: User;
   consultantId?: User;
+  healthSafetySupervisorId?: User;
   maintenanceType: MaintenanceType;
   locationId: Location;
   departmentId: Department;
@@ -84,6 +86,7 @@ export interface MaintenanceRequest {
   status: RequestStatus;
   engineerNotes?: string;
   consultantNotes?: string;
+  healthSafetyNotes?: string;
   stopReason?: string;
   openedAt: string;
   closedAt?: string;
@@ -177,6 +180,10 @@ export interface StopRequestForm {
 
 export interface AddNoteForm {
   consultantNotes: string;
+}
+
+export interface AddHealthSafetyNoteForm {
+  healthSafetyNotes: string;
 }
 
 export interface CreateUserForm {

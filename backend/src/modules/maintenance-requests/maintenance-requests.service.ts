@@ -10,6 +10,7 @@ import {
   UpdateMaintenanceRequestDto,
   StopRequestDto,
   AddNoteDto,
+  AddHealthSafetyNoteDto,
   FilterRequestsDto,
 } from "./dto";
 import {
@@ -277,6 +278,47 @@ export class MaintenanceRequestsService {
     const updated = await this.populateRequest(id);
 
     // Notify about update
+    this.notificationsGateway.notifyRequestUpdated(updated);
+
+    return updated;
+  }
+
+  async addHealthSafetyNote(
+    id: string,
+    noteDto: AddHealthSafetyNoteDto,
+    user: { userId: string; name: string }
+  ): Promise<MaintenanceRequestDocument> {
+    const request = await this.requestModel.findById(id);
+
+    if (!request) {
+      throw new EntityNotFoundException("Maintenance Request", id);
+    }
+
+    const previousNotes = request.healthSafetyNotes;
+
+    await this.requestModel.findByIdAndUpdate(id, {
+      healthSafetySupervisorId: user.userId,
+      healthSafetyNotes: noteDto.healthSafetyNotes,
+    });
+
+    // Log the action
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.UPDATE,
+      entity: "MaintenanceRequest",
+      entityId: id,
+      changes: {
+        healthSafetyNotes: noteDto.healthSafetyNotes
+      },
+      previousValues: {
+        healthSafetyNotes: previousNotes,
+      },
+    });
+
+    const updated = await this.populateRequest(id);
+
+    // Notify about note addition
     this.notificationsGateway.notifyRequestUpdated(updated);
 
     return updated;

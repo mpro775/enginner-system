@@ -16,6 +16,7 @@ import {
   UpdateMaintenanceRequestDto,
   StopRequestDto,
   AddNoteDto,
+  AddHealthSafetyNoteDto,
   FilterRequestsDto,
 } from "./dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
@@ -140,6 +141,28 @@ export class MaintenanceRequestsController {
     return {
       data: request,
       message: "Note added successfully",
+    };
+  }
+
+  @Patch(":id/health-safety-note")
+  @UseGuards(RolesGuard)
+  @Roles(Role.HEALTH_SAFETY_SUPERVISOR, Role.ADMIN)
+  async addHealthSafetyNote(
+    @Param("id") id: string,
+    @Body() noteDto: AddHealthSafetyNoteDto,
+    @CurrentUser() user: CurrentUserData
+  ) {
+    const request = await this.maintenanceRequestsService.addHealthSafetyNote(
+      id,
+      noteDto,
+      {
+        userId: user.userId,
+        name: user.name,
+      }
+    );
+    return {
+      data: request,
+      message: "Health safety note added successfully",
     };
   }
 

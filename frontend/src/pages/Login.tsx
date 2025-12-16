@@ -113,12 +113,11 @@ export default function Login() {
           <p className="text-white/80 dark:text-white/75 text-xs mt-1">
             إدارة التشغيل والصيانة لكليات الجامعة - فرع المزاحمية
           </p>
-
         </div>
 
         <Card className="border-0 shadow-2xl bg-card/95 dark:bg-card/90 backdrop-blur-sm">
           <CardHeader className="space-y-1 text-center pb-4">
-          <p className="text-sm text-primary/80 mb-1">
+            <p className="text-sm text-primary/80 mb-1">
               نظام إدارة طلبات الصيانة
             </p>
             <CardTitle className="text-2xl text-primary">
@@ -212,8 +211,8 @@ export default function Login() {
               </p>
               <div className="text-xs text-muted-foreground space-y-1">
                 <p>
-                  <span className="text-primary">●</span> مدير الصيانة:
-                  maintenance_manager@maintenance.com
+                  <span className="text-primary">●</span> مدير النظام:
+                  admin@maintenance.com
                 </p>
                 <p>
                   <span className="text-primary">●</span> استشاري:
@@ -222,6 +221,10 @@ export default function Login() {
                 <p>
                   <span className="text-primary">●</span> مهندس:
                   engineer1@maintenance.com
+                </p>
+                <p>
+                  <span className="text-primary">●</span> مشرف الصحة والسلامة:
+                  safety@maintenance.com
                 </p>
                 <p className="mt-2 pt-2 border-t border-primary/20 dark:border-primary/30">
                   كلمة المرور:{" "}

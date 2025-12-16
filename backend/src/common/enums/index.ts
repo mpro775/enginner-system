@@ -3,6 +3,7 @@ export enum Role {
   CONSULTANT = "consultant",
   MAINTENANCE_MANAGER = "maintenance_manager",
   ENGINEER = "engineer",
+  HEALTH_SAFETY_SUPERVISOR = "health_safety_supervisor",
 }
 
 export enum MaintenanceType {

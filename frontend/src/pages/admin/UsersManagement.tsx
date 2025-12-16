@@ -421,7 +421,8 @@ export default function UsersManagement() {
                   <SelectItem value={Role.MAINTENANCE_MANAGER}>
                     مدير الصيانة
                   </SelectItem>
-                  <SelectItem value={Role.ENGINEER}>مهندس</SelectItem>
+                    <SelectItem value={Role.ENGINEER}>مهندس</SelectItem>
+                    <SelectItem value={Role.HEALTH_SAFETY_SUPERVISOR}>مشرف الصحة والسلامة المهنية</SelectItem>
                 </SelectContent>
               </Select>
             </div>

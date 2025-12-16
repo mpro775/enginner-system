@@ -5,6 +5,7 @@ import {
   CreateRequestForm,
   StopRequestForm,
   AddNoteForm,
+  AddHealthSafetyNoteForm,
   PaginationMeta,
 } from '@/types';
 
@@ -61,6 +62,14 @@ export const requestsService = {
   async addNote(id: string, data: AddNoteForm): Promise<MaintenanceRequest> {
     const response = await api.patch<ApiResponse<MaintenanceRequest>>(
       `/requests/${id}/note`,
+      data
+    );
+    return response.data.data;
+  },
+
+  async addHealthSafetyNote(id: string, data: AddHealthSafetyNoteForm): Promise<MaintenanceRequest> {
+    const response = await api.patch<ApiResponse<MaintenanceRequest>>(
+      `/requests/${id}/health-safety-note`,
       data
     );
     return response.data.data;

@@ -24,6 +24,9 @@ export class MaintenanceRequest {
   @Prop({ type: Types.ObjectId, ref: 'User' })
   consultantId?: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  healthSafetySupervisorId?: Types.ObjectId;
+
   @Prop({ required: true, enum: MaintenanceType })
   maintenanceType: MaintenanceType;
 
@@ -57,6 +60,9 @@ export class MaintenanceRequest {
 
   @Prop({ trim: true })
   consultantNotes?: string;
+
+  @Prop({ trim: true })
+  healthSafetyNotes?: string;
 
   @Prop({ trim: true })
   stopReason?: string;

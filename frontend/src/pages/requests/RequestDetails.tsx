@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -18,6 +18,7 @@ import {
   Loader2,
   AlertTriangle,
   Edit,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,14 +74,18 @@ type UpdateRequestFormData = z.infer<typeof updateRequestSchema>;
 export default function RequestDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
 
   const [showStopDialog, setShowStopDialog] = useState(false);
   const [showNoteDialog, setShowNoteDialog] = useState(false);
+  const [showHealthSafetyNoteDialog, setShowHealthSafetyNoteDialog] =
+    useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [stopReason, setStopReason] = useState("");
   const [consultantNotes, setConsultantNotes] = useState("");
+  const [healthSafetyNotes, setHealthSafetyNotes] = useState("");
 
   const {
     register,
@@ -148,6 +153,17 @@ export default function RequestDetails() {
     },
   });
 
+  const addHealthSafetyNoteMutation = useMutation({
+    mutationFn: (notes: string) =>
+      requestsService.addHealthSafetyNote(id!, { healthSafetyNotes: notes }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["request", id] });
+      queryClient.invalidateQueries({ queryKey: ["requests"] });
+      setShowHealthSafetyNoteDialog(false);
+      setHealthSafetyNotes("");
+    },
+  });
+
   const completeMutation = useMutation({
     mutationFn: () => requestsService.complete(id!),
     onSuccess: () => {
@@ -166,6 +182,40 @@ export default function RequestDetails() {
     },
   });
 
+  // Calculate user permissions early
+  const isEngineer = user?.role === Role.ENGINEER;
+  const isConsultant = user?.role === Role.CONSULTANT;
+  const isMaintenanceManager = user?.role === Role.MAINTENANCE_MANAGER;
+  const isHealthSafetySupervisor = user?.role === Role.HEALTH_SAFETY_SUPERVISOR;
+  const isAdmin = user?.role === Role.ADMIN;
+
+  // Open edit dialog if edit=true in URL - moved here to ensure consistent hook order
+  useEffect(() => {
+    const editParam = searchParams.get("edit");
+    if (
+      editParam === "true" &&
+      request &&
+      isEngineer &&
+      request.engineerId?.id === user?.id &&
+      request.status === RequestStatus.IN_PROGRESS
+    ) {
+      reset({
+        maintenanceType: request.maintenanceType,
+        locationId: request.locationId?.id || "",
+        departmentId: request.departmentId?.id || "",
+        systemId: request.systemId?.id || "",
+        machineId: request.machineId?.id || "",
+        reasonText: request.reasonText,
+        machineNumber: request.machineNumber || "",
+        engineerNotes: request.engineerNotes || "",
+      });
+      setShowEditDialog(true);
+      // Remove the query parameter from URL
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request, searchParams, user]);
+
   if (isLoading) {
     return <PageLoader />;
   }
@@ -178,17 +228,15 @@ export default function RequestDetails() {
     );
   }
 
-  const isEngineer = user?.role === Role.ENGINEER;
-  const isConsultant = user?.role === Role.CONSULTANT;
-  const isMaintenanceManager = user?.role === Role.MAINTENANCE_MANAGER;
-  const isAdmin = user?.role === Role.ADMIN;
   const isOwner = isEngineer && request.engineerId?.id === user?.id;
-
   const canEdit = isOwner && request.status === RequestStatus.IN_PROGRESS;
   const canStop = isOwner && request.status === RequestStatus.IN_PROGRESS;
   const canComplete = isOwner && request.status === RequestStatus.IN_PROGRESS;
   const canAddNote =
     (isConsultant || isMaintenanceManager || isAdmin) &&
+    request.status !== RequestStatus.STOPPED;
+  const canAddHealthSafetyNote =
+    (isHealthSafetySupervisor || isAdmin) &&
     request.status !== RequestStatus.STOPPED;
 
   const handleStop = () => {
@@ -198,6 +246,15 @@ export default function RequestDetails() {
   const handleAddNote = () => {
     setConsultantNotes(request.consultantNotes || "");
     setShowNoteDialog(true);
+  };
+
+  const handleAddHealthSafetyNote = () => {
+    setHealthSafetyNotes(request.healthSafetyNotes || "");
+    setShowHealthSafetyNoteDialog(true);
+  };
+
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["request", id] });
   };
 
   const handleEdit = () => {
@@ -234,6 +291,12 @@ export default function RequestDetails() {
   const submitNote = () => {
     if (consultantNotes.trim()) {
       addNoteMutation.mutate(consultantNotes);
+    }
+  };
+
+  const submitHealthSafetyNote = () => {
+    if (healthSafetyNotes.trim()) {
+      addHealthSafetyNoteMutation.mutate(healthSafetyNotes);
     }
   };
 
@@ -325,6 +388,15 @@ export default function RequestDetails() {
                 </div>
               )}
 
+              {request.healthSafetyNotes && (
+                <div className="border-t pt-4">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    ملاحظات مشرف الصحة والسلامة المهنية
+                  </p>
+                  <p>{request.healthSafetyNotes}</p>
+                </div>
+              )}
+
               {request.status === RequestStatus.STOPPED &&
                 request.stopReason && (
                   <div className="border-t pt-4">
@@ -343,7 +415,11 @@ export default function RequestDetails() {
           </Card>
 
           {/* Actions */}
-          {(canEdit || canStop || canComplete || canAddNote) && (
+          {(canEdit ||
+            canStop ||
+            canComplete ||
+            canAddNote ||
+            canAddHealthSafetyNote) && (
             <Card>
               <CardHeader>
                 <CardTitle>الإجراءات المتاحة</CardTitle>
@@ -396,6 +472,26 @@ export default function RequestDetails() {
                         : "إضافة ملاحظة"}
                     </Button>
                   )}
+                  {canAddHealthSafetyNote && (
+                    <Button
+                      variant="outline"
+                      onClick={handleAddHealthSafetyNote}
+                      className="flex-1"
+                    >
+                      <MessageSquarePlus className="ml-2 h-4 w-4" />
+                      {request.healthSafetyNotes
+                        ? "تعديل ملاحظة الصحة والسلامة"
+                        : "إضافة ملاحظة الصحة والسلامة"}
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={handleRefresh}
+                    className="flex-1"
+                  >
+                    <RefreshCw className="ml-2 h-4 w-4" />
+                    تحديث
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -476,6 +572,22 @@ export default function RequestDetails() {
                   </div>
                 </div>
               )}
+              {request.healthSafetySupervisorId && (
+                <div className="flex items-center gap-3">
+                  <User className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      مشرف الصحة والسلامة
+                    </p>
+                    <p className="font-medium">
+                      {request.healthSafetySupervisorId?.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {request.healthSafetySupervisorId?.email}
+                    </p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -551,6 +663,56 @@ export default function RequestDetails() {
               disabled={addNoteMutation.isPending || !consultantNotes.trim()}
             >
               {addNoteMutation.isPending ? (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              ) : (
+                "حفظ الملاحظة"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Health Safety Note Dialog */}
+      <Dialog
+        open={showHealthSafetyNoteDialog}
+        onOpenChange={setShowHealthSafetyNoteDialog}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>إضافة ملاحظة الصحة والسلامة</DialogTitle>
+            <DialogDescription>
+              أضف ملاحظاتك المتعلقة بالصحة والسلامة المهنية على هذا الطلب
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">
+                ملاحظات مشرف الصحة والسلامة المهنية *
+              </label>
+              <Textarea
+                placeholder="أدخل ملاحظاتك المتعلقة بالصحة والسلامة هنا..."
+                value={healthSafetyNotes}
+                onChange={(e) => setHealthSafetyNotes(e.target.value)}
+                rows={4}
+                className="mt-2"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowHealthSafetyNoteDialog(false)}
+            >
+              إلغاء
+            </Button>
+            <Button
+              onClick={submitHealthSafetyNote}
+              disabled={
+                addHealthSafetyNoteMutation.isPending ||
+                !healthSafetyNotes.trim()
+              }
+            >
+              {addHealthSafetyNoteMutation.isPending ? (
                 <Loader2 className="ml-2 h-4 w-4 animate-spin" />
               ) : (
                 "حفظ الملاحظة"
