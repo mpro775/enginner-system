@@ -211,10 +211,6 @@ export default function Login() {
               </p>
               <div className="text-xs text-muted-foreground space-y-1">
                 <p>
-                  <span className="text-primary">●</span> مدير النظام:
-                  admin@maintenance.com
-                </p>
-                <p>
                   <span className="text-primary">●</span> استشاري:
                   consultant1@maintenance.com
                 </p>
