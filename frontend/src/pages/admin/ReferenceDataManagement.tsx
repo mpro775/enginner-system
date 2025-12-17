@@ -21,6 +21,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { TagsInput } from "@/components/ui/tags-input";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
 
 interface ReferenceDataProps {
@@ -37,7 +38,7 @@ interface ReferenceDataProps {
   fields: {
     name: string;
     label: string;
-    type: "text" | "textarea" | "select";
+    type: "text" | "textarea" | "select" | "tags";
     required?: boolean;
     options?: { value: string; label: string }[];
   }[];
@@ -64,9 +65,9 @@ export default function ReferenceDataManagement({
     string,
     unknown
   > | null>(null);
-  const [formData, setFormData] = useState<Record<string, string | boolean>>(
-    {}
-  );
+  const [formData, setFormData] = useState<
+    Record<string, string | boolean | string[]>
+  >({});
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: [queryKey],
@@ -133,10 +134,12 @@ export default function ReferenceDataManagement({
 
   const openEditDialog = (item: Record<string, unknown>) => {
     setEditingItem(item);
-    const initialData: Record<string, string | boolean> = {};
+    const initialData: Record<string, string | boolean | string[]> = {};
     fields.forEach((field) => {
       const value = item[field.name];
-      if (typeof value === "object" && value !== null && "id" in value) {
+      if (field.type === "tags") {
+        initialData[field.name] = Array.isArray(value) ? value : [];
+      } else if (typeof value === "object" && value !== null && "id" in value) {
         initialData[field.name] = (value as { id: string }).id;
       } else {
         initialData[field.name] = String(value || "");
@@ -209,10 +212,31 @@ export default function ReferenceDataManagement({
                   <tr key={item.id as string}>
                     {columns.map((col) => (
                       <td key={col.key}>
-                        {typeof item[col.key] === "object" &&
-                        item[col.key] !== null
-                          ? (item[col.key] as { name: string }).name
-                          : String(item[col.key] || "-")}
+                        {col.key === "components" &&
+                        Array.isArray(item[col.key]) ? (
+                          <div className="flex flex-wrap gap-1">
+                            {(item[col.key] as string[]).length > 0 ? (
+                              (item[col.key] as string[]).map(
+                                (component, idx) => (
+                                  <Badge
+                                    key={idx}
+                                    variant="secondary"
+                                    className="text-xs"
+                                  >
+                                    {component}
+                                  </Badge>
+                                )
+                              )
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </div>
+                        ) : typeof item[col.key] === "object" &&
+                          item[col.key] !== null ? (
+                          (item[col.key] as { name: string }).name
+                        ) : (
+                          String(item[col.key] || "-")
+                        )}
                       </td>
                     ))}
                     <td>
@@ -288,7 +312,18 @@ export default function ReferenceDataManagement({
                   <Label>
                     {field.label} {field.required && "*"}
                   </Label>
-                  {field.type === "textarea" ? (
+                  {field.type === "tags" ? (
+                    <TagsInput
+                      value={Array.isArray(fieldValue) ? fieldValue : []}
+                      onChange={(tags) =>
+                        setFormData({
+                          ...formData,
+                          [field.name]: tags,
+                        })
+                      }
+                      placeholder="أضف مكون واضغط Enter"
+                    />
+                  ) : field.type === "textarea" ? (
                     <Textarea
                       value={stringValue}
                       onChange={(e) =>

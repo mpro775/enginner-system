@@ -5,6 +5,7 @@ import {
   MaintenanceRequest,
   MaintenanceRequestDocument,
 } from "./schemas/maintenance-request.schema";
+import { Machine, MachineDocument } from "../machines/schemas/machine.schema";
 import {
   CreateMaintenanceRequestDto,
   UpdateMaintenanceRequestDto,
@@ -32,22 +33,65 @@ import {
 } from "../../common/utils/pagination.util";
 import { NotificationsGateway } from "../notifications/notifications.gateway";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
+import { ScheduledTasksService } from "../scheduled-tasks/scheduled-tasks.service";
 
 @Injectable()
 export class MaintenanceRequestsService {
   constructor(
     @InjectModel(MaintenanceRequest.name)
     private requestModel: Model<MaintenanceRequestDocument>,
+    @InjectModel(Machine.name)
+    private machineModel: Model<MachineDocument>,
     @Inject(forwardRef(() => NotificationsGateway))
     private notificationsGateway: NotificationsGateway,
     @Inject(forwardRef(() => AuditLogsService))
-    private auditLogsService: AuditLogsService
+    private auditLogsService: AuditLogsService,
+    @Inject(forwardRef(() => ScheduledTasksService))
+    private scheduledTasksService: ScheduledTasksService
   ) {}
 
   async create(
     createDto: CreateMaintenanceRequestDto,
     user: { userId: string; name: string }
   ): Promise<MaintenanceRequestDocument> {
+    // Validate components if maintainAllComponents is false
+    if (createDto.maintainAllComponents === false) {
+      if (
+        !createDto.selectedComponents ||
+        createDto.selectedComponents.length === 0
+      ) {
+        throw new InvalidOperationException(
+          "Selected components are required when maintainAllComponents is false"
+        );
+      }
+
+      // Verify that the machine exists and has the selected components
+      const machine = await this.machineModel.findById(createDto.machineId);
+      if (!machine) {
+        throw new EntityNotFoundException("Machine", createDto.machineId);
+      }
+
+      if (!machine.components || machine.components.length === 0) {
+        throw new InvalidOperationException(
+          "The selected machine does not have any components"
+        );
+      }
+
+      // Check if all selected components exist in the machine
+      const invalidComponents = createDto.selectedComponents.filter(
+        (component) => !machine.components?.includes(component)
+      );
+
+      if (invalidComponents.length > 0) {
+        throw new InvalidOperationException(
+          `The following components are not valid for this machine: ${invalidComponents.join(", ")}`
+        );
+      }
+    }
+
+    // Set default value for maintainAllComponents if not provided
+    const maintainAllComponents = createDto.maintainAllComponents ?? true;
+
     // Generate request code
     const requestCode = await this.generateRequestCode(
       createDto.maintenanceType
@@ -60,6 +104,7 @@ export class MaintenanceRequestsService {
 
     const request = new this.requestModel({
       ...createDto,
+      maintainAllComponents,
       requestCode,
       engineerId,
       status: RequestStatus.IN_PROGRESS,
@@ -68,6 +113,14 @@ export class MaintenanceRequestsService {
 
     const saved = await request.save();
     const populated = await this.populateRequest(saved._id.toString());
+
+    // If scheduledTaskId is provided, mark the task as completed
+    if (createDto.scheduledTaskId) {
+      await this.scheduledTasksService.markAsCompleted(
+        createDto.scheduledTaskId,
+        saved._id.toString()
+      );
+    }
 
     // Send real-time notification
     this.notificationsGateway.notifyRequestCreated(populated);
@@ -106,7 +159,7 @@ export class MaintenanceRequestsService {
         .populate("locationId", "name")
         .populate("departmentId", "name")
         .populate("systemId", "name")
-        .populate("machineId", "name")
+        .populate("machineId", "name components")
         .sort(sortOptions)
         .skip(skip)
         .limit(limit)
@@ -216,11 +269,22 @@ export class MaintenanceRequestsService {
 
     const previousStatus = request.status;
 
-    await this.requestModel.findByIdAndUpdate(id, {
-      status: RequestStatus.STOPPED,
-      stopReason: stopDto.stopReason,
-      stoppedAt: new Date(),
-    });
+    const updatedRequest = await this.requestModel.findByIdAndUpdate(
+      id,
+      {
+        status: RequestStatus.STOPPED,
+        stopReason: stopDto.stopReason,
+        stoppedAt: new Date(),
+      },
+      { new: true }
+    );
+
+    // If request was linked to a scheduled task, mark it as pending again
+    if (updatedRequest?.scheduledTaskId) {
+      await this.scheduledTasksService.markAsPending(
+        updatedRequest.scheduledTaskId.toString()
+      );
+    }
 
     // Log the action
     await this.auditLogsService.create({
@@ -309,7 +373,7 @@ export class MaintenanceRequestsService {
       entity: "MaintenanceRequest",
       entityId: id,
       changes: {
-        healthSafetyNotes: noteDto.healthSafetyNotes
+        healthSafetyNotes: noteDto.healthSafetyNotes,
       },
       previousValues: {
         healthSafetyNotes: previousNotes,
@@ -486,7 +550,7 @@ export class MaintenanceRequestsService {
       .populate("locationId", "name")
       .populate("departmentId", "name")
       .populate("systemId", "name")
-      .populate("machineId", "name")
+      .populate("machineId", "name components")
       .exec() as Promise<MaintenanceRequestDocument>;
   }
 

@@ -267,12 +267,12 @@ async function seed() {
       departmentId: departments[1]._id, // كهرباء
       isActive: true,
     },
-    // Health Safety Supervisor
+    // Maintenance Safety Monitor
     {
-      name: "علي مشرف الصحة والسلامة",
+      name: "علي مراقب الصيانة والسلامة",
       email: "safety@maintenance.com",
       password: hashedPassword,
-      role: Role.HEALTH_SAFETY_SUPERVISOR,
+      role: Role.MAINTENANCE_SAFETY_MONITOR,
       isActive: true,
     },
   ]);

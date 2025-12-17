@@ -1,6 +1,6 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
-import { MaintenanceType, RequestStatus } from '../../../common/enums';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document, Types } from "mongoose";
+import { MaintenanceType, RequestStatus } from "../../../common/enums";
 
 export type MaintenanceRequestDocument = MaintenanceRequest & Document;
 
@@ -18,28 +18,28 @@ export class MaintenanceRequest {
   @Prop({ required: true, unique: true })
   requestCode: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: Types.ObjectId, ref: "User", required: true })
   engineerId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: Types.ObjectId, ref: "User" })
   consultantId?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: Types.ObjectId, ref: "User" })
   healthSafetySupervisorId?: Types.ObjectId;
 
   @Prop({ required: true, enum: MaintenanceType })
   maintenanceType: MaintenanceType;
 
-  @Prop({ type: Types.ObjectId, ref: 'Location', required: true })
+  @Prop({ type: Types.ObjectId, ref: "Location", required: true })
   locationId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Department', required: true })
+  @Prop({ type: Types.ObjectId, ref: "Department", required: true })
   departmentId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'System', required: true })
+  @Prop({ type: Types.ObjectId, ref: "System", required: true })
   systemId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Machine', required: true })
+  @Prop({ type: Types.ObjectId, ref: "Machine", required: true })
   machineId: Types.ObjectId;
 
   @Prop({ required: true, trim: true })
@@ -67,6 +67,12 @@ export class MaintenanceRequest {
   @Prop({ trim: true })
   stopReason?: string;
 
+  @Prop({ default: true })
+  maintainAllComponents: boolean;
+
+  @Prop({ type: [String], default: [] })
+  selectedComponents?: string[];
+
   @Prop({ required: true, default: () => new Date() })
   openedAt: Date;
 
@@ -75,9 +81,13 @@ export class MaintenanceRequest {
 
   @Prop()
   stoppedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: "ScheduledTask" })
+  scheduledTaskId?: Types.ObjectId;
 }
 
-export const MaintenanceRequestSchema = SchemaFactory.createForClass(MaintenanceRequest);
+export const MaintenanceRequestSchema =
+  SchemaFactory.createForClass(MaintenanceRequest);
 
 // Indexes
 MaintenanceRequestSchema.index({ requestCode: 1 }, { unique: true });
@@ -89,6 +99,3 @@ MaintenanceRequestSchema.index({ maintenanceType: 1 });
 MaintenanceRequestSchema.index({ status: 1 });
 MaintenanceRequestSchema.index({ createdAt: -1 });
 MaintenanceRequestSchema.index({ openedAt: -1 });
-
-
-

@@ -146,7 +146,7 @@ export class MaintenanceRequestsController {
 
   @Patch(":id/health-safety-note")
   @UseGuards(RolesGuard)
-  @Roles(Role.HEALTH_SAFETY_SUPERVISOR, Role.ADMIN)
+  @Roles(Role.MAINTENANCE_SAFETY_MONITOR, Role.ADMIN)
   async addHealthSafetyNote(
     @Param("id") id: string,
     @Body() noteDto: AddHealthSafetyNoteDto,

@@ -12,6 +12,8 @@ import {
   History,
   LogOut,
   X,
+  Calendar,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth";
@@ -37,6 +39,12 @@ const navItems: NavItem[] = [
     icon: FileText,
     label: "طلبات الصيانة",
     href: "/requests",
+  },
+  {
+    icon: ClipboardList,
+    label: "مهامي المرجعية",
+    href: "/engineer/my-tasks",
+    roles: [Role.ENGINEER],
   },
   {
     icon: BarChart3,
@@ -78,6 +86,12 @@ const navItems: NavItem[] = [
     icon: Wrench,
     label: "الآلات",
     href: "/admin/machines",
+    roles: [Role.ADMIN],
+  },
+  {
+    icon: Calendar,
+    label: "المهام المرجعية",
+    href: "/admin/scheduled-tasks",
     roles: [Role.ADMIN],
   },
   {

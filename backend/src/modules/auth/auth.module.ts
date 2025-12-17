@@ -9,6 +9,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { User, UserSchema } from '../users/schemas/user.schema';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
+import { ScheduledTasksModule } from '../scheduled-tasks/scheduled-tasks.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { AuditLogsModule } from '../audit-logs/audit-logs.module';
       inject: [ConfigService],
     }),
     forwardRef(() => AuditLogsModule),
+    forwardRef(() => ScheduledTasksModule),
+    forwardRef(() => NotificationsModule),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, JwtRefreshStrategy],

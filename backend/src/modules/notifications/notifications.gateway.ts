@@ -176,4 +176,32 @@ export class NotificationsGateway
 
     this.logger.log(`Notified about updated request: ${request.requestCode}`);
   }
+
+  // Notify about pending scheduled tasks
+  notifyPendingTasks(
+    engineerId: string,
+    counts: { overdue: number; pending: number; total: number }
+  ): void {
+    const notification = {
+      type: counts.overdue > 0 ? "task:overdue" : "task:pending",
+      data: {
+        engineerId,
+        overdueCount: counts.overdue,
+        pendingCount: counts.pending,
+        totalCount: counts.total,
+      },
+      message:
+        counts.overdue > 0
+          ? `لديك ${counts.overdue} مهمة مرجعية متأخرة و ${counts.pending} مهمة معلقة`
+          : `لديك ${counts.pending} مهمة مرجعية معلقة`,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Notify the specific engineer
+    this.server.to(`user:${engineerId}`).emit("notification", notification);
+
+    this.logger.log(
+      `Notified engineer ${engineerId} about pending tasks: ${counts.total} total`
+    );
+  }
 }

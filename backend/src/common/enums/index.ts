@@ -3,7 +3,7 @@ export enum Role {
   CONSULTANT = "consultant",
   MAINTENANCE_MANAGER = "maintenance_manager",
   ENGINEER = "engineer",
-  HEALTH_SAFETY_SUPERVISOR = "health_safety_supervisor",
+  MAINTENANCE_SAFETY_MONITOR = "maintenance_safety_monitor",
 }
 
 export enum MaintenanceType {
@@ -24,4 +24,11 @@ export enum AuditAction {
   LOGIN = "login",
   LOGOUT = "logout",
   STATUS_CHANGE = "status_change",
+}
+
+export enum TaskStatus {
+  PENDING = "pending",
+  COMPLETED = "completed",
+  OVERDUE = "overdue",
+  CANCELLED = "cancelled",
 }

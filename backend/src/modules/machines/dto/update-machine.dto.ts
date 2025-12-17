@@ -1,4 +1,10 @@
-import { IsString, IsOptional, IsBoolean, IsMongoId } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsMongoId,
+  IsArray,
+} from "class-validator";
 
 export class UpdateMachineDto {
   @IsOptional()
@@ -6,7 +12,7 @@ export class UpdateMachineDto {
   name?: string;
 
   @IsOptional()
-  @IsMongoId({ message: 'Invalid system ID' })
+  @IsMongoId({ message: "Invalid system ID" })
   systemId?: string;
 
   @IsOptional()
@@ -16,10 +22,9 @@ export class UpdateMachineDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  components?: string[];
 }
-
-
-
-
-
-

@@ -186,7 +186,8 @@ export default function RequestDetails() {
   const isEngineer = user?.role === Role.ENGINEER;
   const isConsultant = user?.role === Role.CONSULTANT;
   const isMaintenanceManager = user?.role === Role.MAINTENANCE_MANAGER;
-  const isHealthSafetySupervisor = user?.role === Role.HEALTH_SAFETY_SUPERVISOR;
+  const isMaintenanceSafetyMonitor =
+    user?.role === Role.MAINTENANCE_SAFETY_MONITOR;
   const isAdmin = user?.role === Role.ADMIN;
 
   // Open edit dialog if edit=true in URL - moved here to ensure consistent hook order
@@ -236,7 +237,7 @@ export default function RequestDetails() {
     (isConsultant || isMaintenanceManager || isAdmin) &&
     request.status !== RequestStatus.STOPPED;
   const canAddHealthSafetyNote =
-    (isHealthSafetySupervisor || isAdmin) &&
+    (isMaintenanceSafetyMonitor || isAdmin) &&
     request.status !== RequestStatus.STOPPED;
 
   const handleStop = () => {
@@ -391,7 +392,7 @@ export default function RequestDetails() {
               {request.healthSafetyNotes && (
                 <div className="border-t pt-4">
                   <p className="text-sm text-muted-foreground mb-2">
-                    ملاحظات مشرف الصحة والسلامة المهنية
+                    ملاحظات مراقب الصيانة والسلامة
                   </p>
                   <p>{request.healthSafetyNotes}</p>
                 </div>
@@ -577,7 +578,7 @@ export default function RequestDetails() {
                   <User className="h-5 w-5 text-muted-foreground" />
                   <div>
                     <p className="text-sm text-muted-foreground">
-                      مشرف الصحة والسلامة
+                      مراقب الصيانة والسلامة
                     </p>
                     <p className="font-medium">
                       {request.healthSafetySupervisorId?.name}
@@ -687,7 +688,7 @@ export default function RequestDetails() {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium">
-                ملاحظات مشرف الصحة والسلامة المهنية *
+                ملاحظات مراقب الصيانة والسلامة *
               </label>
               <Textarea
                 placeholder="أدخل ملاحظاتك المتعلقة بالصحة والسلامة هنا..."

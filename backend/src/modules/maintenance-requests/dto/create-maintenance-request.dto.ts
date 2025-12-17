@@ -4,32 +4,36 @@ import {
   IsEnum,
   IsOptional,
   IsMongoId,
-} from 'class-validator';
-import { MaintenanceType } from '../../../common/enums';
+  IsArray,
+  IsBoolean,
+} from "class-validator";
+import { MaintenanceType } from "../../../common/enums";
 
 export class CreateMaintenanceRequestDto {
-  @IsEnum(MaintenanceType, { message: 'Maintenance type must be emergency or preventive' })
-  @IsNotEmpty({ message: 'Maintenance type is required' })
+  @IsEnum(MaintenanceType, {
+    message: "Maintenance type must be emergency or preventive",
+  })
+  @IsNotEmpty({ message: "Maintenance type is required" })
   maintenanceType: MaintenanceType;
 
-  @IsMongoId({ message: 'Invalid location ID' })
-  @IsNotEmpty({ message: 'Location is required' })
+  @IsMongoId({ message: "Invalid location ID" })
+  @IsNotEmpty({ message: "Location is required" })
   locationId: string;
 
-  @IsMongoId({ message: 'Invalid department ID' })
-  @IsNotEmpty({ message: 'Department is required' })
+  @IsMongoId({ message: "Invalid department ID" })
+  @IsNotEmpty({ message: "Department is required" })
   departmentId: string;
 
-  @IsMongoId({ message: 'Invalid system ID' })
-  @IsNotEmpty({ message: 'System is required' })
+  @IsMongoId({ message: "Invalid system ID" })
+  @IsNotEmpty({ message: "System is required" })
   systemId: string;
 
-  @IsMongoId({ message: 'Invalid machine ID' })
-  @IsNotEmpty({ message: 'Machine is required' })
+  @IsMongoId({ message: "Invalid machine ID" })
+  @IsNotEmpty({ message: "Machine is required" })
   machineId: string;
 
   @IsString()
-  @IsNotEmpty({ message: 'Reason is required' })
+  @IsNotEmpty({ message: "Reason is required" })
   reasonText: string;
 
   @IsOptional()
@@ -39,8 +43,17 @@ export class CreateMaintenanceRequestDto {
   @IsOptional()
   @IsString()
   engineerNotes?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  maintainAllComponents?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  selectedComponents?: string[];
+
+  @IsOptional()
+  @IsMongoId({ message: "Invalid scheduled task ID" })
+  scheduledTaskId?: string;
 }
-
-
-
-

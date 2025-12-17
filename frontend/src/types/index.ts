@@ -4,7 +4,7 @@ export enum Role {
   CONSULTANT = "consultant",
   MAINTENANCE_MANAGER = "maintenance_manager",
   ENGINEER = "engineer",
-  HEALTH_SAFETY_SUPERVISOR = "health_safety_supervisor",
+  MAINTENANCE_SAFETY_MONITOR = "maintenance_safety_monitor",
 }
 
 export enum MaintenanceType {
@@ -16,6 +16,13 @@ export enum RequestStatus {
   IN_PROGRESS = "in_progress",
   COMPLETED = "completed",
   STOPPED = "stopped",
+}
+
+export enum TaskStatus {
+  PENDING = "pending",
+  COMPLETED = "completed",
+  OVERDUE = "overdue",
+  CANCELLED = "cancelled",
 }
 
 export enum AuditAction {
@@ -66,6 +73,7 @@ export interface Machine {
   name: string;
   systemId: System | string;
   description?: string;
+  components?: string[];
   isActive: boolean;
 }
 
@@ -162,6 +170,31 @@ export interface EngineerStatistics {
   avgCompletionTimeHours: number;
 }
 
+// Scheduled Task types
+export interface ScheduledTask {
+  id: string;
+  taskCode: string;
+  title: string;
+  engineerId: User;
+  locationId: Location;
+  departmentId: Department;
+  systemId: System;
+  machineId: Machine;
+  maintainAllComponents: boolean;
+  selectedComponents?: string[];
+  scheduledMonth: number;
+  scheduledYear: number;
+  taskType: MaintenanceType;
+  description?: string;
+  status: TaskStatus;
+  completedRequestId?: MaintenanceRequest;
+  completedAt?: string;
+  createdBy: User;
+  daysRemaining?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Form types
 export interface CreateRequestForm {
   maintenanceType: MaintenanceType;
@@ -172,6 +205,9 @@ export interface CreateRequestForm {
   reasonText: string;
   machineNumber?: string;
   engineerNotes?: string;
+  maintainAllComponents?: boolean;
+  selectedComponents?: string[];
+  scheduledTaskId?: string;
 }
 
 export interface StopRequestForm {

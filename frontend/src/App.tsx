@@ -17,6 +17,9 @@ import {
   MachinesPage,
   AuditLogs,
 } from "@/pages/admin";
+import ScheduledTasksManagement from "@/pages/admin/ScheduledTasksManagement";
+import ScheduledTaskForm from "@/pages/admin/ScheduledTaskForm";
+import MyScheduledTasks from "@/pages/engineer/MyScheduledTasks";
 import { Role } from "@/types";
 
 function App() {
@@ -50,6 +53,16 @@ function App() {
             }
           />
           <Route path="requests/:id" element={<RequestDetails />} />
+
+          {/* Engineer routes */}
+          <Route
+            path="engineer/my-tasks"
+            element={
+              <ProtectedRoute allowedRoles={[Role.ENGINEER]}>
+                <MyScheduledTasks />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Statistics - Admin, Consultant & Maintenance Manager */}
           <Route
@@ -129,6 +142,30 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={[Role.ADMIN]}>
                 <AuditLogs />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin/scheduled-tasks"
+            element={
+              <ProtectedRoute allowedRoles={[Role.ADMIN]}>
+                <ScheduledTasksManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin/scheduled-tasks/new"
+            element={
+              <ProtectedRoute allowedRoles={[Role.ADMIN]}>
+                <ScheduledTaskForm />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin/scheduled-tasks/:id/edit"
+            element={
+              <ProtectedRoute allowedRoles={[Role.ADMIN]}>
+                <ScheduledTaskForm />
               </ProtectedRoute>
             }
           />

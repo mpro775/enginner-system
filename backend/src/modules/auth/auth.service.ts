@@ -8,7 +8,10 @@ import { User, UserDocument } from '../users/schemas/user.schema';
 import { LoginDto } from './dto/login.dto';
 import { JwtPayload } from './strategies/jwt.strategy';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
-import { AuditAction } from '../../common/enums';
+import { AuditAction, Role } from '../../common/enums';
+import { Inject, forwardRef } from '@nestjs/common';
+import { ScheduledTasksService } from '../scheduled-tasks/scheduled-tasks.service';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 
 export interface TokensResponse {
   accessToken: string;
@@ -32,6 +35,10 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private auditLogsService: AuditLogsService,
+    @Inject(forwardRef(() => ScheduledTasksService))
+    private scheduledTasksService: ScheduledTasksService,
+    @Inject(forwardRef(() => NotificationsGateway))
+    private notificationsGateway: NotificationsGateway,
   ) {}
 
   async login(loginDto: LoginDto, ipAddress?: string, userAgent?: string): Promise<AuthResponse> {
@@ -69,6 +76,11 @@ export class AuthService {
       ipAddress,
       userAgent,
     });
+
+    // Notify about pending tasks for engineers
+    if (user.role === Role.ENGINEER) {
+      this.notifyPendingTasks(user._id.toString());
+    }
 
     return {
       ...tokens,
@@ -166,6 +178,40 @@ export class AuthService {
       refreshToken,
       expiresIn: 900, // 15 minutes in seconds
     };
+  }
+
+  private async notifyPendingTasks(engineerId: string): Promise<void> {
+    try {
+      const tasks = await this.scheduledTasksService.findPendingByEngineer(
+        engineerId
+      );
+
+      if (tasks.length > 0) {
+        const overdueTasks = tasks.filter(
+          (task) => task.status === "overdue"
+        );
+        const pendingTasks = tasks.filter(
+          (task) => task.status === "pending"
+        );
+
+        if (overdueTasks.length > 0) {
+          this.notificationsGateway.notifyPendingTasks(engineerId, {
+            overdue: overdueTasks.length,
+            pending: pendingTasks.length,
+            total: tasks.length,
+          });
+        } else if (pendingTasks.length > 0) {
+          this.notificationsGateway.notifyPendingTasks(engineerId, {
+            overdue: 0,
+            pending: pendingTasks.length,
+            total: tasks.length,
+          });
+        }
+      }
+    } catch (error) {
+      // Silently fail - don't block login if notification fails
+      console.error("Error notifying about pending tasks:", error);
+    }
   }
 }
 

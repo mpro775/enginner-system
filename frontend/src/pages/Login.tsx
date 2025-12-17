@@ -219,8 +219,8 @@ export default function Login() {
                   engineer1@maintenance.com
                 </p>
                 <p>
-                  <span className="text-primary">●</span> مشرف الصحة والسلامة:
-                  safety@maintenance.com
+                  <span className="text-primary">●</span> مراقب الصيانة
+                  والسلامة: safety@maintenance.com
                 </p>
                 <p className="mt-2 pt-2 border-t border-primary/20 dark:border-primary/30">
                   كلمة المرور:{" "}

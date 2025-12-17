@@ -12,6 +12,7 @@ import { DepartmentsModule } from "./modules/departments/departments.module";
 import { SystemsModule } from "./modules/systems/systems.module";
 import { MachinesModule } from "./modules/machines/machines.module";
 import { MaintenanceRequestsModule } from "./modules/maintenance-requests/maintenance-requests.module";
+import { ScheduledTasksModule } from "./modules/scheduled-tasks/scheduled-tasks.module";
 import { StatisticsModule } from "./modules/statistics/statistics.module";
 import { ReportsModule } from "./modules/reports/reports.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
@@ -71,6 +72,7 @@ import { HealthModule } from "./modules/health/health.module";
     SystemsModule,
     MachinesModule,
     MaintenanceRequestsModule,
+    ScheduledTasksModule,
     StatisticsModule,
     ReportsModule,
     NotificationsModule,

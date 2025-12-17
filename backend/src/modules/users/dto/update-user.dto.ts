@@ -25,7 +25,8 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsEnum(Role, {
-    message: "Role must be admin, consultant, maintenance_manager, engineer, or health_safety_supervisor",
+    message:
+      "Role must be admin, consultant, maintenance_manager, engineer, or maintenance_safety_monitor",
   })
   role?: Role;
 
