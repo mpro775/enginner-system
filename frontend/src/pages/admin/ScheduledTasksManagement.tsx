@@ -50,6 +50,14 @@ const getMonthName = (month: number): string => {
   return months[month - 1] || "";
 };
 
+const formatScheduledDate = (task: ScheduledTask): string => {
+  const monthName = getMonthName(task.scheduledMonth);
+  if (task.scheduledDay) {
+    return `${task.scheduledDay} ${monthName} ${task.scheduledYear}`;
+  }
+  return `${monthName} ${task.scheduledYear}`;
+};
+
 const getStatusBadge = (status: TaskStatus) => {
   switch (status) {
     case TaskStatus.PENDING:
@@ -94,7 +102,7 @@ export default function ScheduledTasksManagement() {
   const [filters, setFilters] = useState({
     page: 1,
     limit: 10,
-    status: "",
+    status: "all",
   });
 
   const { data, isLoading } = useQuery({
@@ -102,7 +110,8 @@ export default function ScheduledTasksManagement() {
     queryFn: () =>
       scheduledTasksService.getAll({
         ...filters,
-        status: (filters.status as TaskStatus) || undefined,
+        status:
+          filters.status !== "all" ? (filters.status as TaskStatus) : undefined,
       }),
   });
 
@@ -172,7 +181,7 @@ export default function ScheduledTasksManagement() {
                   <SelectValue placeholder="جميع الحالات" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">جميع الحالات</SelectItem>
+                  <SelectItem value="all">جميع الحالات</SelectItem>
                   <SelectItem value={TaskStatus.PENDING}>معلقة</SelectItem>
                   <SelectItem value={TaskStatus.COMPLETED}>مكتملة</SelectItem>
                   <SelectItem value={TaskStatus.OVERDUE}>متأخرة</SelectItem>
@@ -249,10 +258,7 @@ export default function ScheduledTasksManagement() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4" />
-                        <span>
-                          {getMonthName(task.scheduledMonth)}{" "}
-                          {task.scheduledYear}
-                        </span>
+                        <span>{formatScheduledDate(task)}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span>القسم:</span>
@@ -340,7 +346,9 @@ export default function ScheduledTasksManagement() {
           <DialogHeader>
             <DialogTitle>تأكيد الحذف</DialogTitle>
           </DialogHeader>
-          <p>هل أنت متأكد من حذف المهمة المرجعية "{taskToDelete?.title}"؟</p>
+          <div>
+            هل أنت متأكد من حذف المهمة المرجعية "{taskToDelete?.title}"؟
+          </div>
           <DialogFooter>
             <Button
               variant="outline"

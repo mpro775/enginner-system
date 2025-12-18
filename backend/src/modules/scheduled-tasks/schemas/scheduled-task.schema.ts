@@ -48,6 +48,9 @@ export class ScheduledTask {
   @Prop({ required: true })
   scheduledYear: number;
 
+  @Prop({ type: Number, min: 1, max: 31, default: 1 })
+  scheduledDay: number;
+
   @Prop({ required: true, enum: MaintenanceType })
   taskType: MaintenanceType;
 
@@ -76,11 +79,10 @@ export const ScheduledTaskSchema = SchemaFactory.createForClass(ScheduledTask);
 // Virtual for days remaining
 ScheduledTaskSchema.virtual("daysRemaining").get(function () {
   const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1; // 1-12
-
-  // Calculate target date (first day of scheduled month)
-  const targetDate = new Date(this.scheduledYear, this.scheduledMonth - 1, 1);
+  
+  // Use scheduledDay if provided, otherwise use 1 (first day of month)
+  const day = this.scheduledDay || 1;
+  const targetDate = new Date(this.scheduledYear, this.scheduledMonth - 1, day);
 
   // Calculate days remaining
   const diffTime = targetDate.getTime() - now.getTime();
@@ -92,6 +94,6 @@ ScheduledTaskSchema.virtual("daysRemaining").get(function () {
 // Indexes
 ScheduledTaskSchema.index({ taskCode: 1 }, { unique: true });
 ScheduledTaskSchema.index({ engineerId: 1, status: 1 });
-ScheduledTaskSchema.index({ scheduledYear: 1, scheduledMonth: 1 });
+ScheduledTaskSchema.index({ scheduledYear: 1, scheduledMonth: 1, scheduledDay: 1 });
 ScheduledTaskSchema.index({ status: 1 });
 ScheduledTaskSchema.index({ createdAt: -1 });

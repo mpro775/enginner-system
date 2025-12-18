@@ -37,6 +37,7 @@ export interface CreateScheduledTaskForm {
   selectedComponents?: string[];
   scheduledMonth: number;
   scheduledYear: number;
+  scheduledDay?: number;
   taskType: MaintenanceType;
   description?: string;
 }
@@ -52,6 +53,7 @@ export interface UpdateScheduledTaskForm {
   selectedComponents?: string[];
   scheduledMonth?: number;
   scheduledYear?: number;
+  scheduledDay?: number;
   taskType?: MaintenanceType;
   description?: string;
   status?: TaskStatus;

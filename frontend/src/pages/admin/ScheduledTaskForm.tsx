@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Select,
   SelectContent,
@@ -46,6 +48,7 @@ const taskSchema = z
     selectedComponents: z.array(z.string()).optional(),
     scheduledMonth: z.number().min(1).max(12),
     scheduledYear: z.number().min(2020),
+    scheduledDay: z.number().min(1).max(31).optional(),
     description: z.string().optional(),
   })
   .refine(
@@ -68,6 +71,8 @@ export default function ScheduledTaskForm() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const isEditing = !!id;
+
+  const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
 
   const {
     register,
@@ -130,8 +135,13 @@ export default function ScheduledTaskForm() {
         selectedComponents: task.selectedComponents || [],
         scheduledMonth: task.scheduledMonth,
         scheduledYear: task.scheduledYear,
+        scheduledDay: task.scheduledDay || 1,
         description: task.description || "",
       });
+      
+      // Set the date picker value
+      const day = task.scheduledDay || 1;
+      setScheduledDate(new Date(task.scheduledYear, task.scheduledMonth - 1, day));
     }
   }, [task, isEditing, reset]);
 
@@ -391,131 +401,118 @@ export default function ScheduledTaskForm() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <Label>الشهر *</Label>
-                <Select
-                  onValueChange={(value) =>
-                    setValue("scheduledMonth", parseInt(value))
-                  }
-                  value={watch("scheduledMonth")?.toString()}
-                >
-                  <SelectTrigger
-                    className={
-                      errors.scheduledMonth ? "border-destructive" : ""
-                    }
-                  >
-                    <SelectValue placeholder="اختر الشهر" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((month) => (
-                      <SelectItem key={month} value={month.toString()}>
-                        {month}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.scheduledMonth && (
-                  <p className="text-xs text-destructive">
-                    {errors.scheduledMonth.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label>السنة *</Label>
-                <Input
-                  type="number"
-                  min="2020"
-                  max="2100"
-                  placeholder="2025"
-                  {...register("scheduledYear", { valueAsNumber: true })}
-                  className={errors.scheduledYear ? "border-destructive" : ""}
-                />
-                {errors.scheduledYear && (
-                  <p className="text-xs text-destructive">
-                    {errors.scheduledYear.message}
-                  </p>
-                )}
-              </div>
             </div>
 
-            {watchMachineId && selectedMachine && (
-              <div className="space-y-2">
-                <Label>المكونات</Label>
+            <div className="space-y-2">
+              <Label>تاريخ المهمة المجدولة *</Label>
+              <DatePicker
+                date={scheduledDate}
+                onDateChange={(date) => {
+                  setScheduledDate(date);
+                  if (date) {
+                    setValue("scheduledYear", date.getFullYear());
+                    setValue("scheduledMonth", date.getMonth() + 1);
+                    setValue("scheduledDay", date.getDate());
+                  }
+                }}
+                placeholder="اختر تاريخ المهمة"
+              />
+              {(errors.scheduledYear || errors.scheduledMonth || errors.scheduledDay) && (
+                <p className="text-xs text-destructive">
+                  {errors.scheduledYear?.message || errors.scheduledMonth?.message || errors.scheduledDay?.message}
+                </p>
+              )}
+            </div>
+
+            {watchMachineId && selectedMachine && selectedMachine.components && selectedMachine.components.length > 0 && (
+              <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
                 <div className="space-y-3">
-                  <div className="flex items-center space-x-2 space-x-reverse">
-                    <input
-                      type="checkbox"
+                  <Label className="text-base font-semibold">المكونات</Label>
+                  
+                  <div className="flex items-center space-x-3 space-x-reverse">
+                    <Checkbox
                       id="all-components"
                       checked={watchMaintainAllComponents !== false}
-                      onChange={(e) => {
-                        setValue("maintainAllComponents", e.target.checked);
-                        if (e.target.checked) {
+                      onCheckedChange={(checked) => {
+                        setValue("maintainAllComponents", checked as boolean);
+                        if (checked) {
                           setValue("selectedComponents", []);
                         }
                       }}
-                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                     />
                     <Label
                       htmlFor="all-components"
-                      className="cursor-pointer font-normal"
+                      className="cursor-pointer font-medium"
                     >
-                      جميع المكونات
+                      جميع المكونات ({selectedMachine.components.length})
                     </Label>
                   </div>
 
-                  {watchMaintainAllComponents === false &&
-                    selectedMachine.components &&
-                    selectedMachine.components.length > 0 && (
-                      <div className="space-y-2 border-t pt-3">
-                        <Label className="text-sm">اختر المكونات:</Label>
-                        <div className="grid gap-2">
-                          {selectedMachine.components.map((component) => (
-                            <div
-                              key={component}
-                              className="flex items-center space-x-2 space-x-reverse"
-                            >
-                              <input
-                                type="checkbox"
-                                id={`component-${component}`}
-                                checked={
-                                  watch("selectedComponents")?.includes(
-                                    component
-                                  ) || false
-                                }
-                                onChange={(e) => {
-                                  const current =
-                                    watch("selectedComponents") || [];
-                                  if (e.target.checked) {
-                                    setValue("selectedComponents", [
-                                      ...current,
-                                      component,
-                                    ]);
-                                  } else {
-                                    setValue(
-                                      "selectedComponents",
-                                      current.filter((c) => c !== component)
-                                    );
-                                  }
-                                }}
-                                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                              />
-                              <Label
-                                htmlFor={`component-${component}`}
-                                className="cursor-pointer font-normal"
-                              >
-                                {component}
-                              </Label>
-                            </div>
-                          ))}
-                        </div>
-                        {errors.selectedComponents && (
-                          <p className="text-xs text-destructive">
-                            {errors.selectedComponents.message}
-                          </p>
-                        )}
+                  {watchMaintainAllComponents === false && (
+                    <div className="space-y-3 pt-3 border-t">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">
+                          المكونات المحددة ({watch("selectedComponents")?.length || 0}/{selectedMachine.components.length})
+                        </Label>
+                        <Button
+                          type="button"
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0 text-xs"
+                          onClick={() => {
+                            setValue("selectedComponents", selectedMachine.components || []);
+                          }}
+                        >
+                          تحديد الكل
+                        </Button>
                       </div>
-                    )}
+                      
+                      <div className="grid gap-2 max-h-48 overflow-y-auto p-3 border rounded-md bg-background">
+                        {selectedMachine.components.map((component) => (
+                          <div
+                            key={component}
+                            className="flex items-center space-x-3 space-x-reverse"
+                          >
+                            <Checkbox
+                              id={`component-${component}`}
+                              checked={
+                                watch("selectedComponents")?.includes(
+                                  component
+                                ) || false
+                              }
+                              onCheckedChange={(checked) => {
+                                const current =
+                                  watch("selectedComponents") || [];
+                                if (checked) {
+                                  setValue("selectedComponents", [
+                                    ...current,
+                                    component,
+                                  ]);
+                                } else {
+                                  setValue(
+                                    "selectedComponents",
+                                    current.filter((c) => c !== component)
+                                  );
+                                }
+                              }}
+                            />
+                            <Label
+                              htmlFor={`component-${component}`}
+                              className="cursor-pointer font-normal"
+                            >
+                              {component}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {errors.selectedComponents && (
+                        <p className="text-xs text-destructive">
+                          {errors.selectedComponents.message}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -83,6 +83,11 @@ export class ScheduledTasksService {
 
     const task = new this.taskModel({
       ...createDto,
+      engineerId: new Types.ObjectId(createDto.engineerId),
+      locationId: new Types.ObjectId(createDto.locationId),
+      departmentId: new Types.ObjectId(createDto.departmentId),
+      systemId: new Types.ObjectId(createDto.systemId),
+      machineId: new Types.ObjectId(createDto.machineId),
       maintainAllComponents,
       taskCode,
       status: TaskStatus.PENDING,
@@ -153,9 +158,14 @@ export class ScheduledTasksService {
 
     const tasks = await this.taskModel
       .find({
-        engineerId: Types.ObjectId.isValid(engineerId)
-          ? new Types.ObjectId(engineerId)
-          : engineerId,
+        $or: [
+          { engineerId: engineerId }, // Match string
+          {
+            engineerId: Types.ObjectId.isValid(engineerId)
+              ? new Types.ObjectId(engineerId)
+              : null,
+          }, // Match ObjectId
+        ],
         status: { $in: [TaskStatus.PENDING, TaskStatus.OVERDUE] },
       })
       .sort({ scheduledYear: 1, scheduledMonth: 1 })
@@ -172,10 +182,16 @@ export class ScheduledTasksService {
     engineerId: string,
     filterDto: FilterScheduledTasksDto
   ): Promise<PaginatedResult<ScheduledTaskDocument>> {
+    // Build filter to match both ObjectId and string engineerId
     const filter: FilterQuery<ScheduledTaskDocument> = {
-      engineerId: Types.ObjectId.isValid(engineerId)
-        ? new Types.ObjectId(engineerId)
-        : engineerId,
+      $or: [
+        { engineerId: engineerId }, // Match string
+        {
+          engineerId: Types.ObjectId.isValid(engineerId)
+            ? new Types.ObjectId(engineerId)
+            : null,
+        }, // Match ObjectId
+      ],
     };
 
     if (filterDto.status) {
@@ -266,7 +282,25 @@ export class ScheduledTasksService {
       status: task.status,
     };
 
-    await this.taskModel.findByIdAndUpdate(id, updateDto);
+    // Convert IDs to ObjectId if they exist in the update
+    const updateData: any = { ...updateDto };
+    if (updateDto.engineerId) {
+      updateData.engineerId = new Types.ObjectId(updateDto.engineerId);
+    }
+    if (updateDto.locationId) {
+      updateData.locationId = new Types.ObjectId(updateDto.locationId);
+    }
+    if (updateDto.departmentId) {
+      updateData.departmentId = new Types.ObjectId(updateDto.departmentId);
+    }
+    if (updateDto.systemId) {
+      updateData.systemId = new Types.ObjectId(updateDto.systemId);
+    }
+    if (updateDto.machineId) {
+      updateData.machineId = new Types.ObjectId(updateDto.machineId);
+    }
+
+    await this.taskModel.findByIdAndUpdate(id, updateData);
 
     // Log the action
     await this.auditLogsService.create({
@@ -351,10 +385,13 @@ export class ScheduledTasksService {
 
   calculateDaysRemaining(
     scheduledMonth: number,
-    scheduledYear: number
+    scheduledYear: number,
+    scheduledDay?: number
   ): number {
     const now = new Date();
-    const targetDate = new Date(scheduledYear, scheduledMonth - 1, 1);
+    // Use scheduledDay if provided, otherwise use 1 (first day of month)
+    const day = scheduledDay || 1;
+    const targetDate = new Date(scheduledYear, scheduledMonth - 1, day);
     const diffTime = targetDate.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
@@ -362,17 +399,28 @@ export class ScheduledTasksService {
 
   async updateOverdueTasks(): Promise<void> {
     const now = new Date();
+    now.setHours(0, 0, 0, 0); // Reset to start of day for accurate comparison
+    
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
+    const currentDay = now.getDate();
 
     await this.taskModel.updateMany(
       {
         status: TaskStatus.PENDING,
         $or: [
+          // Tasks from previous years
           { scheduledYear: { $lt: currentYear } },
+          // Tasks from previous months in current year
           {
             scheduledYear: currentYear,
             scheduledMonth: { $lt: currentMonth },
+          },
+          // Tasks from current month but past days
+          {
+            scheduledYear: currentYear,
+            scheduledMonth: currentMonth,
+            scheduledDay: { $exists: true, $lt: currentDay },
           },
         ],
       },

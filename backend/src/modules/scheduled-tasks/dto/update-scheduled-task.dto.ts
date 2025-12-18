@@ -56,6 +56,12 @@ export class UpdateScheduledTaskDto {
   scheduledYear?: number;
 
   @IsOptional()
+  @IsInt({ message: "Scheduled day must be a number" })
+  @Min(1, { message: "Scheduled day must be between 1 and 31" })
+  @Max(31, { message: "Scheduled day must be between 1 and 31" })
+  scheduledDay?: number;
+
+  @IsOptional()
   @IsEnum(MaintenanceType, {
     message: "Task type must be emergency or preventive",
   })

@@ -184,6 +184,7 @@ export interface ScheduledTask {
   selectedComponents?: string[];
   scheduledMonth: number;
   scheduledYear: number;
+  scheduledDay?: number;
   taskType: MaintenanceType;
   description?: string;
   status: TaskStatus;

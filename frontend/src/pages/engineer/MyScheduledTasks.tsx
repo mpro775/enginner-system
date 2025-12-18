@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -10,8 +10,18 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -22,7 +32,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
 import { scheduledTasksService } from "@/services/scheduled-tasks";
+import { requestsService } from "@/services/requests";
 import { ScheduledTask, TaskStatus } from "@/types";
+import { useToast } from "@/hooks/use-toast";
 
 const getMonthName = (month: number): string => {
   const months = [
@@ -40,6 +52,14 @@ const getMonthName = (month: number): string => {
     "ديسمبر",
   ];
   return months[month - 1] || "";
+};
+
+const formatScheduledDate = (task: ScheduledTask): string => {
+  const monthName = getMonthName(task.scheduledMonth);
+  if (task.scheduledDay) {
+    return `${task.scheduledDay} ${monthName} ${task.scheduledYear}`;
+  }
+  return `${monthName} ${task.scheduledYear}`;
 };
 
 const getStatusBadge = (status: TaskStatus) => {
@@ -82,28 +102,85 @@ const getDaysRemaining = (task: ScheduledTask): number => {
     return task.daysRemaining;
   }
   const now = new Date();
-  const targetDate = new Date(task.scheduledYear, task.scheduledMonth - 1, 1);
+  // Use scheduledDay if provided, otherwise use 1 (first day of month)
+  const day = task.scheduledDay || 1;
+  const targetDate = new Date(task.scheduledYear, task.scheduledMonth - 1, day);
   const diffTime = targetDate.getTime() - now.getTime();
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 };
 
 export default function MyScheduledTasks() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const [filters, setFilters] = useState({
     page: 1,
     limit: 10,
-    status: "",
+    status: "all",
   });
+
+  const [executeDialogOpen, setExecuteDialogOpen] = useState(false);
+  const [selectedTaskForExecution, setSelectedTaskForExecution] = useState<ScheduledTask | null>(null);
+  const [executionNotes, setExecutionNotes] = useState("");
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["my-scheduled-tasks", filters],
     queryFn: () =>
       scheduledTasksService.getMyTasks({
         ...filters,
-        status: (filters.status as TaskStatus) || undefined,
+        status:
+          filters.status !== "all" ? (filters.status as TaskStatus) : undefined,
       }),
   });
+
+  const createRequestMutation = useMutation({
+    mutationFn: requestsService.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["my-scheduled-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["requests"] });
+      toast({
+        title: "تم إنشاء الطلب بنجاح",
+        description: "تم إنشاء طلب الصيانة من المهمة المرجعية",
+      });
+      setExecuteDialogOpen(false);
+      setExecutionNotes("");
+      setSelectedTaskForExecution(null);
+    },
+    onError: () => {
+      toast({
+        title: "حدث خطأ",
+        description: "فشل إنشاء طلب الصيانة",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleQuickExecute = (task: ScheduledTask) => {
+    setSelectedTaskForExecution(task);
+    setExecutionNotes("");
+    setExecuteDialogOpen(true);
+  };
+
+  const handleExecuteSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTaskForExecution) return;
+
+    const requestData = {
+      maintenanceType: selectedTaskForExecution.taskType,
+      locationId: selectedTaskForExecution.locationId.id,
+      departmentId: selectedTaskForExecution.departmentId.id,
+      systemId: selectedTaskForExecution.systemId.id,
+      machineId: selectedTaskForExecution.machineId.id,
+      maintainAllComponents: selectedTaskForExecution.maintainAllComponents,
+      selectedComponents: selectedTaskForExecution.selectedComponents,
+      reasonText: selectedTaskForExecution.description || selectedTaskForExecution.title,
+      engineerNotes: executionNotes,
+      scheduledTaskId: selectedTaskForExecution.id,
+    };
+
+    createRequestMutation.mutate(requestData);
+  };
 
   const handleCreateRequest = (task: ScheduledTask) => {
     // Navigate to new request page with task data in state
@@ -166,7 +243,7 @@ export default function MyScheduledTasks() {
                   <SelectValue placeholder="جميع الحالات" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">جميع الحالات</SelectItem>
+                  <SelectItem value="all">جميع الحالات</SelectItem>
                   <SelectItem value={TaskStatus.PENDING}>معلقة</SelectItem>
                   <SelectItem value={TaskStatus.COMPLETED}>مكتملة</SelectItem>
                   <SelectItem value={TaskStatus.OVERDUE}>متأخرة</SelectItem>
@@ -210,10 +287,7 @@ export default function MyScheduledTasks() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4" />
-                          <span>
-                            {getMonthName(task.scheduledMonth)}{" "}
-                            {task.scheduledYear}
-                          </span>
+                          <span>{formatScheduledDate(task)}</span>
                         </div>
                       </div>
 
@@ -259,16 +333,25 @@ export default function MyScheduledTasks() {
                         )}
                     </div>
 
-                    {task.status === TaskStatus.PENDING ||
-                      (task.status === TaskStatus.OVERDUE && (
+                    {(task.status === TaskStatus.PENDING ||
+                      task.status === TaskStatus.OVERDUE) && (
+                      <div className="flex gap-2 ml-4">
+                        <Button
+                          onClick={() => handleQuickExecute(task)}
+                          variant="default"
+                        >
+                          <CheckCircle2 className="ml-2 h-4 w-4" />
+                          تنفيذ المهمة
+                        </Button>
                         <Button
                           onClick={() => handleCreateRequest(task)}
-                          className="ml-4"
+                          variant="outline"
                         >
                           <Plus className="ml-2 h-4 w-4" />
-                          إنشاء طلب
+                          طلب مخصص
                         </Button>
-                      ))}
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -301,6 +384,64 @@ export default function MyScheduledTasks() {
           </Button>
         </div>
       )}
+
+      {/* Execute Task Dialog */}
+      <Dialog open={executeDialogOpen} onOpenChange={setExecuteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>تنفيذ المهمة المرجعية</DialogTitle>
+            <DialogDescription>
+              {selectedTaskForExecution?.title}
+              <div className="mt-2 text-sm">
+                <p>القسم: {selectedTaskForExecution?.departmentId.name}</p>
+                <p>الآلة: {selectedTaskForExecution?.machineId.name}</p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleExecuteSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                ملاحظات إضافية (اختياري)
+              </label>
+              <Textarea
+                placeholder="أضف أي ملاحظات تريدها..."
+                value={executionNotes}
+                onChange={(e) => setExecutionNotes(e.target.value)}
+                rows={4}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setExecuteDialogOpen(false);
+                  setExecutionNotes("");
+                  setSelectedTaskForExecution(null);
+                }}
+                disabled={createRequestMutation.isPending}
+              >
+                إلغاء
+              </Button>
+              <Button type="submit" disabled={createRequestMutation.isPending}>
+                {createRequestMutation.isPending ? (
+                  <>
+                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                    جاري الإنشاء...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="ml-2 h-4 w-4" />
+                    إنشاء الطلب
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

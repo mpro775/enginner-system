@@ -168,7 +168,9 @@ export default function NewRequest() {
       return task.daysRemaining;
     }
     const now = new Date();
-    const targetDate = new Date(task.scheduledYear, task.scheduledMonth - 1, 1);
+    // Use scheduledDay if provided, otherwise use 1 (first day of month)
+    const day = task.scheduledDay || 1;
+    const targetDate = new Date(task.scheduledYear, task.scheduledMonth - 1, day);
     const diffTime = targetDate.getTime() - now.getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
@@ -189,6 +191,14 @@ export default function NewRequest() {
       "ديسمبر",
     ];
     return months[month - 1] || "";
+  };
+
+  const formatScheduledDate = (task: ScheduledTask): string => {
+    const monthName = getMonthName(task.scheduledMonth);
+    if (task.scheduledDay) {
+      return `${task.scheduledDay} ${monthName} ${task.scheduledYear}`;
+    }
+    return `${monthName} ${task.scheduledYear}`;
   };
 
   return (
@@ -236,8 +246,7 @@ export default function NewRequest() {
                           {task.departmentId.name} - {task.machineId.name}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {getMonthName(task.scheduledMonth)}{" "}
-                          {task.scheduledYear}
+                          {formatScheduledDate(task)}
                         </p>
                       </div>
                       <div className="text-right">
@@ -275,8 +284,7 @@ export default function NewRequest() {
               </Button>
             </CardTitle>
             <CardDescription>
-              {selectedTask.title} - {getMonthName(selectedTask.scheduledMonth)}{" "}
-              {selectedTask.scheduledYear}
+              {selectedTask.title} - {formatScheduledDate(selectedTask)}
             </CardDescription>
           </CardHeader>
         </Card>
