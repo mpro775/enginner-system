@@ -253,7 +253,7 @@ export default function ScheduledTasksManagement() {
                       <div className="flex items-center gap-2">
                         <span>المهندس:</span>
                         <span className="font-medium">
-                          {task.engineerId.name}
+                          {task.engineerId?.name || "متاحة لجميع المهندسين"}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">

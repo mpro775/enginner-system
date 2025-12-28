@@ -148,7 +148,7 @@ export default function NewRequest() {
   const handleTaskSelect = (task: ScheduledTask) => {
     setSelectedTask(task);
     setValue("scheduledTaskId", task.id);
-    setValue("maintenanceType", task.taskType);
+    setValue("maintenanceType", MaintenanceType.PREVENTIVE); // جميع المهام المرجعية وقائية
     setValue("locationId", task.locationId.id);
     setValue("departmentId", task.departmentId.id);
     setValue("systemId", task.systemId.id);

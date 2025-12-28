@@ -21,7 +21,6 @@ interface ScheduledTaskFilters {
   departmentId?: string;
   systemId?: string;
   machineId?: string;
-  taskType?: MaintenanceType;
   scheduledMonth?: number;
   scheduledYear?: number;
 }

@@ -35,7 +35,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
 import { scheduledTasksService } from "@/services/scheduled-tasks";
 import { requestsService } from "@/services/requests";
-import { ScheduledTask, TaskStatus } from "@/types";
+import { ScheduledTask, TaskStatus, MaintenanceType } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 
 const getMonthName = (month: number): string => {
@@ -126,7 +126,6 @@ export default function MyScheduledTasks() {
   const [selectedTaskForExecution, setSelectedTaskForExecution] = useState<ScheduledTask | null>(null);
   const [executionNotes, setExecutionNotes] = useState("");
   const [availableTasks, setAvailableTasks] = useState<ScheduledTask[]>([]);
-  const [loadingAvailable, setLoadingAvailable] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["my-scheduled-tasks", filters],
@@ -140,7 +139,6 @@ export default function MyScheduledTasks() {
 
   // Load available tasks
   const loadAvailableTasks = async () => {
-    setLoadingAvailable(true);
     try {
       const tasks = await scheduledTasksService.getAvailableTasks();
       setAvailableTasks(tasks);
@@ -150,8 +148,6 @@ export default function MyScheduledTasks() {
         description: "فشل تحميل المهام المتاحة",
         variant: "destructive",
       });
-    } finally {
-      setLoadingAvailable(false);
     }
   };
 
@@ -216,7 +212,7 @@ export default function MyScheduledTasks() {
     if (!selectedTaskForExecution) return;
 
     const requestData = {
-      maintenanceType: selectedTaskForExecution.taskType,
+      maintenanceType: MaintenanceType.PREVENTIVE, // جميع المهام المرجعية وقائية
       locationId: selectedTaskForExecution.locationId.id,
       departmentId: selectedTaskForExecution.departmentId.id,
       systemId: selectedTaskForExecution.systemId.id,
