@@ -1,17 +1,17 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import * as bcrypt from 'bcryptjs';
-import { User, UserDocument } from '../users/schemas/user.schema';
-import { LoginDto } from './dto/login.dto';
-import { JwtPayload } from './strategies/jwt.strategy';
-import { AuditLogsService } from '../audit-logs/audit-logs.service';
-import { AuditAction, Role } from '../../common/enums';
-import { Inject, forwardRef } from '@nestjs/common';
-import { ScheduledTasksService } from '../scheduled-tasks/scheduled-tasks.service';
-import { NotificationsGateway } from '../notifications/notifications.gateway';
+import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import { ConfigService } from "@nestjs/config";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
+import * as bcrypt from "bcryptjs";
+import { User, UserDocument } from "../users/schemas/user.schema";
+import { LoginDto } from "./dto/login.dto";
+import { JwtPayload } from "./strategies/jwt.strategy";
+import { AuditLogsService } from "../audit-logs/audit-logs.service";
+import { AuditAction, Role } from "../../common/enums";
+import { Inject, forwardRef } from "@nestjs/common";
+import { ScheduledTasksService } from "../scheduled-tasks/scheduled-tasks.service";
+import { NotificationsGateway } from "../notifications/notifications.gateway";
 
 export interface TokensResponse {
   accessToken: string;
@@ -38,24 +38,33 @@ export class AuthService {
     @Inject(forwardRef(() => ScheduledTasksService))
     private scheduledTasksService: ScheduledTasksService,
     @Inject(forwardRef(() => NotificationsGateway))
-    private notificationsGateway: NotificationsGateway,
+    private notificationsGateway: NotificationsGateway
   ) {}
 
-  async login(loginDto: LoginDto, ipAddress?: string, userAgent?: string): Promise<AuthResponse> {
-    const user = await this.userModel.findOne({ email: loginDto.email.toLowerCase() });
+  async login(
+    loginDto: LoginDto,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<AuthResponse> {
+    const user = await this.userModel.findOne({
+      email: loginDto.email.toLowerCase(),
+    });
 
     if (!user) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException("Invalid email or password");
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedException('Your account has been deactivated');
+      throw new UnauthorizedException("Your account has been deactivated");
     }
 
-    const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
+    const isPasswordValid = await bcrypt.compare(
+      loginDto.password,
+      user.password
+    );
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException("Invalid email or password");
     }
 
     const tokens = await this.generateTokens(user);
@@ -71,7 +80,7 @@ export class AuthService {
       userId: user._id.toString(),
       userName: user.name,
       action: AuditAction.LOGIN,
-      entity: 'User',
+      entity: "User",
       entityId: user._id.toString(),
       ipAddress,
       userAgent,
@@ -93,19 +102,22 @@ export class AuthService {
     };
   }
 
-  async refreshTokens(userId: string, refreshToken: string): Promise<TokensResponse> {
+  async refreshTokens(
+    userId: string,
+    refreshToken: string
+  ): Promise<TokensResponse> {
     const user = await this.userModel.findById(userId);
 
     if (!user || !user.refreshToken) {
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException("Invalid refresh token");
     }
 
     if (user.refreshToken !== refreshToken) {
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException("Invalid refresh token");
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedException('Your account has been deactivated');
+      throw new UnauthorizedException("Your account has been deactivated");
     }
 
     const tokens = await this.generateTokens(user);
@@ -117,7 +129,11 @@ export class AuthService {
     return tokens;
   }
 
-  async logout(userId: string, ipAddress?: string, userAgent?: string): Promise<void> {
+  async logout(
+    userId: string,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<void> {
     const user = await this.userModel.findById(userId);
 
     if (user) {
@@ -130,7 +146,7 @@ export class AuthService {
         userId: user._id.toString(),
         userName: user.name,
         action: AuditAction.LOGOUT,
-        entity: 'User',
+        entity: "User",
         entityId: user._id.toString(),
         ipAddress,
         userAgent,
@@ -141,11 +157,11 @@ export class AuthService {
   async getMe(userId: string) {
     const user = await this.userModel
       .findById(userId)
-      .select('-password -refreshToken')
-      .populate('departmentId', 'name');
+      .select("-password -refreshToken")
+      .populate("departmentId", "name");
 
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      throw new UnauthorizedException("User not found");
     }
 
     return user;
@@ -159,40 +175,65 @@ export class AuthService {
       name: user.name,
     };
 
+    const jwtExpiresIn = this.configService.get<string>(
+      "JWT_EXPIRES_IN",
+      "15m"
+    );
+
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('JWT_SECRET'),
-        expiresIn: this.configService.get<string>('JWT_EXPIRES_IN', '15m'),
+        secret: this.configService.get<string>("JWT_SECRET"),
+        expiresIn: jwtExpiresIn,
       }),
       this.jwtService.signAsync(
         { sub: user._id.toString(), email: user.email },
         {
-          secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-          expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d'),
-        },
+          secret: this.configService.get<string>("JWT_REFRESH_SECRET"),
+          expiresIn: this.configService.get<string>(
+            "JWT_REFRESH_EXPIRES_IN",
+            "7d"
+          ),
+        }
       ),
     ]);
+
+    // حساب expiresIn بالثواني ديناميكياً
+    const expiresInSeconds = this.parseExpiresIn(jwtExpiresIn);
 
     return {
       accessToken,
       refreshToken,
-      expiresIn: 900, // 15 minutes in seconds
+      expiresIn: expiresInSeconds,
     };
+  }
+
+  // دالة مساعدة لتحويل مدة الصلاحية إلى ثواني
+  private parseExpiresIn(expiresIn: string): number {
+    const units: { [key: string]: number } = {
+      s: 1, // seconds
+      m: 60, // minutes
+      h: 3600, // hours
+      d: 86400, // days
+    };
+
+    const match = expiresIn.match(/^(\d+)([smhd])$/);
+    if (!match) {
+      return 900; // Default to 15 minutes if parsing fails
+    }
+
+    const value = parseInt(match[1], 10);
+    const unit = match[2];
+    return value * (units[unit] || 60);
   }
 
   private async notifyPendingTasks(engineerId: string): Promise<void> {
     try {
-      const tasks = await this.scheduledTasksService.findPendingByEngineer(
-        engineerId
-      );
+      const tasks =
+        await this.scheduledTasksService.findPendingByEngineer(engineerId);
 
       if (tasks.length > 0) {
-        const overdueTasks = tasks.filter(
-          (task) => task.status === "overdue"
-        );
-        const pendingTasks = tasks.filter(
-          (task) => task.status === "pending"
-        );
+        const overdueTasks = tasks.filter((task) => task.status === "overdue");
+        const pendingTasks = tasks.filter((task) => task.status === "pending");
 
         if (overdueTasks.length > 0) {
           this.notificationsGateway.notifyPendingTasks(engineerId, {
@@ -214,9 +255,3 @@ export class AuthService {
     }
   }
 }
-
-
-
-
-
-

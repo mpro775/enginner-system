@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { MongooseModule } from "@nestjs/mongoose";
 import { ThrottlerModule } from "@nestjs/throttler";
 import { CacheModule } from "@nestjs/cache-manager";
+import { ScheduleModule } from "@nestjs/schedule";
 
 // Modules
 import { AuthModule } from "./modules/auth/auth.module";
@@ -63,6 +64,9 @@ import { HealthModule } from "./modules/health/health.module";
       },
       inject: [ConfigService],
     }),
+
+    // Schedule Module for cron jobs
+    ScheduleModule.forRoot(),
 
     // Feature Modules
     AuthModule,

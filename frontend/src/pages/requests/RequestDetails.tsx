@@ -364,6 +364,41 @@ export default function RequestDetails() {
                 </div>
               </div>
 
+              {request.machineId?.description && (
+                <div className="border-t pt-4">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    وصف الآلة
+                  </p>
+                  <p className="font-medium">{request.machineId.description}</p>
+                </div>
+              )}
+
+              <div className="border-t pt-4">
+                <p className="text-sm text-muted-foreground mb-2">
+                  المكونات المختارة
+                </p>
+                {request.maintainAllComponents ? (
+                  <p className="font-medium">جميع المكونات</p>
+                ) : (
+                  <div>
+                    {request.selectedComponents &&
+                    request.selectedComponents.length > 0 ? (
+                      <ul className="list-disc list-inside space-y-1">
+                        {request.selectedComponents.map((component, index) => (
+                          <li key={index} className="font-medium">
+                            {component}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-muted-foreground">
+                        لا توجد مكونات محددة
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="border-t pt-4">
                 <p className="text-sm text-muted-foreground mb-2">
                   سبب طلب الصيانة

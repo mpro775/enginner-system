@@ -10,16 +10,16 @@ import {
   Min,
   Max,
 } from "class-validator";
-import { MaintenanceType } from "../../../common/enums";
+import { RepetitionInterval } from "../../../common/enums";
 
 export class CreateScheduledTaskDto {
   @IsString()
   @IsNotEmpty({ message: "Title is required" })
   title: string;
 
+  @IsOptional()
   @IsMongoId({ message: "Invalid engineer ID" })
-  @IsNotEmpty({ message: "Engineer is required" })
-  engineerId: string;
+  engineerId?: string;
 
   @IsMongoId({ message: "Invalid location ID" })
   @IsNotEmpty({ message: "Location is required" })
@@ -62,13 +62,13 @@ export class CreateScheduledTaskDto {
   @Max(31, { message: "Scheduled day must be between 1 and 31" })
   scheduledDay?: number;
 
-  @IsEnum(MaintenanceType, {
-    message: "Task type must be emergency or preventive",
-  })
-  @IsNotEmpty({ message: "Task type is required" })
-  taskType: MaintenanceType;
-
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsEnum(RepetitionInterval, {
+    message: "Repetition interval must be weekly, monthly, quarterly, or semi_annually",
+  })
+  repetitionInterval?: RepetitionInterval;
 }

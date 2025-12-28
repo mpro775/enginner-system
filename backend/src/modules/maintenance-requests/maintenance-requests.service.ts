@@ -159,7 +159,7 @@ export class MaintenanceRequestsService {
         .populate("locationId", "name")
         .populate("departmentId", "name")
         .populate("systemId", "name")
-        .populate("machineId", "name components")
+        .populate("machineId", "name components description")
         .sort(sortOptions)
         .skip(skip)
         .limit(limit)
@@ -550,7 +550,7 @@ export class MaintenanceRequestsService {
       .populate("locationId", "name")
       .populate("departmentId", "name")
       .populate("systemId", "name")
-      .populate("machineId", "name components")
+      .populate("machineId", "name components description")
       .exec() as Promise<MaintenanceRequestDocument>;
   }
 

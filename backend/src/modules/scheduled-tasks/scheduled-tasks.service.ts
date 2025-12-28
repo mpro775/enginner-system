@@ -16,7 +16,7 @@ import {
   InvalidOperationException,
   ForbiddenAccessException,
 } from "../../common/exceptions";
-import { TaskStatus, Role, AuditAction } from "../../common/enums";
+import { TaskStatus, Role, AuditAction, RepetitionInterval } from "../../common/enums";
 import {
   createPaginationMeta,
   getSkipAndLimit,
@@ -24,6 +24,7 @@ import {
   PaginatedResult,
 } from "../../common/utils/pagination.util";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
+import { NotificationsGateway } from "../notifications/notifications.gateway";
 
 @Injectable()
 export class ScheduledTasksService {
@@ -33,7 +34,9 @@ export class ScheduledTasksService {
     @InjectModel(Machine.name)
     private machineModel: Model<MachineDocument>,
     @Inject(forwardRef(() => AuditLogsService))
-    private auditLogsService: AuditLogsService
+    private auditLogsService: AuditLogsService,
+    @Inject(forwardRef(() => NotificationsGateway))
+    private notificationsGateway: NotificationsGateway
   ) {}
 
   async create(
@@ -81,9 +84,8 @@ export class ScheduledTasksService {
     // Generate task code
     const taskCode = await this.generateTaskCode();
 
-    const task = new this.taskModel({
+    const taskData: any = {
       ...createDto,
-      engineerId: new Types.ObjectId(createDto.engineerId),
       locationId: new Types.ObjectId(createDto.locationId),
       departmentId: new Types.ObjectId(createDto.departmentId),
       systemId: new Types.ObjectId(createDto.systemId),
@@ -92,9 +94,17 @@ export class ScheduledTasksService {
       taskCode,
       status: TaskStatus.PENDING,
       createdBy: new Types.ObjectId(user.userId),
-    });
+    };
+
+    // Only set engineerId if provided
+    if (createDto.engineerId) {
+      taskData.engineerId = new Types.ObjectId(createDto.engineerId);
+    }
+
+    const task = new this.taskModel(taskData);
 
     const saved = await task.save();
+    
     const populated = await this.populateTask(saved._id.toString());
 
     if (!populated) {
@@ -110,6 +120,10 @@ export class ScheduledTasksService {
       entityId: saved._id.toString(),
       changes: { taskCode, title: createDto.title },
     });
+
+    // Send notification
+    const isAvailableToAll = !createDto.engineerId;
+    this.notificationsGateway.notifyScheduledTaskCreated(populated, isAvailableToAll);
 
     return populated;
   }
@@ -165,10 +179,13 @@ export class ScheduledTasksService {
               ? new Types.ObjectId(engineerId)
               : null,
           }, // Match ObjectId
+          { engineerId: { $exists: false } }, // Unassigned tasks
+          { engineerId: null }, // Unassigned tasks
         ],
         status: { $in: [TaskStatus.PENDING, TaskStatus.OVERDUE] },
       })
       .sort({ scheduledYear: 1, scheduledMonth: 1 })
+      .populate("engineerId", "name email")
       .populate("locationId", "name")
       .populate("departmentId", "name")
       .populate("systemId", "name")
@@ -183,6 +200,7 @@ export class ScheduledTasksService {
     filterDto: FilterScheduledTasksDto
   ): Promise<PaginatedResult<ScheduledTaskDocument>> {
     // Build filter to match both ObjectId and string engineerId
+    // Only include assigned tasks (exclude unassigned)
     const filter: FilterQuery<ScheduledTaskDocument> = {
       $or: [
         { engineerId: engineerId }, // Match string
@@ -284,8 +302,12 @@ export class ScheduledTasksService {
 
     // Convert IDs to ObjectId if they exist in the update
     const updateData: any = { ...updateDto };
-    if (updateDto.engineerId) {
-      updateData.engineerId = new Types.ObjectId(updateDto.engineerId);
+    if (updateDto.engineerId !== undefined) {
+      if (updateDto.engineerId) {
+        updateData.engineerId = new Types.ObjectId(updateDto.engineerId);
+      } else {
+        updateData.engineerId = null; // Allow unassigning
+      }
     }
     if (updateDto.locationId) {
       updateData.locationId = new Types.ObjectId(updateDto.locationId);
@@ -298,6 +320,11 @@ export class ScheduledTasksService {
     }
     if (updateDto.machineId) {
       updateData.machineId = new Types.ObjectId(updateDto.machineId);
+    }
+
+    // Handle repetitionInterval
+    if (updateDto.repetitionInterval !== undefined) {
+      updateData.repetitionInterval = updateDto.repetitionInterval;
     }
 
     await this.taskModel.findByIdAndUpdate(id, updateData);
@@ -493,10 +520,6 @@ export class ScheduledTasksService {
         : filterDto.machineId;
     }
 
-    if (filterDto.taskType) {
-      filter.taskType = filterDto.taskType;
-    }
-
     if (filterDto.scheduledMonth) {
       filter.scheduledMonth = filterDto.scheduledMonth;
     }
@@ -520,6 +543,247 @@ export class ScheduledTasksService {
       .populate("machineId", "name")
       .populate("createdBy", "name email")
       .populate("completedRequestId", "requestCode")
+      .populate("parentTaskId", "taskCode title")
       .exec();
+  }
+
+  async getAvailableTasks(): Promise<ScheduledTaskDocument[]> {
+    // Update overdue tasks first
+    await this.updateOverdueTasks();
+
+    const tasks = await this.taskModel
+      .find({
+        $or: [
+          { engineerId: { $exists: false } },
+          { engineerId: null },
+        ],
+        status: { $in: [TaskStatus.PENDING, TaskStatus.OVERDUE] },
+      })
+      .sort({ scheduledYear: 1, scheduledMonth: 1, scheduledDay: 1 })
+      .populate("locationId", "name")
+      .populate("departmentId", "name")
+      .populate("systemId", "name")
+      .populate("machineId", "name")
+      .populate("createdBy", "name email")
+      .exec();
+
+    return tasks;
+  }
+
+  async acceptTask(
+    taskId: string,
+    engineerId: string,
+    user: { userId: string; name: string }
+  ): Promise<ScheduledTaskDocument> {
+    const task = await this.taskModel.findById(taskId);
+    if (!task) {
+      throw new EntityNotFoundException("Scheduled Task", taskId);
+    }
+
+    // Check if task is already assigned
+    if (task.engineerId) {
+      throw new InvalidOperationException(
+        "This task has already been assigned to an engineer"
+      );
+    }
+
+
+    // Assign the task to the engineer
+    await this.taskModel.findByIdAndUpdate(taskId, {
+      engineerId: new Types.ObjectId(engineerId),
+    });
+
+    // Log the action
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.UPDATE,
+      entity: "ScheduledTask",
+      entityId: taskId,
+      changes: { engineerId, action: "accepted_task" },
+      previousValues: { engineerId: null },
+    });
+
+    const populated = await this.populateTask(taskId);
+    if (!populated) {
+      throw new EntityNotFoundException("Scheduled Task", taskId);
+    }
+    return populated;
+  }
+
+  async generateRecurringTasks(): Promise<void> {
+    const now = new Date();
+    const currentDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // Find all tasks with repetition intervals that need first generation
+    const tasksNeedingFirstGen = await this.taskModel.find({
+      repetitionInterval: { $exists: true, $ne: null },
+      parentTaskId: { $exists: false }, // Only original tasks, not generated ones
+      $or: [
+        { lastGeneratedAt: { $exists: false } },
+        { lastGeneratedAt: null },
+      ],
+    });
+
+    for (const task of tasksNeedingFirstGen) {
+      if (!task.repetitionInterval) continue;
+
+      // Calculate next date based on repetition interval
+      const nextDate = this.calculateNextDate(
+        task.scheduledYear,
+        task.scheduledMonth,
+        task.scheduledDay || 1,
+        task.repetitionInterval,
+        task.lastGeneratedAt
+      );
+
+      // Only create if next date is today or in the past (for overdue generation)
+      if (nextDate <= currentDate) {
+        // Check if a task for this date already exists
+        const existingTask = await this.taskModel.findOne({
+          parentTaskId: task._id,
+          scheduledYear: nextDate.getFullYear(),
+          scheduledMonth: nextDate.getMonth() + 1,
+          scheduledDay: nextDate.getDate(),
+        });
+
+        if (!existingTask) {
+          // Generate task code
+          const taskCode = await this.generateTaskCode();
+
+          // Create new task instance - WITHOUT engineerId so it's available to all engineers
+          const newTask = new this.taskModel({
+            taskCode,
+            title: task.title,
+            // engineerId: undefined - المهام المتكررة متاحة لجميع المهندسين
+            locationId: task.locationId,
+            departmentId: task.departmentId,
+            systemId: task.systemId,
+            machineId: task.machineId,
+            maintainAllComponents: task.maintainAllComponents,
+            selectedComponents: task.selectedComponents,
+            scheduledYear: nextDate.getFullYear(),
+            scheduledMonth: nextDate.getMonth() + 1,
+            scheduledDay: nextDate.getDate(),
+            description: task.description,
+            status: TaskStatus.PENDING,
+            parentTaskId: task._id,
+            createdBy: task.createdBy,
+          });
+
+          await newTask.save();
+
+          // Update task's lastGeneratedAt
+          await this.taskModel.findByIdAndUpdate(task._id, {
+            lastGeneratedAt: now,
+          });
+
+          // Send notification - recurring tasks are always available to all engineers
+          const populatedNewTask = await this.populateTask(newTask._id.toString());
+          if (populatedNewTask) {
+            this.notificationsGateway.notifyScheduledTaskCreated(populatedNewTask, true);
+          }
+        }
+      }
+    }
+
+    // Also check for tasks that need periodic generation
+    const tasksWithLastGen = await this.taskModel.find({
+      repetitionInterval: { $exists: true, $ne: null },
+      parentTaskId: { $exists: false }, // Only original tasks
+      lastGeneratedAt: { $exists: true, $ne: null },
+    });
+
+    for (const task of tasksWithLastGen) {
+      if (!task.repetitionInterval || !task.lastGeneratedAt) continue;
+
+      const lastGenDate = new Date(task.lastGeneratedAt);
+      const nextGenDate = this.calculateNextDate(
+        lastGenDate.getFullYear(),
+        lastGenDate.getMonth() + 1,
+        lastGenDate.getDate(),
+        task.repetitionInterval,
+        task.lastGeneratedAt
+      );
+
+      // Generate if it's time
+      if (nextGenDate <= currentDate) {
+        const existingTask = await this.taskModel.findOne({
+          parentTaskId: task._id,
+          scheduledYear: nextGenDate.getFullYear(),
+          scheduledMonth: nextGenDate.getMonth() + 1,
+          scheduledDay: nextGenDate.getDate(),
+        });
+
+        if (!existingTask) {
+          const taskCode = await this.generateTaskCode();
+
+          // Create new task instance - WITHOUT engineerId so it's available to all engineers
+          const newTask = new this.taskModel({
+            taskCode,
+            title: task.title,
+            // engineerId: undefined - المهام المتكررة متاحة لجميع المهندسين
+            locationId: task.locationId,
+            departmentId: task.departmentId,
+            systemId: task.systemId,
+            machineId: task.machineId,
+            maintainAllComponents: task.maintainAllComponents,
+            selectedComponents: task.selectedComponents,
+            scheduledYear: nextGenDate.getFullYear(),
+            scheduledMonth: nextGenDate.getMonth() + 1,
+            scheduledDay: nextGenDate.getDate(),
+            description: task.description,
+            status: TaskStatus.PENDING,
+            parentTaskId: task._id,
+            createdBy: task.createdBy,
+          });
+
+          await newTask.save();
+
+          await this.taskModel.findByIdAndUpdate(task._id, {
+            lastGeneratedAt: now,
+          });
+
+          // Send notification - recurring tasks are always available to all engineers
+          const populatedNewTask = await this.populateTask(newTask._id.toString());
+          if (populatedNewTask) {
+            this.notificationsGateway.notifyScheduledTaskCreated(populatedNewTask, true);
+          }
+        }
+      }
+    }
+  }
+
+  private calculateNextDate(
+    year: number,
+    month: number,
+    day: number,
+    interval: RepetitionInterval,
+    lastGeneratedAt?: Date
+  ): Date {
+    const baseDate = lastGeneratedAt
+      ? new Date(lastGeneratedAt)
+      : new Date(year, month - 1, day);
+
+    const nextDate = new Date(baseDate);
+
+    switch (interval) {
+      case RepetitionInterval.WEEKLY:
+        nextDate.setDate(nextDate.getDate() + 7);
+        break;
+      case RepetitionInterval.MONTHLY:
+        nextDate.setMonth(nextDate.getMonth() + 1);
+        break;
+      case RepetitionInterval.QUARTERLY:
+        nextDate.setMonth(nextDate.getMonth() + 3);
+        break;
+      case RepetitionInterval.SEMI_ANNUALLY:
+        nextDate.setMonth(nextDate.getMonth() + 6);
+        break;
+      default:
+        return baseDate;
+    }
+
+    return nextDate;
   }
 }

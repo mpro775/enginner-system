@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -42,7 +43,7 @@ const navItems: NavItem[] = [
   },
   {
     icon: ClipboardList,
-    label: "مهامي المرجعية",
+    label: "صيانتي الوقائية",
     href: "/engineer/my-tasks",
     roles: [Role.ENGINEER],
   },
@@ -90,7 +91,7 @@ const navItems: NavItem[] = [
   },
   {
     icon: Calendar,
-    label: "المهام المرجعية",
+    label: "الصيانة الوقائية",
     href: "/admin/scheduled-tasks",
     roles: [Role.ADMIN],
   },
@@ -115,10 +116,21 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const { user, logout } = useAuthStore();
+  const [isMobile, setIsMobile] = useState(false);
 
   const filteredNavItems = navItems.filter(
     (item) => !item.roles || (user && item.roles.includes(user.role))
   );
+
+  // Check if we're on mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const handleLinkClick = () => {
     // Close sidebar on mobile when a link is clicked
@@ -126,6 +138,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       onClose();
     }
   };
+
+  // Only hide from screen readers when closed on mobile
+  const shouldHideFromScreenReader = !isOpen && isMobile;
 
   return (
     <>
@@ -147,7 +162,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             ? "translate-x-0"
             : "translate-x-full lg:translate-x-0 pointer-events-none lg:pointer-events-auto"
         )}
-        aria-hidden={!isOpen}
+        {...(shouldHideFromScreenReader && { 'aria-hidden': 'true' })}
       >
         <div className="flex h-full flex-col">
           {/* Logo & Close Button - KSU Brand */}

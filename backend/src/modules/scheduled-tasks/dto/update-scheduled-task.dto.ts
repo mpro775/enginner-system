@@ -9,7 +9,7 @@ import {
   Min,
   Max,
 } from "class-validator";
-import { MaintenanceType, TaskStatus } from "../../../common/enums";
+import { TaskStatus, RepetitionInterval } from "../../../common/enums";
 
 export class UpdateScheduledTaskDto {
   @IsOptional()
@@ -62,14 +62,14 @@ export class UpdateScheduledTaskDto {
   scheduledDay?: number;
 
   @IsOptional()
-  @IsEnum(MaintenanceType, {
-    message: "Task type must be emergency or preventive",
-  })
-  taskType?: MaintenanceType;
-
-  @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsEnum(RepetitionInterval, {
+    message: "Repetition interval must be weekly, monthly, quarterly, or semi_annually",
+  })
+  repetitionInterval?: RepetitionInterval;
 
   @IsOptional()
   @IsEnum(TaskStatus, {

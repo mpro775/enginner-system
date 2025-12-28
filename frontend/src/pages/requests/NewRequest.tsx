@@ -218,10 +218,10 @@ export default function NewRequest() {
         <Card>
           <CardHeader>
             <CardTitle>
-              المهام المرجعية المعلقة ({pendingTasks.length})
+              الصيانة الوقائية المعلقة ({pendingTasks.length})
             </CardTitle>
             <CardDescription>
-              اختر مهمة مرجعية لملء البيانات تلقائياً أو أضف طلب جديد
+              اختر صيانة وقائية لملء البيانات تلقائياً أو أضف طلب جديد
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -273,7 +273,7 @@ export default function NewRequest() {
         <Card className="border-primary">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>المهمة المرجعية المختارة</span>
+              <span>الصيانة الوقائية المختارة</span>
               <Button
                 type="button"
                 variant="ghost"
@@ -468,22 +468,6 @@ export default function NewRequest() {
               </div>
             </div>
 
-            {/* Reason */}
-            <div className="space-y-2">
-              <Label>سبب طلب الصيانة *</Label>
-              <Textarea
-                placeholder="وصف تفصيلي للمشكلة أو سبب طلب الصيانة"
-                rows={4}
-                className={errors.reasonText ? "border-destructive" : ""}
-                {...register("reasonText")}
-              />
-              {errors.reasonText && (
-                <p className="text-xs text-destructive">
-                  {errors.reasonText.message}
-                </p>
-              )}
-            </div>
-
             {/* Components Selection - Only show if machine has components */}
             {hasComponents && (
               <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
@@ -590,6 +574,22 @@ export default function NewRequest() {
                 )}
               </div>
             )}
+
+            {/* Reason */}
+            <div className="space-y-2">
+              <Label>سبب طلب الصيانة *</Label>
+              <Textarea
+                placeholder="وصف تفصيلي للمشكلة أو سبب طلب الصيانة"
+                rows={4}
+                className={errors.reasonText ? "border-destructive" : ""}
+                {...register("reasonText")}
+              />
+              {errors.reasonText && (
+                <p className="text-xs text-destructive">
+                  {errors.reasonText.message}
+                </p>
+              )}
+            </div>
 
             {/* Engineer Notes */}
             <div className="space-y-2">

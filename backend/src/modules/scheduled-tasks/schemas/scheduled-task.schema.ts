@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { Document, Types } from "mongoose";
-import { MaintenanceType, TaskStatus } from "../../../common/enums";
+import { TaskStatus, RepetitionInterval } from "../../../common/enums";
 
 export type ScheduledTaskDocument = ScheduledTask & Document;
 
@@ -21,8 +21,8 @@ export class ScheduledTask {
   @Prop({ required: true, trim: true })
   title: string;
 
-  @Prop({ type: Types.ObjectId, ref: "User", required: true })
-  engineerId: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: "User" })
+  engineerId?: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: "Location", required: true })
   locationId: Types.ObjectId;
@@ -51,11 +51,17 @@ export class ScheduledTask {
   @Prop({ type: Number, min: 1, max: 31, default: 1 })
   scheduledDay: number;
 
-  @Prop({ required: true, enum: MaintenanceType })
-  taskType: MaintenanceType;
-
   @Prop({ trim: true })
   description?: string;
+
+  @Prop({ enum: RepetitionInterval })
+  repetitionInterval?: RepetitionInterval;
+
+  @Prop()
+  lastGeneratedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: "ScheduledTask" })
+  parentTaskId?: Types.ObjectId;
 
   @Prop({
     required: true,
@@ -97,3 +103,6 @@ ScheduledTaskSchema.index({ engineerId: 1, status: 1 });
 ScheduledTaskSchema.index({ scheduledYear: 1, scheduledMonth: 1, scheduledDay: 1 });
 ScheduledTaskSchema.index({ status: 1 });
 ScheduledTaskSchema.index({ createdAt: -1 });
+ScheduledTaskSchema.index({ parentTaskId: 1 });
+ScheduledTaskSchema.index({ repetitionInterval: 1 });
+ScheduledTaskSchema.index({ engineerId: 1 }, { sparse: true }); // Sparse index for unassigned tasks

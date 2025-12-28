@@ -1,4 +1,5 @@
 import { useState } from "react";
+import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
@@ -11,6 +12,7 @@ import {
   Clock,
   XCircle,
   Loader2,
+  UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -123,6 +125,8 @@ export default function MyScheduledTasks() {
   const [executeDialogOpen, setExecuteDialogOpen] = useState(false);
   const [selectedTaskForExecution, setSelectedTaskForExecution] = useState<ScheduledTask | null>(null);
   const [executionNotes, setExecutionNotes] = useState("");
+  const [availableTasks, setAvailableTasks] = useState<ScheduledTask[]>([]);
+  const [loadingAvailable, setLoadingAvailable] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["my-scheduled-tasks", filters],
@@ -134,6 +138,28 @@ export default function MyScheduledTasks() {
       }),
   });
 
+  // Load available tasks
+  const loadAvailableTasks = async () => {
+    setLoadingAvailable(true);
+    try {
+      const tasks = await scheduledTasksService.getAvailableTasks();
+      setAvailableTasks(tasks);
+    } catch (error) {
+      toast({
+        title: "حدث خطأ",
+        description: "فشل تحميل المهام المتاحة",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingAvailable(false);
+    }
+  };
+
+  // Load available tasks on mount
+  React.useEffect(() => {
+    loadAvailableTasks();
+  }, []);
+
   const createRequestMutation = useMutation({
     mutationFn: requestsService.create,
     onSuccess: () => {
@@ -141,7 +167,7 @@ export default function MyScheduledTasks() {
       queryClient.invalidateQueries({ queryKey: ["requests"] });
       toast({
         title: "تم إنشاء الطلب بنجاح",
-        description: "تم إنشاء طلب الصيانة من المهمة المرجعية",
+        description: "تم إنشاء طلب الصيانة من الصيانة الوقائية",
       });
       setExecuteDialogOpen(false);
       setExecutionNotes("");
@@ -155,6 +181,29 @@ export default function MyScheduledTasks() {
       });
     },
   });
+
+  const acceptTaskMutation = useMutation({
+    mutationFn: scheduledTasksService.acceptTask,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["my-scheduled-tasks"] });
+      loadAvailableTasks();
+      toast({
+        title: "تم قبول المهمة بنجاح",
+        description: "تم إسناد المهمة إليك",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "حدث خطأ",
+        description: error?.response?.data?.message || "فشل قبول المهمة",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleAcceptTask = (task: ScheduledTask) => {
+    acceptTaskMutation.mutate(task.id);
+  };
 
   const handleQuickExecute = (task: ScheduledTask) => {
     setSelectedTaskForExecution(task);
@@ -197,7 +246,7 @@ export default function MyScheduledTasks() {
     return (
       <div className="container mx-auto p-6">
         <div className="text-center text-destructive">
-          حدث خطأ أثناء تحميل المهام المرجعية
+          حدث خطأ أثناء تحميل الصيانة الوقائية
         </div>
       </div>
     );
@@ -210,9 +259,9 @@ export default function MyScheduledTasks() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">مهامي المرجعية</h1>
+          <h1 className="text-3xl font-bold tracking-tight">صيانتي الوقائية</h1>
           <p className="text-muted-foreground mt-1">
-            عرض وإدارة المهام المرجعية المخصصة لك
+            عرض وإدارة الصيانة الوقائية المخصصة لك
           </p>
         </div>
         <Button onClick={() => navigate("/requests/new")}>
@@ -220,6 +269,89 @@ export default function MyScheduledTasks() {
           طلب صيانة جديد
         </Button>
       </div>
+
+      {/* Available Tasks Section */}
+      {availableTasks.length > 0 && (
+        <Card className="border-blue-200 bg-blue-50/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-blue-600" />
+              المهام المتاحة
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              صيانة وقائية متاحة لجميع المهندسين - يمكنك قبول أي صيانة منها
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4">
+              {availableTasks.map((task) => {
+                const daysRemaining = getDaysRemaining(task);
+                const isOverdue = daysRemaining < 0;
+
+                return (
+                  <Card key={task.id} className="bg-white">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-semibold">{task.title}</h4>
+                            {getStatusBadge(task.status)}
+                          </div>
+                          <div className="grid gap-1 md:grid-cols-2 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-4 w-4" />
+                              <span>
+                                {task.departmentId.name} - {task.machineId.name}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4" />
+                              <span>{formatScheduledDate(task)}</span>
+                            </div>
+                          </div>
+                          {task.description && (
+                            <p className="text-sm text-muted-foreground">
+                              {task.description}
+                            </p>
+                          )}
+                          <div>
+                            {isOverdue ? (
+                              <span className="text-destructive font-semibold text-sm">
+                                متأخرة {Math.abs(daysRemaining)} يوم
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">
+                                متبقي {daysRemaining} يوم
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => handleAcceptTask(task)}
+                          disabled={acceptTaskMutation.isPending}
+                          className="ml-4"
+                        >
+                          {acceptTaskMutation.isPending ? (
+                            <>
+                              <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                              جاري القبول...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="ml-2 h-4 w-4" />
+                              قبول المهمة
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <Card>
@@ -260,7 +392,7 @@ export default function MyScheduledTasks() {
         {tasks.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground">لا توجد مهام مرجعية</p>
+              <p className="text-muted-foreground">لا توجد صيانة وقائية</p>
             </CardContent>
           </Card>
         ) : (
@@ -289,6 +421,12 @@ export default function MyScheduledTasks() {
                           <Calendar className="h-4 w-4" />
                           <span>{formatScheduledDate(task)}</span>
                         </div>
+                        {task.engineerId && (
+                          <div className="flex items-center gap-2">
+                            <span>المهندس:</span>
+                            <span className="font-medium">{task.engineerId.name}</span>
+                          </div>
+                        )}
                       </div>
 
                       {task.description && (
@@ -389,7 +527,7 @@ export default function MyScheduledTasks() {
       <Dialog open={executeDialogOpen} onOpenChange={setExecuteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>تنفيذ المهمة المرجعية</DialogTitle>
+            <DialogTitle>تنفيذ الصيانة الوقائية</DialogTitle>
             <DialogDescription>
               {selectedTaskForExecution?.title}
               <div className="mt-2 text-sm">

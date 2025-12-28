@@ -25,6 +25,18 @@ export enum TaskStatus {
   CANCELLED = "cancelled",
 }
 
+export enum RepetitionInterval {
+  WEEKLY = "weekly",
+  MONTHLY = "monthly",
+  QUARTERLY = "quarterly",
+  SEMI_ANNUALLY = "semi_annually",
+}
+
+export enum TaskAssignmentStatus {
+  UNASSIGNED = "unassigned",
+  ASSIGNED = "assigned",
+}
+
 export enum AuditAction {
   CREATE = "create",
   UPDATE = "update",
@@ -91,6 +103,8 @@ export interface MaintenanceRequest {
   machineId: Machine;
   reasonText: string;
   machineNumber?: string;
+  maintainAllComponents: boolean;
+  selectedComponents?: string[];
   status: RequestStatus;
   engineerNotes?: string;
   consultantNotes?: string;
@@ -175,7 +189,7 @@ export interface ScheduledTask {
   id: string;
   taskCode: string;
   title: string;
-  engineerId: User;
+  engineerId?: User;
   locationId: Location;
   departmentId: Department;
   systemId: System;
@@ -185,13 +199,15 @@ export interface ScheduledTask {
   scheduledMonth: number;
   scheduledYear: number;
   scheduledDay?: number;
-  taskType: MaintenanceType;
   description?: string;
   status: TaskStatus;
   completedRequestId?: MaintenanceRequest;
   completedAt?: string;
   createdBy: User;
   daysRemaining?: number;
+  repetitionInterval?: RepetitionInterval;
+  lastGeneratedAt?: string;
+  parentTaskId?: ScheduledTask | string;
   createdAt: string;
   updatedAt: string;
 }

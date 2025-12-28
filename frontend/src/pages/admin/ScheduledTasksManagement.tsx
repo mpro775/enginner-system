@@ -147,15 +147,15 @@ export default function ScheduledTasksManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
-            إدارة المهام المرجعية
+            إدارة الصيانة الوقائية
           </h1>
           <p className="text-muted-foreground mt-1">
-            إدارة المهام المرجعية المخصصة للمهندسين
+            إدارة الصيانة الوقائية المخصصة للمهندسين
           </p>
         </div>
         <Button onClick={() => navigate("/admin/scheduled-tasks/new")}>
           <Plus className="ml-2 h-4 w-4" />
-          إضافة مهمة مرجعية جديدة
+          إضافة صيانة وقائية جديدة
         </Button>
       </div>
 
@@ -232,7 +232,7 @@ export default function ScheduledTasksManagement() {
         {tasks.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground">لا توجد مهام مرجعية</p>
+              <p className="text-muted-foreground">لا توجد صيانة وقائية</p>
             </CardContent>
           </Card>
         ) : (
@@ -347,7 +347,7 @@ export default function ScheduledTasksManagement() {
             <DialogTitle>تأكيد الحذف</DialogTitle>
           </DialogHeader>
           <div>
-            هل أنت متأكد من حذف المهمة المرجعية "{taskToDelete?.title}"؟
+            هل أنت متأكد من حذف الصيانة الوقائية "{taskToDelete?.title}"؟
           </div>
           <DialogFooter>
             <Button

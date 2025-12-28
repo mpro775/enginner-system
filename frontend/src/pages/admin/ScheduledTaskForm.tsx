@@ -33,23 +33,23 @@ import {
   machinesService,
 } from "@/services/reference-data";
 import { usersService } from "@/services/users";
-import { MaintenanceType } from "@/types";
+import { RepetitionInterval } from "@/types";
 
 const taskSchema = z
   .object({
     title: z.string().min(3, "العنوان يجب أن يكون 3 أحرف على الأقل"),
-    engineerId: z.string().min(1, "اختر المهندس"),
+    engineerId: z.string().optional(),
     locationId: z.string().min(1, "اختر الموقع"),
     departmentId: z.string().min(1, "اختر القسم"),
     systemId: z.string().min(1, "اختر النظام"),
     machineId: z.string().min(1, "اختر الآلة"),
-    taskType: z.nativeEnum(MaintenanceType),
     maintainAllComponents: z.boolean().optional(),
     selectedComponents: z.array(z.string()).optional(),
     scheduledMonth: z.number().min(1).max(12),
     scheduledYear: z.number().min(2020),
     scheduledDay: z.number().min(1).max(31).optional(),
     description: z.string().optional(),
+    repetitionInterval: z.nativeEnum(RepetitionInterval).optional(),
   })
   .refine(
     (data) => {
@@ -125,18 +125,18 @@ export default function ScheduledTaskForm() {
     if (task && isEditing) {
       reset({
         title: task.title,
-        engineerId: task.engineerId.id,
+        engineerId: task.engineerId?.id,
         locationId: task.locationId.id,
         departmentId: task.departmentId.id,
         systemId: task.systemId.id,
         machineId: task.machineId.id,
-        taskType: task.taskType,
         maintainAllComponents: task.maintainAllComponents,
         selectedComponents: task.selectedComponents || [],
         scheduledMonth: task.scheduledMonth,
         scheduledYear: task.scheduledYear,
         scheduledDay: task.scheduledDay || 1,
         description: task.description || "",
+        repetitionInterval: task.repetitionInterval,
       });
       
       // Set the date picker value
@@ -163,10 +163,16 @@ export default function ScheduledTaskForm() {
   });
 
   const onSubmit = (data: TaskFormData) => {
+    // Remove engineerId if it's empty string
+    const submitData = {
+      ...data,
+      engineerId: data.engineerId || undefined,
+    };
+    
     if (isEditing) {
-      updateMutation.mutate(data);
+      updateMutation.mutate(submitData);
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate(submitData);
     }
   };
 
@@ -193,26 +199,26 @@ export default function ScheduledTaskForm() {
         </Button>
         <div>
           <h2 className="text-3xl font-bold tracking-tight">
-            {isEditing ? "تعديل مهمة مرجعية" : "إضافة مهمة مرجعية جديدة"}
+            {isEditing ? "تعديل صيانة وقائية" : "إضافة صيانة وقائية جديدة"}
           </h2>
           <p className="text-muted-foreground">
             {isEditing
-              ? "تعديل بيانات المهمة المرجعية"
-              : "إنشاء مهمة مرجعية جديدة للمهندسين"}
+              ? "تعديل بيانات الصيانة الوقائية"
+              : "إنشاء صيانة وقائية جديدة للمهندسين"}
           </p>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>بيانات المهمة المرجعية</CardTitle>
-          <CardDescription>أدخل تفاصيل المهمة المرجعية</CardDescription>
+          <CardTitle>بيانات الصيانة الوقائية</CardTitle>
+          <CardDescription>أدخل تفاصيل الصيانة الوقائية</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {(createMutation.isError || updateMutation.isError) && (
               <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                حدث خطأ أثناء {isEditing ? "تعديل" : "إنشاء"} المهمة المرجعية
+                حدث خطأ أثناء {isEditing ? "تعديل" : "إنشاء"} الصيانة الوقائية
               </div>
             )}
 
@@ -232,17 +238,16 @@ export default function ScheduledTaskForm() {
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>المهندس *</Label>
+                <Label>المهندس (اختياري)</Label>
                 <Select
-                  onValueChange={(value) => setValue("engineerId", value)}
-                  value={watch("engineerId")}
+                  onValueChange={(value) => setValue("engineerId", value === "__none__" ? undefined : value)}
+                  value={watch("engineerId") || "__none__"}
                 >
-                  <SelectTrigger
-                    className={errors.engineerId ? "border-destructive" : ""}
-                  >
-                    <SelectValue placeholder="اختر المهندس" />
+                  <SelectTrigger>
+                    <SelectValue placeholder="اتركه فارغاً للمهام المتاحة لجميع المهندسين" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="__none__">لا يوجد (مهمة متاحة لجميع المهندسين)</SelectItem>
                     {engineers?.map(
                       (engineer: { id: string; name: string }) => (
                         <SelectItem key={engineer.id} value={engineer.id}>
@@ -252,40 +257,9 @@ export default function ScheduledTaskForm() {
                     )}
                   </SelectContent>
                 </Select>
-                {errors.engineerId && (
-                  <p className="text-xs text-destructive">
-                    {errors.engineerId.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label>نوع الصيانة *</Label>
-                <Select
-                  onValueChange={(value) =>
-                    setValue("taskType", value as MaintenanceType)
-                  }
-                  value={watch("taskType")}
-                >
-                  <SelectTrigger
-                    className={errors.taskType ? "border-destructive" : ""}
-                  >
-                    <SelectValue placeholder="اختر نوع الصيانة" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={MaintenanceType.EMERGENCY}>
-                      طارئة
-                    </SelectItem>
-                    <SelectItem value={MaintenanceType.PREVENTIVE}>
-                      وقائية
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.taskType && (
-                  <p className="text-xs text-destructive">
-                    {errors.taskType.message}
-                  </p>
-                )}
+                <p className="text-xs text-muted-foreground">
+                  اتركه فارغاً لجعل المهمة متاحة لجميع المهندسين
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -520,10 +494,44 @@ export default function ScheduledTaskForm() {
             <div className="space-y-2">
               <Label>الوصف</Label>
               <Textarea
-                placeholder="وصف إضافي للمهمة المرجعية..."
+                placeholder="وصف إضافي للصيانة الوقائية..."
                 rows={3}
                 {...register("description")}
               />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>معدل التكرار (اختياري)</Label>
+                <Select
+                  onValueChange={(value) =>
+                    setValue("repetitionInterval", value === "__none__" ? undefined : value as RepetitionInterval)
+                  }
+                  value={watch("repetitionInterval") || "__none__"}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر معدل التكرار" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">لا يوجد تكرار</SelectItem>
+                    <SelectItem value={RepetitionInterval.WEEKLY}>
+                      أسبوعي
+                    </SelectItem>
+                    <SelectItem value={RepetitionInterval.MONTHLY}>
+                      شهري
+                    </SelectItem>
+                    <SelectItem value={RepetitionInterval.QUARTERLY}>
+                      كل 3 أشهر
+                    </SelectItem>
+                    <SelectItem value={RepetitionInterval.SEMI_ANNUALLY}>
+                      كل 6 أشهر
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  سيتم إنشاء مهام جديدة تلقائياً حسب المعدل المحدد
+                </p>
+              </div>
             </div>
 
             <div className="flex gap-3 justify-end">

@@ -10,6 +10,7 @@ import { Logger } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import { MaintenanceRequestDocument } from "../maintenance-requests/schemas/maintenance-request.schema";
+import { ScheduledTaskDocument } from "../scheduled-tasks/schemas/scheduled-task.schema";
 
 interface AuthenticatedSocket extends Socket {
   user?: {
@@ -192,8 +193,8 @@ export class NotificationsGateway
       },
       message:
         counts.overdue > 0
-          ? `لديك ${counts.overdue} مهمة مرجعية متأخرة و ${counts.pending} مهمة معلقة`
-          : `لديك ${counts.pending} مهمة مرجعية معلقة`,
+          ? `لديك ${counts.overdue} صيانة وقائية متأخرة و ${counts.pending} صيانة معلقة`
+          : `لديك ${counts.pending} صيانة وقائية معلقة`,
       timestamp: new Date().toISOString(),
     };
 
@@ -203,5 +204,49 @@ export class NotificationsGateway
     this.logger.log(
       `Notified engineer ${engineerId} about pending tasks: ${counts.total} total`
     );
+  }
+
+  // Notify when a new scheduled task is created
+  notifyScheduledTaskCreated(
+    task: ScheduledTaskDocument,
+    isAvailableToAll: boolean = false
+  ) {
+    const notification = {
+      type: "task:created",
+      data: {
+        id: task._id,
+        taskCode: task.taskCode,
+        title: task.title,
+        locationName: (task.locationId as any)?.name,
+        departmentName: (task.departmentId as any)?.name,
+        machineName: (task.machineId as any)?.name,
+        scheduledDate: `${task.scheduledYear}-${String(task.scheduledMonth).padStart(2, "0")}-${String(task.scheduledDay || 1).padStart(2, "0")}`,
+        isAvailableToAll,
+        createdAt: (task as any).createdAt,
+      },
+      message: isAvailableToAll
+        ? `تم إضافة صيانة وقائية جديدة متاحة لجميع المهندسين: ${task.taskCode}`
+        : `تم إضافة صيانة وقائية جديدة: ${task.taskCode}`,
+      timestamp: new Date().toISOString(),
+    };
+
+    if (isAvailableToAll) {
+      // Notify all engineers
+      this.server.to("engineer").emit("notification", notification);
+      this.logger.log(
+        `Notified all engineers about new available task: ${task.taskCode}`
+      );
+    } else if (task.engineerId) {
+      // Notify specific engineer
+      const engineerId =
+        (task.engineerId as any)?._id?.toString() ||
+        (task.engineerId as any)?.id;
+      if (engineerId) {
+        this.server.to(`user:${engineerId}`).emit("notification", notification);
+        this.logger.log(
+          `Notified engineer ${engineerId} about new task: ${task.taskCode}`
+        );
+      }
+    }
   }
 }

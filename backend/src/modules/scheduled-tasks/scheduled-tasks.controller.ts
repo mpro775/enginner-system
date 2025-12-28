@@ -16,6 +16,7 @@ import {
   CreateScheduledTaskDto,
   UpdateScheduledTaskDto,
   FilterScheduledTasksDto,
+  AcceptTaskDto,
 } from "./dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -76,6 +77,36 @@ export class ScheduledTasksController {
     return {
       data: tasks,
       message: "Pending scheduled tasks retrieved successfully",
+    };
+  }
+
+  @Get("available")
+  @UseGuards(RolesGuard)
+  @Roles(Role.ENGINEER)
+  async getAvailableTasks() {
+    const tasks = await this.scheduledTasksService.getAvailableTasks();
+    return {
+      data: tasks,
+      message: "Available scheduled tasks retrieved successfully",
+    };
+  }
+
+  @Post(":id/accept")
+  @UseGuards(RolesGuard)
+  @Roles(Role.ENGINEER)
+  @HttpCode(HttpStatus.OK)
+  async acceptTask(
+    @Param("id") id: string,
+    @Body() acceptDto: AcceptTaskDto,
+    @CurrentUser() user: CurrentUserData
+  ) {
+    const task = await this.scheduledTasksService.acceptTask(id, user.userId, {
+      userId: user.userId,
+      name: user.name,
+    });
+    return {
+      data: task,
+      message: "Task accepted successfully",
     };
   }
 

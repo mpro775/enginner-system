@@ -1,6 +1,6 @@
 import { IsOptional, IsEnum, IsMongoId, IsInt } from "class-validator";
 import { PaginationDto } from "../../../common/dto/pagination.dto";
-import { TaskStatus, MaintenanceType } from "../../../common/enums";
+import { TaskStatus } from "../../../common/enums";
 
 export class FilterScheduledTasksDto extends PaginationDto {
   @IsOptional()
@@ -26,10 +26,6 @@ export class FilterScheduledTasksDto extends PaginationDto {
   @IsOptional()
   @IsMongoId()
   machineId?: string;
-
-  @IsOptional()
-  @IsEnum(MaintenanceType)
-  taskType?: MaintenanceType;
 
   @IsOptional()
   @IsInt()

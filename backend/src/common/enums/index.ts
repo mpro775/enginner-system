@@ -32,3 +32,15 @@ export enum TaskStatus {
   OVERDUE = "overdue",
   CANCELLED = "cancelled",
 }
+
+export enum RepetitionInterval {
+  WEEKLY = "weekly",
+  MONTHLY = "monthly",
+  QUARTERLY = "quarterly",
+  SEMI_ANNUALLY = "semi_annually",
+}
+
+export enum TaskAssignmentStatus {
+  UNASSIGNED = "unassigned",
+  ASSIGNED = "assigned",
+}

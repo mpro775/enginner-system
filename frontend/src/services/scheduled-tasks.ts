@@ -3,8 +3,8 @@ import {
   ApiResponse,
   ScheduledTask,
   PaginationMeta,
-  MaintenanceType,
   TaskStatus,
+  RepetitionInterval,
 } from '@/types';
 
 interface ScheduledTasksResponse {
@@ -28,7 +28,7 @@ interface ScheduledTaskFilters {
 
 export interface CreateScheduledTaskForm {
   title: string;
-  engineerId: string;
+  engineerId?: string;
   locationId: string;
   departmentId: string;
   systemId: string;
@@ -38,8 +38,8 @@ export interface CreateScheduledTaskForm {
   scheduledMonth: number;
   scheduledYear: number;
   scheduledDay?: number;
-  taskType: MaintenanceType;
   description?: string;
+  repetitionInterval?: RepetitionInterval;
 }
 
 export interface UpdateScheduledTaskForm {
@@ -54,8 +54,8 @@ export interface UpdateScheduledTaskForm {
   scheduledMonth?: number;
   scheduledYear?: number;
   scheduledDay?: number;
-  taskType?: MaintenanceType;
   description?: string;
+  repetitionInterval?: RepetitionInterval;
   status?: TaskStatus;
 }
 
@@ -98,5 +98,15 @@ export const scheduledTasksService = {
 
   async delete(id: string): Promise<void> {
     await api.delete(`/scheduled-tasks/${id}`);
+  },
+
+  async getAvailableTasks(): Promise<ScheduledTask[]> {
+    const response = await api.get<ApiResponse<ScheduledTask[]>>('/scheduled-tasks/available');
+    return response.data.data;
+  },
+
+  async acceptTask(id: string): Promise<ScheduledTask> {
+    const response = await api.post<ApiResponse<ScheduledTask>>(`/scheduled-tasks/${id}/accept`, {});
+    return response.data.data;
   },
 };
