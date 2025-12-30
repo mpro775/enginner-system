@@ -15,6 +15,7 @@ import {
   X,
   Calendar,
   ClipboardList,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth";
@@ -34,71 +35,76 @@ const navItems: NavItem[] = [
   {
     icon: LayoutDashboard,
     label: "لوحة التحكم",
-    href: "/dashboard",
+    href: "/app/dashboard",
   },
   {
     icon: FileText,
     label: "طلبات الصيانة",
-    href: "/requests",
+    href: "/app/requests",
+  },
+  {
+    icon: AlertCircle,
+    label: "البلاغات",
+    href: "/app/complaints",
   },
   {
     icon: ClipboardList,
     label: "صيانتي الوقائية",
-    href: "/engineer/my-tasks",
+    href: "/app/engineer/my-tasks",
     roles: [Role.ENGINEER],
   },
   {
     icon: BarChart3,
     label: "الإحصائيات",
-    href: "/statistics",
+    href: "/app/statistics",
     roles: [Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER],
   },
   {
     icon: FileSpreadsheet,
     label: "التقارير",
-    href: "/reports",
+    href: "/app/reports",
     roles: [Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER],
   },
   {
     icon: Users,
     label: "المستخدمين",
-    href: "/admin/users",
+    href: "/app/admin/users",
     roles: [Role.ADMIN],
   },
   {
     icon: MapPin,
     label: "المواقع",
-    href: "/admin/locations",
+    href: "/app/admin/locations",
     roles: [Role.ADMIN],
   },
   {
     icon: Building2,
     label: "الأقسام",
-    href: "/admin/departments",
+    href: "/app/admin/departments",
     roles: [Role.ADMIN],
   },
   {
     icon: Cog,
     label: "الأنظمة",
-    href: "/admin/systems",
+    href: "/app/admin/systems",
     roles: [Role.ADMIN],
   },
   {
     icon: Wrench,
     label: "الآلات",
-    href: "/admin/machines",
+    href: "/app/admin/machines",
     roles: [Role.ADMIN],
   },
   {
     icon: Calendar,
     label: "الصيانة الوقائية",
-    href: "/admin/scheduled-tasks",
+    href: "/app/admin/scheduled-tasks",
     roles: [Role.ADMIN],
   },
   {
     icon: History,
     label: "سجل العمليات",
-    href: "/admin/audit-logs",
+    href: "/app/admin/audit-logs",
     roles: [Role.ADMIN],
   },
   {

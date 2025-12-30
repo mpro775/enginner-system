@@ -320,10 +320,14 @@ export class MaintenanceRequestsService {
     }
 
     const previousNotes = request.consultantNotes;
+    const formattedNote = this.formatNoteWithAuthor(
+      noteDto.consultantNotes,
+      user.name
+    );
 
     await this.requestModel.findByIdAndUpdate(id, {
       consultantId: user.userId,
-      consultantNotes: noteDto.consultantNotes,
+      consultantNotes: formattedNote,
     });
 
     // Log the action
@@ -334,7 +338,7 @@ export class MaintenanceRequestsService {
       entity: "MaintenanceRequest",
       entityId: id,
       changes: {
-        consultantNotes: noteDto.consultantNotes,
+        consultantNotes: formattedNote,
       },
       previousValues: { consultantNotes: previousNotes },
     });
@@ -359,10 +363,14 @@ export class MaintenanceRequestsService {
     }
 
     const previousNotes = request.healthSafetyNotes;
+    const formattedNote = this.formatNoteWithAuthor(
+      noteDto.healthSafetyNotes,
+      user.name
+    );
 
     await this.requestModel.findByIdAndUpdate(id, {
       healthSafetySupervisorId: user.userId,
-      healthSafetyNotes: noteDto.healthSafetyNotes,
+      healthSafetyNotes: formattedNote,
     });
 
     // Log the action
@@ -373,7 +381,7 @@ export class MaintenanceRequestsService {
       entity: "MaintenanceRequest",
       entityId: id,
       changes: {
-        healthSafetyNotes: noteDto.healthSafetyNotes,
+        healthSafetyNotes: formattedNote,
       },
       previousValues: {
         healthSafetyNotes: previousNotes,
@@ -540,6 +548,12 @@ export class MaintenanceRequestsService {
     return filter;
   }
 
+  private formatNoteWithAuthor(note: string, authorName: string): string {
+    // إزالة أي اسم موجود مسبقاً في نهاية الملاحظة
+    const cleanedNote = note.replace(/\s*\([^)]+\)\s*$/, '').trim();
+    return `${cleanedNote} (${authorName})`;
+  }
+
   private async populateRequest(
     id: string
   ): Promise<MaintenanceRequestDocument> {
@@ -547,6 +561,7 @@ export class MaintenanceRequestsService {
       .findById(id)
       .populate("engineerId", "name email")
       .populate("consultantId", "name email")
+      .populate("healthSafetySupervisorId", "name email")
       .populate("locationId", "name")
       .populate("departmentId", "name")
       .populate("systemId", "name")

@@ -11,6 +11,7 @@ import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import { MaintenanceRequestDocument } from "../maintenance-requests/schemas/maintenance-request.schema";
 import { ScheduledTaskDocument } from "../scheduled-tasks/schemas/scheduled-task.schema";
+import { ComplaintDocument } from "../complaints/schemas/complaint.schema";
 
 interface AuthenticatedSocket extends Socket {
   user?: {
@@ -248,5 +249,53 @@ export class NotificationsGateway
         );
       }
     }
+  }
+
+  // Notify when a new complaint is created
+  notifyComplaintCreated(complaint: ComplaintDocument) {
+    const notification = {
+      type: "complaint:created",
+      data: {
+        id: complaint._id,
+        complaintCode: complaint.complaintCode,
+        reporterName: complaint.reporterName,
+        department: complaint.department,
+        machine: complaint.machine,
+        location: complaint.location,
+        status: complaint.status,
+        createdAt: (complaint as any).createdAt,
+      },
+      message: `تم تقديم بلاغ جديد: ${complaint.complaintCode}`,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Notify all logged-in users (all roles)
+    this.server.emit("notification", notification);
+
+    this.logger.log(`Notified about new complaint: ${complaint.complaintCode}`);
+  }
+
+  // Notify when a complaint is resolved
+  notifyComplaintResolved(complaint: ComplaintDocument) {
+    const notification = {
+      type: "complaint:resolved",
+      data: {
+        id: complaint._id,
+        complaintCode: complaint.complaintCode,
+        reporterName: complaint.reporterName,
+        status: complaint.status,
+        engineerName: (complaint.assignedEngineerId as any)?.name,
+        resolvedAt: complaint.resolvedAt,
+      },
+      message: `تم حل البلاغ ${complaint.complaintCode}`,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Notify admin, consultant, and maintenance safety monitor
+    this.server.to("admin").emit("notification", notification);
+    this.server.to("consultant").emit("notification", notification);
+    this.server.to("maintenance_safety_monitor").emit("notification", notification);
+
+    this.logger.log(`Notified about resolved complaint: ${complaint.complaintCode}`);
   }
 }

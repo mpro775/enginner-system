@@ -3,13 +3,24 @@ import { Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { useSocket } from "@/hooks/useSocket";
+import { useNotificationsStore } from "@/store/notifications";
+import { useAuthStore } from "@/store/auth";
 
 export function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const { fetchNotifications } = useNotificationsStore();
+  const { isAuthenticated } = useAuthStore();
 
   // Initialize socket connection
   useSocket();
+
+  // Fetch notifications on mount and when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchNotifications();
+    }
+  }, [isAuthenticated, fetchNotifications]);
 
   // Close sidebar on route change (for mobile)
   useEffect(() => {

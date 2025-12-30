@@ -44,3 +44,10 @@ export enum TaskAssignmentStatus {
   UNASSIGNED = "unassigned",
   ASSIGNED = "assigned",
 }
+
+export enum ComplaintStatus {
+  NEW = "new",
+  IN_PROGRESS = "in_progress",
+  RESOLVED = "resolved",
+  CLOSED = "closed",
+}

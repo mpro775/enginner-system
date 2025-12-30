@@ -9,10 +9,20 @@ import {
 import { useNotificationsStore } from "@/store/notifications";
 import { formatDateTime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
 
 export function NotificationDropdown() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead } =
+  const { notifications, unreadCount, markAsRead, markAllAsRead, fetchNotifications } =
     useNotificationsStore();
+  const [isOpen, setIsOpen] = useState(false);
+
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    if (open) {
+      // Fetch notifications when dropdown is opened
+      fetchNotifications();
+    }
+  };
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -45,7 +55,7 @@ export function NotificationDropdown() {
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"

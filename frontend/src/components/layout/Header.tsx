@@ -4,6 +4,7 @@ import { useAuthStore } from "@/store/auth";
 import { getRoleLabel } from "@/lib/utils";
 import { useTheme } from "@/hooks/useTheme";
 import { NotificationDropdown } from "./NotificationDropdown";
+import { InstallButton } from "@/components/InstallButton";
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -50,6 +51,8 @@ export function Header({ onMenuClick }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
+        <InstallButton />
+        
         <Button
           variant="ghost"
           size="icon"

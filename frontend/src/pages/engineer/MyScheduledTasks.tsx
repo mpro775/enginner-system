@@ -252,15 +252,19 @@ export default function MyScheduledTasks() {
   const meta = data?.meta;
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">صيانتي الوقائية</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">صيانتي الوقائية</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             عرض وإدارة الصيانة الوقائية المخصصة لك
           </p>
         </div>
-        <Button onClick={() => navigate("/requests/new")}>
+        <Button 
+          onClick={() => navigate("/requests/new")}
+          className="w-full sm:w-auto"
+          size="sm"
+        >
           <Plus className="ml-2 h-4 w-4" />
           طلب صيانة جديد
         </Button>
@@ -269,54 +273,54 @@ export default function MyScheduledTasks() {
       {/* Available Tasks Section */}
       {availableTasks.length > 0 && (
         <Card className="border-blue-200 bg-blue-50/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <UserPlus className="h-5 w-5 text-blue-600" />
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <UserPlus className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
               المهام المتاحة
             </CardTitle>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               صيانة وقائية متاحة لجميع المهندسين - يمكنك قبول أي صيانة منها
             </p>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4">
+            <div className="grid gap-3 sm:gap-4">
               {availableTasks.map((task) => {
                 const daysRemaining = getDaysRemaining(task);
                 const isOverdue = daysRemaining < 0;
 
                 return (
                   <Card key={task.id} className="bg-white">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-semibold">{task.title}</h4>
+                    <CardContent className="p-3 sm:p-4">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between gap-3 sm:gap-4">
+                        <div className="flex-1 space-y-2 w-full">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                            <h4 className="font-semibold text-sm sm:text-base">{task.title}</h4>
                             {getStatusBadge(task.status)}
                           </div>
-                          <div className="grid gap-1 md:grid-cols-2 text-sm text-muted-foreground">
+                          <div className="grid gap-2 sm:grid-cols-2 text-xs sm:text-sm text-muted-foreground">
                             <div className="flex items-center gap-2">
-                              <Building2 className="h-4 w-4" />
-                              <span>
+                              <Building2 className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                              <span className="break-words">
                                 {task.departmentId.name} - {task.machineId.name}
                               </span>
                             </div>
                             <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4" />
+                              <Calendar className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
                               <span>{formatScheduledDate(task)}</span>
                             </div>
                           </div>
                           {task.description && (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
                               {task.description}
                             </p>
                           )}
                           <div>
                             {isOverdue ? (
-                              <span className="text-destructive font-semibold text-sm">
+                              <span className="text-destructive font-semibold text-xs sm:text-sm">
                                 متأخرة {Math.abs(daysRemaining)} يوم
                               </span>
                             ) : (
-                              <span className="text-muted-foreground text-sm">
+                              <span className="text-muted-foreground text-xs sm:text-sm">
                                 متبقي {daysRemaining} يوم
                               </span>
                             )}
@@ -325,17 +329,20 @@ export default function MyScheduledTasks() {
                         <Button
                           onClick={() => handleAcceptTask(task)}
                           disabled={acceptTaskMutation.isPending}
-                          className="ml-4"
+                          className="w-full sm:w-auto sm:ml-4"
+                          size="sm"
                         >
                           {acceptTaskMutation.isPending ? (
                             <>
                               <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                              جاري القبول...
+                              <span className="hidden sm:inline">جاري القبول...</span>
+                              <span className="sm:hidden">جاري...</span>
                             </>
                           ) : (
                             <>
                               <CheckCircle2 className="ml-2 h-4 w-4" />
-                              قبول المهمة
+                              <span className="hidden sm:inline">قبول المهمة</span>
+                              <span className="sm:hidden">قبول</span>
                             </>
                           )}
                         </Button>
@@ -351,14 +358,14 @@ export default function MyScheduledTasks() {
 
       {/* Filters */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="h-5 w-5" />
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+            <Filter className="h-4 w-4 sm:h-5 sm:w-5" />
             التصفية
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">الحالة</label>
               <Select
@@ -367,7 +374,7 @@ export default function MyScheduledTasks() {
                   setFilters({ ...filters, status: value, page: 1 })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="جميع الحالات" />
                 </SelectTrigger>
                 <SelectContent>
@@ -384,11 +391,11 @@ export default function MyScheduledTasks() {
       </Card>
 
       {/* Tasks List */}
-      <div className="grid gap-4">
+      <div className="grid gap-3 sm:gap-4">
         {tasks.length === 0 ? (
           <Card>
-            <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground">لا توجد صيانة وقائية</p>
+            <CardContent className="py-8 sm:py-12 text-center">
+              <p className="text-sm sm:text-base text-muted-foreground">لا توجد صيانة وقائية</p>
             </CardContent>
           </Card>
         ) : (
@@ -397,28 +404,30 @@ export default function MyScheduledTasks() {
             const isOverdue = daysRemaining < 0;
 
             return (
-              <Card key={task.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
+              <Card key={task.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4 sm:p-6">
+                  <div className="flex flex-col gap-4">
                     <div className="flex-1 space-y-3">
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-semibold">{task.title}</h3>
-                        {getStatusBadge(task.status)}
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                        <h3 className="text-base sm:text-lg font-semibold break-words">{task.title}</h3>
+                        <div className="flex-shrink-0">
+                          {getStatusBadge(task.status)}
+                        </div>
                       </div>
 
-                      <div className="grid gap-2 md:grid-cols-2 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="h-4 w-4" />
-                          <span>
+                      <div className="grid gap-2 sm:grid-cols-2 text-xs sm:text-sm text-muted-foreground">
+                        <div className="flex items-start sm:items-center gap-2">
+                          <Building2 className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 mt-0.5 sm:mt-0" />
+                          <span className="break-words">
                             {task.departmentId.name} - {task.machineId.name}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4" />
+                          <Calendar className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
                           <span>{formatScheduledDate(task)}</span>
                         </div>
                         {task.engineerId && (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 sm:col-span-2">
                             <span>المهندس:</span>
                             <span className="font-medium">{task.engineerId.name}</span>
                           </div>
@@ -426,20 +435,20 @@ export default function MyScheduledTasks() {
                       </div>
 
                       {task.description && (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2 sm:line-clamp-none">
                           {task.description}
                         </p>
                       )}
 
                       {task.status === TaskStatus.COMPLETED &&
                         task.completedRequestId && (
-                          <div className="text-sm">
+                          <div className="text-xs sm:text-sm">
                             <span className="text-muted-foreground">
                               الطلب المكتمل:{" "}
                             </span>
                             <Button
                               variant="link"
-                              className="p-0 h-auto"
+                              className="p-0 h-auto text-xs sm:text-sm"
                               onClick={() =>
                                 navigate(
                                   `/requests/${task.completedRequestId?.id}`
@@ -453,13 +462,13 @@ export default function MyScheduledTasks() {
 
                       {task.status !== TaskStatus.COMPLETED &&
                         task.status !== TaskStatus.CANCELLED && (
-                          <div className="pt-2">
+                          <div className="pt-1">
                             {isOverdue ? (
-                              <span className="text-destructive font-semibold">
+                              <span className="text-destructive font-semibold text-xs sm:text-sm">
                                 متأخرة {Math.abs(daysRemaining)} يوم
                               </span>
                             ) : (
-                              <span className="text-muted-foreground">
+                              <span className="text-muted-foreground text-xs sm:text-sm">
                                 متبقي {daysRemaining} يوم
                               </span>
                             )}
@@ -469,20 +478,26 @@ export default function MyScheduledTasks() {
 
                     {(task.status === TaskStatus.PENDING ||
                       task.status === TaskStatus.OVERDUE) && (
-                      <div className="flex gap-2 ml-4">
+                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 pt-2 border-t sm:border-t-0 sm:pt-0">
                         <Button
                           onClick={() => handleQuickExecute(task)}
                           variant="default"
+                          className="w-full sm:w-auto"
+                          size="sm"
                         >
                           <CheckCircle2 className="ml-2 h-4 w-4" />
-                          تنفيذ المهمة
+                          <span className="hidden sm:inline">تنفيذ المهمة</span>
+                          <span className="sm:hidden">تنفيذ</span>
                         </Button>
                         <Button
                           onClick={() => handleCreateRequest(task)}
                           variant="outline"
+                          className="w-full sm:w-auto"
+                          size="sm"
                         >
                           <Plus className="ml-2 h-4 w-4" />
-                          طلب مخصص
+                          <span className="hidden sm:inline">طلب مخصص</span>
+                          <span className="sm:hidden">مخصص</span>
                         </Button>
                       </div>
                     )}
@@ -496,16 +511,17 @@ export default function MyScheduledTasks() {
 
       {/* Pagination */}
       {meta && meta.totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-2 pt-2">
           <Button
             variant="outline"
             size="sm"
             onClick={() => setFilters({ ...filters, page: filters.page - 1 })}
             disabled={filters.page === 1}
+            className="w-full sm:w-auto"
           >
             السابق
           </Button>
-          <span className="text-sm text-muted-foreground">
+          <span className="text-xs sm:text-sm text-muted-foreground">
             صفحة {meta.page} من {meta.totalPages}
           </span>
           <Button
@@ -513,6 +529,7 @@ export default function MyScheduledTasks() {
             size="sm"
             onClick={() => setFilters({ ...filters, page: filters.page + 1 })}
             disabled={filters.page >= meta.totalPages}
+            className="w-full sm:w-auto"
           >
             التالي
           </Button>
@@ -521,12 +538,12 @@ export default function MyScheduledTasks() {
 
       {/* Execute Task Dialog */}
       <Dialog open={executeDialogOpen} onOpenChange={setExecuteDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>تنفيذ الصيانة الوقائية</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-lg sm:text-xl">تنفيذ الصيانة الوقائية</DialogTitle>
+            <DialogDescription className="text-sm">
               {selectedTaskForExecution?.title}
-              <div className="mt-2 text-sm">
+              <div className="mt-2 space-y-1 text-xs sm:text-sm">
                 <p>القسم: {selectedTaskForExecution?.departmentId.name}</p>
                 <p>الآلة: {selectedTaskForExecution?.machineId.name}</p>
               </div>
@@ -543,10 +560,11 @@ export default function MyScheduledTasks() {
                 value={executionNotes}
                 onChange={(e) => setExecutionNotes(e.target.value)}
                 rows={4}
+                className="text-sm"
               />
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
               <Button
                 type="button"
                 variant="outline"
@@ -556,19 +574,28 @@ export default function MyScheduledTasks() {
                   setSelectedTaskForExecution(null);
                 }}
                 disabled={createRequestMutation.isPending}
+                className="w-full sm:w-auto order-2 sm:order-1"
+                size="sm"
               >
                 إلغاء
               </Button>
-              <Button type="submit" disabled={createRequestMutation.isPending}>
+              <Button 
+                type="submit" 
+                disabled={createRequestMutation.isPending}
+                className="w-full sm:w-auto order-1 sm:order-2"
+                size="sm"
+              >
                 {createRequestMutation.isPending ? (
                   <>
                     <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                    جاري الإنشاء...
+                    <span className="hidden sm:inline">جاري الإنشاء...</span>
+                    <span className="sm:hidden">جاري...</span>
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="ml-2 h-4 w-4" />
-                    إنشاء الطلب
+                    <span className="hidden sm:inline">إنشاء الطلب</span>
+                    <span className="sm:hidden">إنشاء</span>
                   </>
                 )}
               </Button>

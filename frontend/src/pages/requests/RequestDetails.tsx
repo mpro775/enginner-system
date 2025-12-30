@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   Edit,
   RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -99,6 +100,16 @@ export default function RequestDetails() {
   });
 
   const watchSystemId = watch("systemId");
+
+  // Helper function to parse note with author name
+  const parseNoteWithAuthor = (note: string) => {
+    // Match pattern: text (author) at the end
+    const match = note.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+    if (match) {
+      return { text: match[1].trim(), author: match[2].trim() };
+    }
+    return { text: note, author: null };
+  };
 
   const { data: request, isLoading } = useQuery({
     queryKey: ["request", id],
@@ -245,12 +256,18 @@ export default function RequestDetails() {
   };
 
   const handleAddNote = () => {
-    setConsultantNotes(request.consultantNotes || "");
+    const notes = request.consultantNotes || "";
+    // Remove author name from the end if present
+    const { text } = parseNoteWithAuthor(notes);
+    setConsultantNotes(text);
     setShowNoteDialog(true);
   };
 
   const handleAddHealthSafetyNote = () => {
-    setHealthSafetyNotes(request.healthSafetyNotes || "");
+    const notes = request.healthSafetyNotes || "";
+    // Remove author name from the end if present
+    const { text } = parseNoteWithAuthor(notes);
+    setHealthSafetyNotes(text);
     setShowHealthSafetyNoteDialog(true);
   };
 
@@ -415,23 +432,39 @@ export default function RequestDetails() {
                 </div>
               )}
 
-              {request.consultantNotes && (
-                <div className="border-t pt-4">
-                  <p className="text-sm text-muted-foreground mb-2">
-                    ملاحظات المكتب الاستشاري
-                  </p>
-                  <p>{request.consultantNotes}</p>
-                </div>
-              )}
+              {request.consultantNotes && (() => {
+                const { text, author } = parseNoteWithAuthor(request.consultantNotes);
+                return (
+                  <div className="border-t pt-4">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      ملاحظات المكتب الاستشاري
+                    </p>
+                    <p className="mb-1">{text}</p>
+                    {author && (
+                      <p className="text-xs text-muted-foreground text-left">
+                        - {author}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
-              {request.healthSafetyNotes && (
-                <div className="border-t pt-4">
-                  <p className="text-sm text-muted-foreground mb-2">
-                    ملاحظات مراقب الصيانة والسلامة
-                  </p>
-                  <p>{request.healthSafetyNotes}</p>
-                </div>
-              )}
+              {request.healthSafetyNotes && (() => {
+                const { text, author } = parseNoteWithAuthor(request.healthSafetyNotes);
+                return (
+                  <div className="border-t pt-4">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      ملاحظات مراقب الصيانة والسلامة
+                    </p>
+                    <p className="mb-1">{text}</p>
+                    {author && (
+                      <p className="text-xs text-muted-foreground text-left">
+                        - {author}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               {request.status === RequestStatus.STOPPED &&
                 request.stopReason && (
@@ -449,6 +482,47 @@ export default function RequestDetails() {
                 )}
             </CardContent>
           </Card>
+
+          {/* Linked Complaint */}
+          {request.complaintId && (
+            <Card>
+              <CardHeader>
+                <CardTitle>البلاغ المرتبط</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">
+                      {typeof request.complaintId === "string"
+                        ? request.complaintId
+                        : (request.complaintId as any).complaintCode}
+                    </p>
+                    {typeof request.complaintId !== "string" && (
+                      <p className="text-sm text-muted-foreground">
+                        مقدم البلاغ: {(request.complaintId as any).reporterName}
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      navigate(
+                        `/app/complaints/${
+                          typeof request.complaintId === "string"
+                            ? request.complaintId
+                            : (request.complaintId as any).id
+                        }`
+                      )
+                    }
+                  >
+                    <AlertCircle className="h-4 w-4 ml-2" />
+                    عرض البلاغ
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Actions */}
           {(canEdit ||

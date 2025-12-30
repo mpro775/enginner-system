@@ -59,7 +59,7 @@ export default function Login() {
       login(response.user, response.accessToken, response.refreshToken);
 
       const from =
-        (location.state as { from?: Location })?.from?.pathname || "/dashboard";
+        (location.state as { from?: Location })?.from?.pathname || "/app/dashboard";
       navigate(from, { replace: true });
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
@@ -203,33 +203,6 @@ export default function Login() {
                 )}
               </Button>
             </form>
-
-            {/* Demo credentials */}
-            <div className="mt-6 rounded-lg bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/15 border border-primary/20 dark:border-primary/30 p-4">
-              <p className="text-sm font-medium mb-2 text-primary">
-                بيانات تجريبية:
-              </p>
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p>
-                  <span className="text-primary">●</span> استشاري:
-                  consultant1@maintenance.com
-                </p>
-                <p>
-                  <span className="text-primary">●</span> مهندس:
-                  engineer1@maintenance.com
-                </p>
-                <p>
-                  <span className="text-primary">●</span> مراقب الصيانة
-                  والسلامة: safety@maintenance.com
-                </p>
-                <p className="mt-2 pt-2 border-t border-primary/20 dark:border-primary/30">
-                  كلمة المرور:{" "}
-                  <span className="font-mono bg-primary/10 dark:bg-primary/20 px-1.5 py-0.5 rounded">
-                    123456
-                  </span>
-                </p>
-              </div>
-            </div>
           </CardContent>
         </Card>
 

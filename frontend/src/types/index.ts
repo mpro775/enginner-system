@@ -37,6 +37,13 @@ export enum TaskAssignmentStatus {
   ASSIGNED = "assigned",
 }
 
+export enum ComplaintStatus {
+  NEW = "new",
+  IN_PROGRESS = "in_progress",
+  RESOLVED = "resolved",
+  CLOSED = "closed",
+}
+
 export enum AuditAction {
   CREATE = "create",
   UPDATE = "update",
@@ -113,6 +120,7 @@ export interface MaintenanceRequest {
   openedAt: string;
   closedAt?: string;
   stoppedAt?: string;
+  complaintId?: Complaint | string;
   createdAt: string;
   updatedAt: string;
 }
@@ -269,4 +277,34 @@ export interface AuditLog {
   userAgent?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// Complaint types
+export interface Complaint {
+  id: string;
+  complaintCode: string;
+  reporterName: string;
+  department: string;
+  machine: string;
+  machineNumber?: string;
+  location: string;
+  description: string;
+  notes?: string;
+  status: ComplaintStatus;
+  assignedEngineerId?: User;
+  maintenanceRequestId?: MaintenanceRequest | string;
+  resolvedAt?: string;
+  closedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateComplaintForm {
+  reporterName: string;
+  department: string;
+  machine: string;
+  machineNumber?: string;
+  location: string;
+  description: string;
+  notes?: string;
 }

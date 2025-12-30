@@ -20,6 +20,10 @@ import {
 import ScheduledTasksManagement from "@/pages/admin/ScheduledTasksManagement";
 import ScheduledTaskForm from "@/pages/admin/ScheduledTaskForm";
 import MyScheduledTasks from "@/pages/engineer/MyScheduledTasks";
+import Home from "@/pages/Home";
+import NewComplaint from "@/pages/complaints/NewComplaint";
+import ComplaintsList from "@/pages/complaints/ComplaintsList";
+import ComplaintDetails from "@/pages/complaints/ComplaintDetails";
 import { Role } from "@/types";
 
 function App() {
@@ -28,19 +32,27 @@ function App() {
       <Toaster />
       <Routes>
         {/* Public routes */}
+        <Route path="/" element={<Home />} />
+        <Route path="/home" element={<Home />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/complaint/new" element={<NewComplaint />} />
 
         {/* Protected routes */}
         <Route
-          path="/"
+          path="/app"
           element={
             <ProtectedRoute>
               <MainLayout />
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route index element={<Navigate to="/app/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
+
+          {/* Requests */}
+          {/* Complaints */}
+          <Route path="complaints" element={<ComplaintsList />} />
+          <Route path="complaints/:id" element={<ComplaintDetails />} />
 
           {/* Requests */}
           <Route path="requests" element={<RequestsList />} />
@@ -172,7 +184,7 @@ function App() {
         </Route>
 
         {/* Fallback */}
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

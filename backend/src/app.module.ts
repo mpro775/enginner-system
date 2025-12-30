@@ -19,6 +19,7 @@ import { ReportsModule } from "./modules/reports/reports.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { AuditLogsModule } from "./modules/audit-logs/audit-logs.module";
 import { HealthModule } from "./modules/health/health.module";
+import { ComplaintsModule } from "./modules/complaints/complaints.module";
 
 @Module({
   imports: [
@@ -82,6 +83,7 @@ import { HealthModule } from "./modules/health/health.module";
     NotificationsModule,
     AuditLogsModule,
     HealthModule,
+    ComplaintsModule,
   ],
 })
 export class AppModule {}

@@ -84,6 +84,9 @@ export class MaintenanceRequest {
 
   @Prop({ type: Types.ObjectId, ref: "ScheduledTask" })
   scheduledTaskId?: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: "Complaint" })
+  complaintId?: Types.ObjectId;
 }
 
 export const MaintenanceRequestSchema =
