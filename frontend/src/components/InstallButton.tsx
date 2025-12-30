@@ -10,30 +10,43 @@ interface BeforeInstallPromptEvent extends Event {
 export function InstallButton() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
+  const [isSupported, setIsSupported] = useState(false);
 
   useEffect(() => {
-    // Check if app is already installed
+    // التحقق من دعم PWA
+    const checkSupport = () => {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isAndroid = /Android/.test(navigator.userAgent);
+      
+      setIsSupported(!isStandalone && (isAndroid || isIOS || 'serviceWorker' in navigator));
+    };
+
+    checkSupport();
+
+    // التحقق من التثبيت
     if (window.matchMedia('(display-mode: standalone)').matches) {
       setIsInstalled(true);
       return;
     }
 
-    // Check if app was installed before (using localStorage)
     if (localStorage.getItem('pwa-installed') === 'true') {
       setIsInstalled(true);
       return;
     }
 
-    // Listen for beforeinstallprompt event
+    // الاستماع لحدث beforeinstallprompt
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
+      console.log('beforeinstallprompt event fired');
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    // Listen for app installed event
+    // الاستماع لحدث التثبيت
     window.addEventListener('appinstalled', () => {
+      console.log('App installed');
       setIsInstalled(true);
       setDeferredPrompt(null);
       localStorage.setItem('pwa-installed', 'true');
@@ -45,28 +58,38 @@ export function InstallButton() {
   }, []);
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-
-    // Show the install prompt
-    await deferredPrompt.prompt();
-
-    // Wait for the user to respond to the prompt
-    const { outcome } = await deferredPrompt.userChoice;
-
-    if (outcome === 'accepted') {
-      setIsInstalled(true);
-      localStorage.setItem('pwa-installed', 'true');
+    if (!deferredPrompt) {
+      console.log('No deferred prompt available');
+      return;
     }
 
-    // Clear the deferred prompt
-    setDeferredPrompt(null);
+    try {
+      // عرض نافذة التثبيت
+      await deferredPrompt.prompt();
+
+      // انتظار رد المستخدم
+      const { outcome } = await deferredPrompt.userChoice;
+
+      console.log('User choice:', outcome);
+
+      if (outcome === 'accepted') {
+        setIsInstalled(true);
+        localStorage.setItem('pwa-installed', 'true');
+      }
+
+      // مسح الـ prompt
+      setDeferredPrompt(null);
+    } catch (error) {
+      console.error('Error showing install prompt:', error);
+    }
   };
 
-  // Don't show button if app is already installed or prompt is not available
-  if (isInstalled || !deferredPrompt) {
+  // عدم إظهار الزر إذا كان التطبيق مثبتاً أو غير مدعوم
+  if (isInstalled || !isSupported) {
     return null;
   }
 
+  // إظهار الزر حتى لو لم يكن هناك prompt (للمستخدمين على Android)
   return (
     <Button
       variant="ghost"
@@ -74,10 +97,12 @@ export function InstallButton() {
       className="h-9 w-9 sm:h-10 sm:w-10 text-muted-foreground hover:text-foreground"
       onClick={handleInstallClick}
       title="تثبيت التطبيق"
+      disabled={!deferredPrompt}
     >
       <Download className="h-5 w-5" />
       <span className="sr-only">تثبيت التطبيق</span>
     </Button>
   );
 }
+
 
