@@ -283,10 +283,14 @@ export interface AuditLog {
 export interface Complaint {
   id: string;
   complaintCode: string;
-  reporterName: string;
-  location: string;
-  description: string;
-  notes?: string;
+  reporterNameAr: string;
+  reporterNameEn: string;
+  locationAr: string;
+  locationEn: string;
+  descriptionAr: string;
+  descriptionEn: string;
+  notesAr?: string;
+  notesEn?: string;
   status: ComplaintStatus;
   assignedEngineerId?: User;
   maintenanceRequestId?: MaintenanceRequest | string;
@@ -297,8 +301,12 @@ export interface Complaint {
 }
 
 export interface CreateComplaintForm {
-  reporterName: string;
-  location: string;
-  description: string;
-  notes?: string;
+  reporterNameAr: string;
+  reporterNameEn: string;
+  locationAr: string;
+  locationEn: string;
+  descriptionAr: string;
+  descriptionEn: string;
+  notesAr?: string;
+  notesEn?: string;
 }

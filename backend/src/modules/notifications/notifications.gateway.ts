@@ -258,8 +258,10 @@ export class NotificationsGateway
       data: {
         id: complaint._id,
         complaintCode: complaint.complaintCode,
-        reporterName: complaint.reporterName,
-        location: complaint.location,
+        reporterNameAr: complaint.reporterNameAr,
+        reporterNameEn: complaint.reporterNameEn,
+        locationAr: complaint.locationAr,
+        locationEn: complaint.locationEn,
         status: complaint.status,
         createdAt: (complaint as any).createdAt,
       },
@@ -280,7 +282,8 @@ export class NotificationsGateway
       data: {
         id: complaint._id,
         complaintCode: complaint.complaintCode,
-        reporterName: complaint.reporterName,
+        reporterNameAr: complaint.reporterNameAr,
+        reporterNameEn: complaint.reporterNameEn,
         status: complaint.status,
         engineerName: (complaint.assignedEngineerId as any)?.name,
         resolvedAt: complaint.resolvedAt,

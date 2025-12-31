@@ -202,8 +202,10 @@ export class NotificationsService {
         data: {
           id: complaint._id.toString(),
           complaintCode: complaint.complaintCode,
-          reporterName: complaint.reporterName,
-          location: complaint.location,
+          reporterNameAr: complaint.reporterNameAr,
+          reporterNameEn: complaint.reporterNameEn,
+          locationAr: complaint.locationAr,
+          locationEn: complaint.locationEn,
           status: complaint.status,
           createdAt: createdAt,
         },
@@ -220,7 +222,8 @@ export class NotificationsService {
           data: {
             id: complaint._id.toString(),
             complaintCode: complaint.complaintCode,
-            reporterName: complaint.reporterName,
+            reporterNameAr: complaint.reporterNameAr,
+            reporterNameEn: complaint.reporterNameEn,
             status: complaint.status,
             engineerName: (complaint.assignedEngineerId as any)?.name,
             resolvedAt: complaint.resolvedAt,

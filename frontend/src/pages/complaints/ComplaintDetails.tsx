@@ -209,7 +209,7 @@ export default function ComplaintDetails() {
         departmentId: "",
         systemId: "",
         machineId: "",
-        reasonText: complaint?.description || "",
+        reasonText: complaint?.descriptionAr || complaint?.descriptionEn || "",
         maintainAllComponents: true,
         selectedComponents: [],
       });
@@ -238,7 +238,7 @@ export default function ComplaintDetails() {
     departmentId: "",
     systemId: "",
     machineId: "",
-    reasonText: complaint?.description || "",
+    reasonText: complaint?.descriptionAr || complaint?.descriptionEn || "",
     maintainAllComponents: true,
     selectedComponents: [] as string[],
   });
@@ -261,20 +261,21 @@ export default function ComplaintDetails() {
     if (!showCreateRequestDialog || !complaint) return;
     if (!locations) return;
 
-    // Find location ID by name
+    // Find location ID by name (try Arabic first, then English)
     const foundLocation = locations.find(
-      (loc) => loc.name === complaint.location
+      (loc) =>
+        loc.name === complaint.locationAr || loc.name === complaint.locationEn
     );
     const locationId = foundLocation?.id || "";
 
-    // Update form with found location ID and description
+    // Update form with found location ID and description (use Arabic, fallback to English)
     setCreateRequestForm({
       maintenanceType: MaintenanceType.EMERGENCY,
       locationId,
       departmentId: "",
       systemId: "",
       machineId: "",
-      reasonText: complaint.description || "",
+      reasonText: complaint.descriptionAr || complaint.descriptionEn || "",
       maintainAllComponents: true,
       selectedComponents: [],
     });
@@ -370,38 +371,111 @@ export default function ComplaintDetails() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Reporter Name - Bilingual */}
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="flex items-center gap-3">
-                  <User className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">مقدم البلاغ</p>
-                    <p className="font-medium">{complaint.reporterName}</p>
+                <div className="flex items-start gap-3">
+                  <User className="h-5 w-5 text-muted-foreground mt-1" />
+                  <div className="flex-1">
+                    <p className="text-sm text-muted-foreground mb-1">
+                      مقدم البلاغ / Reporter Name
+                    </p>
+                    <div className="space-y-2">
+                      <div className="p-2 bg-muted/50 rounded border-r-2 border-r-primary">
+                        <p className="text-xs text-muted-foreground mb-1">
+                          بالعربية:
+                        </p>
+                        <p className="font-medium">
+                          {complaint.reporterNameAr}
+                        </p>
+                      </div>
+                      <div className="p-2 bg-muted/50 rounded border-r-2 border-r-primary">
+                        <p className="text-xs text-muted-foreground mb-1">
+                          In English:
+                        </p>
+                        <p className="font-medium">
+                          {complaint.reporterNameEn}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <MapPin className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">الموقع</p>
-                    <p className="font-medium">{complaint.location}</p>
+                <div className="flex items-start gap-3">
+                  <MapPin className="h-5 w-5 text-muted-foreground mt-1" />
+                  <div className="flex-1">
+                    <p className="text-sm text-muted-foreground mb-1">
+                      الموقع / Location
+                    </p>
+                    <div className="space-y-2">
+                      <div className="p-2 bg-muted/50 rounded border-r-2 border-r-primary">
+                        <p className="text-xs text-muted-foreground mb-1">
+                          بالعربية:
+                        </p>
+                        <p className="font-medium">{complaint.locationAr}</p>
+                      </div>
+                      <div className="p-2 bg-muted/50 rounded border-r-2 border-r-primary">
+                        <p className="text-xs text-muted-foreground mb-1">
+                          In English:
+                        </p>
+                        <p className="font-medium">{complaint.locationEn}</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
+              {/* Description - Bilingual */}
               <div className="border-t pt-4">
-                <p className="text-sm text-muted-foreground mb-2">وصف البلاغ</p>
-                <p className="font-medium whitespace-pre-wrap">
-                  {complaint.description}
+                <p className="text-sm text-muted-foreground mb-3">
+                  وصف البلاغ / Description
                 </p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="p-3 bg-muted/50 rounded border-r-2 border-r-primary">
+                    <p className="text-xs text-muted-foreground mb-2 font-semibold">
+                      بالعربية:
+                    </p>
+                    <p className="font-medium whitespace-pre-wrap text-sm">
+                      {complaint.descriptionAr}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-muted/50 rounded border-r-2 border-r-primary">
+                    <p className="text-xs text-muted-foreground mb-2 font-semibold">
+                      In English:
+                    </p>
+                    <p className="font-medium whitespace-pre-wrap text-sm">
+                      {complaint.descriptionEn}
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              {complaint.notes && (
+              {/* Notes - Bilingual */}
+              {(complaint.notesAr || complaint.notesEn) && (
                 <div className="border-t pt-4">
-                  <p className="text-sm text-muted-foreground mb-2">
-                    ملاحظات / تفاصيل إضافية
+                  <p className="text-sm text-muted-foreground mb-3">
+                    ملاحظات / تفاصيل إضافية / Notes / Additional Details
                   </p>
-                  <p className="font-medium whitespace-pre-wrap">
-                    {complaint.notes}
-                  </p>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {complaint.notesAr && (
+                      <div className="p-3 bg-muted/50 rounded border-r-2 border-r-primary">
+                        <p className="text-xs text-muted-foreground mb-2 font-semibold">
+                          بالعربية:
+                        </p>
+                        <p className="font-medium whitespace-pre-wrap text-sm">
+                          {complaint.notesAr}
+                        </p>
+                      </div>
+                    )}
+                    {complaint.notesEn && (
+                      <div className="p-3 bg-muted/50 rounded border-r-2 border-r-primary">
+                        <p className="text-xs text-muted-foreground mb-2 font-semibold">
+                          In English:
+                        </p>
+                        <p className="font-medium whitespace-pre-wrap text-sm">
+                          {complaint.notesEn}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -657,7 +731,8 @@ export default function ComplaintDetails() {
               departmentId: "",
               systemId: "",
               machineId: "",
-              reasonText: complaint?.description || "",
+              reasonText:
+                complaint?.descriptionAr || complaint?.descriptionEn || "",
               maintainAllComponents: true,
               selectedComponents: [],
             });

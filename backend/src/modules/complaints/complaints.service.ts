@@ -160,10 +160,14 @@ export class ComplaintsService {
     }
 
     const previousValues = {
-      reporterName: complaint.reporterName,
-      location: complaint.location,
-      description: complaint.description,
-      notes: complaint.notes,
+      reporterNameAr: complaint.reporterNameAr,
+      reporterNameEn: complaint.reporterNameEn,
+      locationAr: complaint.locationAr,
+      locationEn: complaint.locationEn,
+      descriptionAr: complaint.descriptionAr,
+      descriptionEn: complaint.descriptionEn,
+      notesAr: complaint.notesAr,
+      notesEn: complaint.notesEn,
     };
 
     await this.complaintModel.findByIdAndUpdate(id, updateDto);
@@ -436,13 +440,16 @@ export class ComplaintsService {
       filter.assignedEngineerId = filterDto.assignedEngineerId;
     }
 
-    // Search filter
+    // Search filter - search in both languages
     if (filterDto.search) {
       filter.$or = [
         { complaintCode: { $regex: filterDto.search, $options: "i" } },
-        { reporterName: { $regex: filterDto.search, $options: "i" } },
-        { location: { $regex: filterDto.search, $options: "i" } },
-        { description: { $regex: filterDto.search, $options: "i" } },
+        { reporterNameAr: { $regex: filterDto.search, $options: "i" } },
+        { reporterNameEn: { $regex: filterDto.search, $options: "i" } },
+        { locationAr: { $regex: filterDto.search, $options: "i" } },
+        { locationEn: { $regex: filterDto.search, $options: "i" } },
+        { descriptionAr: { $regex: filterDto.search, $options: "i" } },
+        { descriptionEn: { $regex: filterDto.search, $options: "i" } },
       ];
     }
 

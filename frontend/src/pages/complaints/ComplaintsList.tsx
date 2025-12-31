@@ -212,16 +212,25 @@ export default function ComplaintsList() {
                             </h3>
                             <ComplaintStatusBadge status={complaint.status} />
                           </div>
-                          <p className="text-sm text-muted-foreground mb-1">
-                            مقدم البلاغ: <span className="font-medium">{complaint.reporterName}</span>
-                          </p>
+                          <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground">
+                              مقدم البلاغ / Reporter:
+                            </p>
+                            <div className="flex flex-col gap-1">
+                              <span className="font-medium text-sm">{complaint.reporterNameAr}</span>
+                              <span className="font-medium text-xs text-muted-foreground">{complaint.reporterNameEn}</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3 text-sm">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <MapPin className="h-4 w-4 flex-shrink-0" />
-                          <span className="truncate">{complaint.location}</span>
+                        <div className="flex items-start gap-2 text-muted-foreground">
+                          <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <p className="truncate font-medium">{complaint.locationAr}</p>
+                            <p className="truncate text-xs text-muted-foreground">{complaint.locationEn}</p>
+                          </div>
                         </div>
                         {complaint.assignedEngineerId && (
                           <div className="flex items-center gap-2 text-muted-foreground">
@@ -233,9 +242,14 @@ export default function ComplaintsList() {
                         )}
                       </div>
 
-                      <p className="text-sm text-foreground line-clamp-2">
-                        {complaint.description}
-                      </p>
+                      <div className="space-y-1">
+                        <p className="text-sm text-foreground line-clamp-2 font-medium">
+                          {complaint.descriptionAr}
+                        </p>
+                        <p className="text-xs text-muted-foreground line-clamp-2">
+                          {complaint.descriptionEn}
+                        </p>
+                      </div>
 
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Calendar className="h-3 w-3" />

@@ -6,19 +6,35 @@ import {
 export class UpdateComplaintDto {
   @IsOptional()
   @IsString()
-  reporterName?: string;
+  reporterNameAr?: string;
 
   @IsOptional()
   @IsString()
-  location?: string;
+  reporterNameEn?: string;
 
   @IsOptional()
   @IsString()
-  description?: string;
+  locationAr?: string;
 
   @IsOptional()
   @IsString()
-  notes?: string;
+  locationEn?: string;
+
+  @IsOptional()
+  @IsString()
+  descriptionAr?: string;
+
+  @IsOptional()
+  @IsString()
+  descriptionEn?: string;
+
+  @IsOptional()
+  @IsString()
+  notesAr?: string;
+
+  @IsOptional()
+  @IsString()
+  notesEn?: string;
 }
 
 

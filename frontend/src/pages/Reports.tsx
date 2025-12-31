@@ -165,7 +165,7 @@ export default function Reports() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">جميع المهندسين</SelectItem>
-                  {engineers?.map((engineer) => (
+                  {Array.isArray(engineers) && engineers.map((engineer) => (
                     <SelectItem key={engineer.id} value={engineer.id}>
                       {engineer.name}
                     </SelectItem>
@@ -184,7 +184,7 @@ export default function Reports() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">جميع الاستشاريين</SelectItem>
-                  {consultants?.map((consultant) => (
+                  {Array.isArray(consultants) && consultants.map((consultant) => (
                     <SelectItem key={consultant.id} value={consultant.id}>
                       {consultant.name}
                     </SelectItem>
@@ -203,7 +203,7 @@ export default function Reports() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">جميع المواقع</SelectItem>
-                  {locations?.map((location) => (
+                  {Array.isArray(locations) && locations.map((location) => (
                     <SelectItem key={location.id} value={location.id}>
                       {location.name}
                     </SelectItem>
@@ -222,7 +222,7 @@ export default function Reports() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">جميع الأقسام</SelectItem>
-                  {departments?.map((dept) => (
+                  {Array.isArray(departments) && departments.map((dept) => (
                     <SelectItem key={dept.id} value={dept.id}>
                       {dept.name}
                     </SelectItem>
@@ -241,7 +241,7 @@ export default function Reports() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">جميع الأنظمة</SelectItem>
-                  {systems?.map((system) => (
+                  {Array.isArray(systems) && systems.map((system) => (
                     <SelectItem key={system.id} value={system.id}>
                       {system.name}
                     </SelectItem>

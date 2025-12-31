@@ -6,20 +6,36 @@ import {
 
 export class CreateComplaintDto {
   @IsString()
-  @IsNotEmpty({ message: "Reporter name is required" })
-  reporterName: string;
+  @IsNotEmpty({ message: "Reporter name (Arabic) is required" })
+  reporterNameAr: string;
 
   @IsString()
-  @IsNotEmpty({ message: "Location is required" })
-  location: string;
+  @IsNotEmpty({ message: "Reporter name (English) is required" })
+  reporterNameEn: string;
 
   @IsString()
-  @IsNotEmpty({ message: "Description is required" })
-  description: string;
+  @IsNotEmpty({ message: "Location (Arabic) is required" })
+  locationAr: string;
+
+  @IsString()
+  @IsNotEmpty({ message: "Location (English) is required" })
+  locationEn: string;
+
+  @IsString()
+  @IsNotEmpty({ message: "Description (Arabic) is required" })
+  descriptionAr: string;
+
+  @IsString()
+  @IsNotEmpty({ message: "Description (English) is required" })
+  descriptionEn: string;
 
   @IsOptional()
   @IsString()
-  notes?: string;
+  notesAr?: string;
+
+  @IsOptional()
+  @IsString()
+  notesEn?: string;
 }
 
 

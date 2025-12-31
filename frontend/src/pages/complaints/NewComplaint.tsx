@@ -3,7 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Sun, Moon, Monitor, ArrowRight, CheckCircle2 } from "lucide-react";
+import {
+  Loader2,
+  Sun,
+  Moon,
+  Monitor,
+  ArrowRight,
+  CheckCircle2,
+  Info,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,16 +28,27 @@ import { useTheme } from "@/hooks/useTheme";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 
 const complaintSchema = z.object({
-  reporterName: z.string().min(2, "اسم مقدم البلاغ يجب أن يكون حرفين على الأقل"),
-  location: z.string().min(2, "الموقع مطلوب"),
-  description: z.string().min(10, "وصف البلاغ يجب أن يكون 10 أحرف على الأقل"),
-  notes: z.string().optional(),
+  reporterNameAr: z
+    .string()
+    .min(2, "اسم مقدم البلاغ (عربي) يجب أن يكون حرفين على الأقل"),
+  reporterNameEn: z
+    .string()
+    .min(2, "اسم مقدم البلاغ (إنجليزي) يجب أن يكون حرفين على الأقل"),
+  locationAr: z.string().min(2, "الموقع (عربي) مطلوب"),
+  locationEn: z.string().min(2, "الموقع (إنجليزي) مطلوب"),
+  descriptionAr: z
+    .string()
+    .min(10, "وصف البلاغ (عربي) يجب أن يكون 10 أحرف على الأقل"),
+  descriptionEn: z
+    .string()
+    .min(10, "وصف البلاغ (إنجليزي) يجب أن يكون 10 أحرف على الأقل"),
+  notesAr: z.string().optional(),
+  notesEn: z.string().optional(),
 });
 
 type ComplaintForm = z.infer<typeof complaintSchema>;
@@ -142,9 +161,7 @@ export default function NewComplaint() {
             <p className="text-sm text-primary/80 mb-1">
               نظام إدارة طلبات الصيانة
             </p>
-            <CardTitle className="text-2xl text-primary">
-              تقديم بلاغ
-            </CardTitle>
+            <CardTitle className="text-2xl text-primary">تقديم بلاغ</CardTitle>
             <CardDescription>
               يرجى ملء جميع الحقول المطلوبة لتقديم البلاغ
             </CardDescription>
@@ -157,75 +174,217 @@ export default function NewComplaint() {
                 </div>
               )}
 
-              <div className="space-y-2">
-                <Label htmlFor="reporterName" className="text-primary">
-                  اسم مقدم البلاغ <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="reporterName"
-                  placeholder="أدخل اسم مقدم البلاغ"
-                  {...register("reporterName")}
-                  className={`focus:border-primary focus:ring-primary ${
-                    errors.reporterName ? "border-destructive" : ""
-                  }`}
-                />
-                {errors.reporterName && (
-                  <p className="text-xs text-destructive">
-                    {errors.reporterName.message}
-                  </p>
-                )}
+              {/* Reporter Name - Bilingual */}
+              <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <Label className="text-primary text-base font-semibold">
+                    اسم مقدم البلاغ / Reporter Name{" "}
+                    <span className="text-destructive">*</span>
+                  </Label>
+                  <span
+                    className="inline-flex items-center cursor-help"
+                    title="مثال: أحمد محمد العلي / Example: Ahmed Mohammed Al-Ali"
+                  >
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                  </span>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="reporterNameAr" className="text-sm">
+                      بالعربية <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="reporterNameAr"
+                      placeholder="مثال: أحمد محمد العلي"
+                      title="مثال احترافي: أحمد محمد العلي - استخدم الاسم الكامل الرسمي"
+                      {...register("reporterNameAr")}
+                      className={`focus:border-primary focus:ring-primary ${
+                        errors.reporterNameAr ? "border-destructive" : ""
+                      }`}
+                    />
+                    {errors.reporterNameAr && (
+                      <p className="text-xs text-destructive">
+                        {errors.reporterNameAr.message}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="reporterNameEn" className="text-sm">
+                      In English <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="reporterNameEn"
+                      placeholder="Example: Ahmed Mohammed Al-Ali"
+                      title="Professional Example: Ahmed Mohammed Al-Ali - Use full official name"
+                      {...register("reporterNameEn")}
+                      className={`focus:border-primary focus:ring-primary ${
+                        errors.reporterNameEn ? "border-destructive" : ""
+                      }`}
+                    />
+                    {errors.reporterNameEn && (
+                      <p className="text-xs text-destructive">
+                        {errors.reporterNameEn.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="location" className="text-primary">
-                  الموقع <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="location"
-                  placeholder="أدخل الموقع"
-                  {...register("location")}
-                  className={`focus:border-primary focus:ring-primary ${
-                    errors.location ? "border-destructive" : ""
-                  }`}
-                />
-                {errors.location && (
-                  <p className="text-xs text-destructive">
-                    {errors.location.message}
-                  </p>
-                )}
+              {/* Location - Bilingual */}
+              <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <Label className="text-primary text-base font-semibold">
+                    الموقع / Location{" "}
+                    <span className="text-destructive">*</span>
+                  </Label>
+                  <span
+                    className="inline-flex items-center cursor-help"
+                    title="مثال: مبنى كلية الهندسة - الطابق الثاني - مكتب 205 / Example: Engineering College Building - 2nd Floor - Office 205"
+                  >
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                  </span>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="locationAr" className="text-sm">
+                      بالعربية <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="locationAr"
+                      placeholder="مثال: مبنى كلية الهندسة - الطابق الثاني - مكتب 205"
+                      title="مثال احترافي: مبنى كلية الهندسة - الطابق الثاني - مكتب 205 - وصف دقيق مع الطابق والغرفة/المكتب"
+                      {...register("locationAr")}
+                      className={`focus:border-primary focus:ring-primary ${
+                        errors.locationAr ? "border-destructive" : ""
+                      }`}
+                    />
+                    {errors.locationAr && (
+                      <p className="text-xs text-destructive">
+                        {errors.locationAr.message}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="locationEn" className="text-sm">
+                      In English <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="locationEn"
+                      placeholder="Example: Engineering College Building - 2nd Floor - Office 205"
+                      title="Professional Example: Engineering College Building - 2nd Floor - Office 205 - Precise description with floor and room/office"
+                      {...register("locationEn")}
+                      className={`focus:border-primary focus:ring-primary ${
+                        errors.locationEn ? "border-destructive" : ""
+                      }`}
+                    />
+                    {errors.locationEn && (
+                      <p className="text-xs text-destructive">
+                        {errors.locationEn.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="description" className="text-primary">
-                  وصف البلاغ <span className="text-destructive">*</span>
-                </Label>
-                <Textarea
-                  id="description"
-                  placeholder="أدخل وصف تفصيلي للبلاغ"
-                  rows={4}
-                  {...register("description")}
-                  className={`focus:border-primary focus:ring-primary ${
-                    errors.description ? "border-destructive" : ""
-                  }`}
-                />
-                {errors.description && (
-                  <p className="text-xs text-destructive">
-                    {errors.description.message}
-                  </p>
-                )}
+              {/* Description - Bilingual */}
+              <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <Label className="text-primary text-base font-semibold">
+                    وصف البلاغ / Description{" "}
+                    <span className="text-destructive">*</span>
+                  </Label>
+                  <span
+                    className="inline-flex items-center cursor-help"
+                    title="مثال: تم ملاحظة تسرب مياه من نظام التكييف في المكتب. يرجى إرسال فريق الصيانة للفحص والإصلاح. / Example: Water leakage observed from the air conditioning system in the office. Please send maintenance team for inspection and repair."
+                  >
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                  </span>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="descriptionAr" className="text-sm">
+                      بالعربية <span className="text-destructive">*</span>
+                    </Label>
+                    <Textarea
+                      id="descriptionAr"
+                      placeholder="مثال: تم ملاحظة تسرب مياه من نظام التكييف في المكتب. يرجى إرسال فريق الصيانة للفحص والإصلاح."
+                      title="مثال احترافي: وصف واضح ومفصل للمشكلة مع السياق - اذكر نوع المشكلة، موقعها، وتأثيرها"
+                      rows={4}
+                      {...register("descriptionAr")}
+                      className={`focus:border-primary focus:ring-primary ${
+                        errors.descriptionAr ? "border-destructive" : ""
+                      }`}
+                    />
+                    {errors.descriptionAr && (
+                      <p className="text-xs text-destructive">
+                        {errors.descriptionAr.message}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="descriptionEn" className="text-sm">
+                      In English <span className="text-destructive">*</span>
+                    </Label>
+                    <Textarea
+                      id="descriptionEn"
+                      placeholder="Example: Water leakage observed from the air conditioning system in the office. Please send maintenance team for inspection and repair."
+                      title="Professional Example: Clear and detailed description of the problem with context - mention problem type, location, and impact"
+                      rows={4}
+                      {...register("descriptionEn")}
+                      className={`focus:border-primary focus:ring-primary ${
+                        errors.descriptionEn ? "border-destructive" : ""
+                      }`}
+                    />
+                    {errors.descriptionEn && (
+                      <p className="text-xs text-destructive">
+                        {errors.descriptionEn.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="notes" className="text-primary">
-                  ملاحظات / تفاصيل إضافية
-                </Label>
-                <Textarea
-                  id="notes"
-                  placeholder="أدخل أي ملاحظات أو تفاصيل إضافية (اختياري)"
-                  rows={3}
-                  {...register("notes")}
-                  className="focus:border-primary focus:ring-primary"
-                />
+              {/* Notes - Bilingual */}
+              <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <Label className="text-primary text-base font-semibold">
+                    ملاحظات / تفاصيل إضافية / Notes / Additional Details
+                  </Label>
+                  <span
+                    className="inline-flex items-center cursor-help"
+                    title="مثال: المشكلة بدأت صباح اليوم وتزداد سوءاً. يرجى المعالجة العاجلة. / Example: The issue started this morning and is getting worse. Please handle urgently."
+                  >
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                  </span>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="notesAr" className="text-sm">
+                      بالعربية
+                    </Label>
+                    <Textarea
+                      id="notesAr"
+                      placeholder="مثال: المشكلة بدأت صباح اليوم وتزداد سوءاً. يرجى المعالجة العاجلة."
+                      title="مثال احترافي: معلومات إضافية مفيدة للمهندسين - التوقيت، الحالة الحالية، الأولوية"
+                      rows={3}
+                      {...register("notesAr")}
+                      className="focus:border-primary focus:ring-primary"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="notesEn" className="text-sm">
+                      In English
+                    </Label>
+                    <Textarea
+                      id="notesEn"
+                      placeholder="Example: The issue started this morning and is getting worse. Please handle urgently."
+                      title="Professional Example: Additional information useful for engineers - timing, current status, priority"
+                      rows={3}
+                      {...register("notesEn")}
+                      className="focus:border-primary focus:ring-primary"
+                    />
+                  </div>
+                </div>
               </div>
 
               <Button
@@ -260,14 +419,15 @@ export default function NewComplaint() {
               <CheckCircle2 className="h-5 w-5 text-green-500" />
               تم تقديم البلاغ بنجاح
             </DialogTitle>
-            <DialogDescription className="pt-4">
+            <div className="pt-4">
               <p className="text-lg font-semibold mb-2">
-                رقم البلاغ: <span className="text-primary">{complaintCode}</span>
+                رقم البلاغ:{" "}
+                <span className="text-primary">{complaintCode}</span>
               </p>
               <p className="text-sm text-muted-foreground">
                 تم استلام بلاغك بنجاح وسيتم متابعته من قبل الفريق المختص.
               </p>
-            </DialogDescription>
+            </div>
           </DialogHeader>
           <div className="flex gap-2 justify-end mt-4">
             <Button
@@ -293,4 +453,3 @@ export default function NewComplaint() {
     </div>
   );
 }
-

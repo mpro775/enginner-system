@@ -19,16 +19,28 @@ export class Complaint {
   complaintCode: string;
 
   @Prop({ required: true, trim: true })
-  reporterName: string;
+  reporterNameAr: string;
 
   @Prop({ required: true, trim: true })
-  location: string;
+  reporterNameEn: string;
 
   @Prop({ required: true, trim: true })
-  description: string;
+  locationAr: string;
+
+  @Prop({ required: true, trim: true })
+  locationEn: string;
+
+  @Prop({ required: true, trim: true })
+  descriptionAr: string;
+
+  @Prop({ required: true, trim: true })
+  descriptionEn: string;
 
   @Prop({ trim: true })
-  notes?: string;
+  notesAr?: string;
+
+  @Prop({ trim: true })
+  notesEn?: string;
 
   @Prop({
     required: true,
@@ -58,3 +70,7 @@ ComplaintSchema.index({ status: 1 });
 ComplaintSchema.index({ assignedEngineerId: 1 });
 ComplaintSchema.index({ maintenanceRequestId: 1 });
 ComplaintSchema.index({ createdAt: -1 });
+// Text indexes for bilingual search
+ComplaintSchema.index({ reporterNameAr: "text", reporterNameEn: "text" });
+ComplaintSchema.index({ locationAr: "text", locationEn: "text" });
+ComplaintSchema.index({ descriptionAr: "text", descriptionEn: "text" });
