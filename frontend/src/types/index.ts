@@ -284,9 +284,6 @@ export interface Complaint {
   id: string;
   complaintCode: string;
   reporterName: string;
-  department: string;
-  machine: string;
-  machineNumber?: string;
   location: string;
   description: string;
   notes?: string;
@@ -301,9 +298,6 @@ export interface Complaint {
 
 export interface CreateComplaintForm {
   reporterName: string;
-  department: string;
-  machine: string;
-  machineNumber?: string;
   location: string;
   description: string;
   notes?: string;

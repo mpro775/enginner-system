@@ -27,9 +27,6 @@ import {
 
 const complaintSchema = z.object({
   reporterName: z.string().min(2, "اسم مقدم البلاغ يجب أن يكون حرفين على الأقل"),
-  department: z.string().min(2, "القسم مطلوب"),
-  machine: z.string().min(2, "الآلة مطلوبة"),
-  machineNumber: z.string().optional(),
   location: z.string().min(2, "الموقع مطلوب"),
   description: z.string().min(10, "وصف البلاغ يجب أن يكون 10 أحرف على الأقل"),
   notes: z.string().optional(),
@@ -179,77 +176,23 @@ export default function NewComplaint() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="department" className="text-primary">
-                    القسم <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="department"
-                    placeholder="أدخل القسم"
-                    {...register("department")}
-                    className={`focus:border-primary focus:ring-primary ${
-                      errors.department ? "border-destructive" : ""
-                    }`}
-                  />
-                  {errors.department && (
-                    <p className="text-xs text-destructive">
-                      {errors.department.message}
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="machine" className="text-primary">
-                    الآلة <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="machine"
-                    placeholder="أدخل الآلة"
-                    {...register("machine")}
-                    className={`focus:border-primary focus:ring-primary ${
-                      errors.machine ? "border-destructive" : ""
-                    }`}
-                  />
-                  {errors.machine && (
-                    <p className="text-xs text-destructive">
-                      {errors.machine.message}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="machineNumber" className="text-primary">
-                    رقم الآلة
-                  </Label>
-                  <Input
-                    id="machineNumber"
-                    placeholder="أدخل رقم الآلة (اختياري)"
-                    {...register("machineNumber")}
-                    className="focus:border-primary focus:ring-primary"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="location" className="text-primary">
-                    الموقع <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="location"
-                    placeholder="أدخل الموقع"
-                    {...register("location")}
-                    className={`focus:border-primary focus:ring-primary ${
-                      errors.location ? "border-destructive" : ""
-                    }`}
-                  />
-                  {errors.location && (
-                    <p className="text-xs text-destructive">
-                      {errors.location.message}
-                    </p>
-                  )}
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="location" className="text-primary">
+                  الموقع <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="location"
+                  placeholder="أدخل الموقع"
+                  {...register("location")}
+                  className={`focus:border-primary focus:ring-primary ${
+                    errors.location ? "border-destructive" : ""
+                  }`}
+                />
+                {errors.location && (
+                  <p className="text-xs text-destructive">
+                    {errors.location.message}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">

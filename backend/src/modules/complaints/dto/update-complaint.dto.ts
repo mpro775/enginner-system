@@ -10,18 +10,6 @@ export class UpdateComplaintDto {
 
   @IsOptional()
   @IsString()
-  department?: string;
-
-  @IsOptional()
-  @IsString()
-  machine?: string;
-
-  @IsOptional()
-  @IsString()
-  machineNumber?: string;
-
-  @IsOptional()
-  @IsString()
   location?: string;
 
   @IsOptional()
@@ -32,5 +20,6 @@ export class UpdateComplaintDto {
   @IsString()
   notes?: string;
 }
+
 
 

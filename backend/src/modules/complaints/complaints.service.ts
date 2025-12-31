@@ -148,11 +148,19 @@ export class ComplaintsService {
       );
     }
 
+    // Check ownership: if assigned, only assigned engineer or admin can update
+    if (
+      complaint.assignedEngineerId &&
+      user.role !== Role.ADMIN &&
+      complaint.assignedEngineerId.toString() !== user.userId
+    ) {
+      throw new ForbiddenAccessException(
+        "Only the assigned engineer can update this complaint"
+      );
+    }
+
     const previousValues = {
       reporterName: complaint.reporterName,
-      department: complaint.department,
-      machine: complaint.machine,
-      machineNumber: complaint.machineNumber,
       location: complaint.location,
       description: complaint.description,
       notes: complaint.notes,
@@ -210,6 +218,17 @@ export class ComplaintsService {
       );
     }
 
+    // Check ownership: if already assigned, only assigned engineer or admin can reassign
+    if (
+      complaint.assignedEngineerId &&
+      user.role !== Role.ADMIN &&
+      complaint.assignedEngineerId.toString() !== user.userId
+    ) {
+      throw new ForbiddenAccessException(
+        "Only the assigned engineer can reassign this complaint"
+      );
+    }
+
     const previousEngineerId = complaint.assignedEngineerId?.toString();
 
     await this.complaintModel.findByIdAndUpdate(id, {
@@ -258,6 +277,17 @@ export class ComplaintsService {
     if (user.role !== Role.ENGINEER && user.role !== Role.ADMIN) {
       throw new ForbiddenAccessException(
         "Only engineers and admins can link maintenance requests"
+      );
+    }
+
+    // Check ownership: if assigned, only assigned engineer or admin can link
+    if (
+      complaint.assignedEngineerId &&
+      user.role !== Role.ADMIN &&
+      complaint.assignedEngineerId.toString() !== user.userId
+    ) {
+      throw new ForbiddenAccessException(
+        "Only the assigned engineer can link maintenance requests to this complaint"
       );
     }
 
@@ -326,6 +356,17 @@ export class ComplaintsService {
     if (user.role !== Role.ENGINEER && user.role !== Role.ADMIN) {
       throw new ForbiddenAccessException(
         "Only engineers and admins can change complaint status"
+      );
+    }
+
+    // Check ownership: if assigned, only assigned engineer or admin can change status
+    if (
+      complaint.assignedEngineerId &&
+      user.role !== Role.ADMIN &&
+      complaint.assignedEngineerId.toString() !== user.userId
+    ) {
+      throw new ForbiddenAccessException(
+        "Only the assigned engineer can change the status of this complaint"
       );
     }
 
@@ -400,8 +441,6 @@ export class ComplaintsService {
       filter.$or = [
         { complaintCode: { $regex: filterDto.search, $options: "i" } },
         { reporterName: { $regex: filterDto.search, $options: "i" } },
-        { department: { $regex: filterDto.search, $options: "i" } },
-        { machine: { $regex: filterDto.search, $options: "i" } },
         { location: { $regex: filterDto.search, $options: "i" } },
         { description: { $regex: filterDto.search, $options: "i" } },
       ];

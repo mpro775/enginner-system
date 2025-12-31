@@ -203,8 +203,6 @@ export class NotificationsService {
           id: complaint._id.toString(),
           complaintCode: complaint.complaintCode,
           reporterName: complaint.reporterName,
-          department: complaint.department,
-          machine: complaint.machine,
           location: complaint.location,
           status: complaint.status,
           createdAt: createdAt,

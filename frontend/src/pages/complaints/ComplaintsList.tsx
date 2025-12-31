@@ -7,7 +7,6 @@ import {
   Eye,
   Calendar,
   MapPin,
-  Building2,
   User,
   ChevronLeft,
   ChevronRight,
@@ -219,18 +218,10 @@ export default function ComplaintsList() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Building2 className="h-4 w-4 flex-shrink-0" />
-                          <span className="truncate">{complaint.department}</span>
-                        </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3 text-sm">
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <MapPin className="h-4 w-4 flex-shrink-0" />
                           <span className="truncate">{complaint.location}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                          <span className="truncate">{complaint.machine}</span>
                         </div>
                         {complaint.assignedEngineerId && (
                           <div className="flex items-center gap-2 text-muted-foreground">

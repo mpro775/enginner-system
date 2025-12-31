@@ -5,8 +5,6 @@ import {
   ArrowRight,
   Calendar,
   MapPin,
-  Building2,
-  AlertCircle,
   User,
   RefreshCw,
   Link as LinkIcon,
@@ -40,6 +38,7 @@ import { useAuthStore } from "@/store/auth";
 import { formatDateTime } from "@/lib/utils";
 import { ComplaintStatus, Role } from "@/types";
 import { ComplaintStatusBadge } from "./ComplaintsList";
+import { useToast } from "@/hooks/use-toast";
 import {
   locationsService,
   departmentsService,
@@ -53,6 +52,7 @@ export default function ComplaintDetails() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
+  const { toast } = useToast();
 
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
@@ -73,6 +73,17 @@ export default function ComplaintDetails() {
     queryFn: () => complaintsService.getById(id!),
     enabled: !!id,
   });
+
+  // Check if complaint is assigned to current user
+  const isAssignedToMe =
+    complaint?.assignedEngineerId &&
+    typeof complaint.assignedEngineerId === "object" &&
+    complaint.assignedEngineerId.id === user?.id;
+
+  // Can modify if admin or if engineer and assigned to them
+  const canModify =
+    isAdmin ||
+    (isEngineer && (isAssignedToMe || !complaint?.assignedEngineerId));
 
   const { data: engineers } = useQuery({
     queryKey: ["engineers"],
@@ -104,12 +115,6 @@ export default function ComplaintDetails() {
     enabled: showCreateRequestDialog,
   });
 
-  const { data: allMachines } = useQuery({
-    queryKey: ["allMachines"],
-    queryFn: () => machinesService.getAll(),
-    enabled: showCreateRequestDialog,
-  });
-
   const assignMutation = useMutation({
     mutationFn: (engineerId: string) =>
       complaintsService.assign(id!, engineerId),
@@ -117,6 +122,22 @@ export default function ComplaintDetails() {
       queryClient.invalidateQueries({ queryKey: ["complaint", id] });
       setShowAssignDialog(false);
       setSelectedEngineerId("");
+      toast({
+        title: "تم بنجاح",
+        description: "تم إسناد البلاغ بنجاح",
+        variant: "default",
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "فشل إسناد البلاغ. يرجى المحاولة مرة أخرى.";
+      toast({
+        title: "خطأ",
+        description: errorMessage,
+        variant: "destructive",
+      });
     },
   });
 
@@ -127,6 +148,22 @@ export default function ComplaintDetails() {
       queryClient.invalidateQueries({ queryKey: ["complaint", id] });
       setShowLinkDialog(false);
       setSelectedRequestId("");
+      toast({
+        title: "تم بنجاح",
+        description: "تم ربط البلاغ بطلب الصيانة بنجاح",
+        variant: "default",
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "فشل ربط البلاغ بطلب الصيانة. يرجى المحاولة مرة أخرى.";
+      toast({
+        title: "خطأ",
+        description: errorMessage,
+        variant: "destructive",
+      });
     },
   });
 
@@ -136,6 +173,22 @@ export default function ComplaintDetails() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["complaint", id] });
       setShowStatusDialog(false);
+      toast({
+        title: "تم بنجاح",
+        description: "تم تغيير حالة البلاغ بنجاح",
+        variant: "default",
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "فشل تغيير حالة البلاغ. يرجى المحاولة مرة أخرى.";
+      toast({
+        title: "خطأ",
+        description: errorMessage,
+        variant: "destructive",
+      });
     },
   });
 
@@ -159,6 +212,22 @@ export default function ComplaintDetails() {
         reasonText: complaint?.description || "",
         maintainAllComponents: true,
         selectedComponents: [],
+      });
+      toast({
+        title: "تم بنجاح",
+        description: "تم إنشاء طلب الصيانة وربطه بالبلاغ بنجاح",
+        variant: "default",
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "فشل إنشاء طلب الصيانة. يرجى المحاولة مرة أخرى.";
+      toast({
+        title: "خطأ",
+        description: errorMessage,
+        variant: "destructive",
       });
     },
   });
@@ -190,7 +259,7 @@ export default function ComplaintDetails() {
   // Auto-fill form when dialog opens and data is loaded
   useEffect(() => {
     if (!showCreateRequestDialog || !complaint) return;
-    if (!locations || !departments || !allSystems || !allMachines) return;
+    if (!locations) return;
 
     // Find location ID by name
     const foundLocation = locations.find(
@@ -198,37 +267,18 @@ export default function ComplaintDetails() {
     );
     const locationId = foundLocation?.id || "";
 
-    // Find department ID by name
-    const foundDepartment = departments.find(
-      (dept) => dept.name === complaint.department
-    );
-    const departmentId = foundDepartment?.id || "";
-
-    // Find machine ID by name (search in all machines)
-    const foundMachine = allMachines.find(
-      (machine) => machine.name === complaint.machine
-    );
-    const machineId = foundMachine?.id || "";
-    
-    // Get systemId from the found machine
-    const systemId = foundMachine?.systemId 
-      ? (typeof foundMachine.systemId === 'string' 
-          ? foundMachine.systemId 
-          : (foundMachine.systemId as any).id || foundMachine.systemId)
-      : "";
-
-    // Update form with found IDs
+    // Update form with found location ID and description
     setCreateRequestForm({
       maintenanceType: MaintenanceType.EMERGENCY,
       locationId,
-      departmentId,
-      systemId,
-      machineId,
+      departmentId: "",
+      systemId: "",
+      machineId: "",
       reasonText: complaint.description || "",
       maintainAllComponents: true,
       selectedComponents: [],
     });
-  }, [showCreateRequestDialog, complaint, locations, departments, allSystems, allMachines]);
+  }, [showCreateRequestDialog, complaint, locations]);
 
   if (isLoading) {
     return <PageLoader />;
@@ -329,23 +379,6 @@ export default function ComplaintDetails() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Building2 className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">القسم</p>
-                    <p className="font-medium">{complaint.department}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <AlertCircle className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">الآلة</p>
-                    <p className="font-medium">
-                      {complaint.machine}
-                      {complaint.machineNumber && ` (${complaint.machineNumber})`}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
                   <MapPin className="h-5 w-5 text-muted-foreground" />
                   <div>
                     <p className="text-sm text-muted-foreground">الموقع</p>
@@ -380,7 +413,9 @@ export default function ComplaintDetails() {
                 {complaint.updatedAt && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <RefreshCw className="h-4 w-4" />
-                    <span>آخر تحديث: {formatDateTime(complaint.updatedAt)}</span>
+                    <span>
+                      آخر تحديث: {formatDateTime(complaint.updatedAt)}
+                    </span>
                   </div>
                 )}
               </div>
@@ -405,6 +440,14 @@ export default function ComplaintDetails() {
                     </p>
                   </div>
                 </div>
+                {!isAssignedToMe && isEngineer && !isAdmin && (
+                  <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                      هذا البلاغ مسند لمهندس آخر. فقط المهندس المسند يمكنه
+                      تعديله.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -465,7 +508,7 @@ export default function ComplaintDetails() {
                   </Button>
                 )}
 
-                {complaint.assignedEngineerId && (
+                {complaint.assignedEngineerId && canModify && (
                   <Button
                     variant="outline"
                     className="w-full"
@@ -477,7 +520,7 @@ export default function ComplaintDetails() {
                   </Button>
                 )}
 
-                {!complaint.maintenanceRequestId && (
+                {!complaint.maintenanceRequestId && canModify && (
                   <>
                     <Button
                       variant="outline"
@@ -498,18 +541,20 @@ export default function ComplaintDetails() {
                   </>
                 )}
 
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => {
-                    setSelectedStatus(complaint.status);
-                    setShowStatusDialog(true);
-                  }}
-                  disabled={statusMutation.isPending}
-                >
-                  <CheckCircle2 className="h-4 w-4 ml-2" />
-                  تغيير الحالة
-                </Button>
+                {canModify && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      setSelectedStatus(complaint.status);
+                      setShowStatusDialog(true);
+                    }}
+                    disabled={statusMutation.isPending}
+                  >
+                    <CheckCircle2 className="h-4 w-4 ml-2" />
+                    تغيير الحالة
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -526,7 +571,10 @@ export default function ComplaintDetails() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Select value={selectedEngineerId} onValueChange={setSelectedEngineerId}>
+            <Select
+              value={selectedEngineerId}
+              onValueChange={setSelectedEngineerId}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="اختر المهندس" />
               </SelectTrigger>
@@ -566,7 +614,10 @@ export default function ComplaintDetails() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Select value={selectedRequestId} onValueChange={setSelectedRequestId}>
+            <Select
+              value={selectedRequestId}
+              onValueChange={setSelectedRequestId}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="اختر طلب الصيانة" />
               </SelectTrigger>
@@ -580,10 +631,7 @@ export default function ComplaintDetails() {
             </Select>
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowLinkDialog(false)}
-            >
+            <Button variant="outline" onClick={() => setShowLinkDialog(false)}>
               إلغاء
             </Button>
             <Button
@@ -744,7 +792,9 @@ export default function ComplaintDetails() {
                       type="radio"
                       id="maintainAll"
                       value="all"
-                      checked={createRequestForm.maintainAllComponents !== false}
+                      checked={
+                        createRequestForm.maintainAllComponents !== false
+                      }
                       onChange={() => {
                         setCreateRequestForm({
                           ...createRequestForm,
@@ -767,7 +817,9 @@ export default function ComplaintDetails() {
                       type="radio"
                       id="maintainSpecific"
                       value="specific"
-                      checked={createRequestForm.maintainAllComponents === false}
+                      checked={
+                        createRequestForm.maintainAllComponents === false
+                      }
                       onChange={() => {
                         setCreateRequestForm({
                           ...createRequestForm,
@@ -901,7 +953,9 @@ export default function ComplaintDetails() {
                 <SelectItem value={ComplaintStatus.IN_PROGRESS}>
                   قيد العمل
                 </SelectItem>
-                <SelectItem value={ComplaintStatus.RESOLVED}>تم الحل</SelectItem>
+                <SelectItem value={ComplaintStatus.RESOLVED}>
+                  تم الحل
+                </SelectItem>
                 <SelectItem value={ComplaintStatus.CLOSED}>مغلق</SelectItem>
               </SelectContent>
             </Select>
@@ -925,4 +979,3 @@ export default function ComplaintDetails() {
     </div>
   );
 }
-

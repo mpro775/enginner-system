@@ -22,15 +22,6 @@ export class Complaint {
   reporterName: string;
 
   @Prop({ required: true, trim: true })
-  department: string;
-
-  @Prop({ required: true, trim: true })
-  machine: string;
-
-  @Prop({ trim: true })
-  machineNumber?: string;
-
-  @Prop({ required: true, trim: true })
   location: string;
 
   @Prop({ required: true, trim: true })
@@ -67,5 +58,3 @@ ComplaintSchema.index({ status: 1 });
 ComplaintSchema.index({ assignedEngineerId: 1 });
 ComplaintSchema.index({ maintenanceRequestId: 1 });
 ComplaintSchema.index({ createdAt: -1 });
-
-

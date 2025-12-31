@@ -152,7 +152,7 @@ export default function RequestsList() {
         </div>
         {isEngineer && (
           <Button asChild className="w-full sm:w-auto">
-            <Link to="/requests/new">
+            <Link to="/app/requests/new">
               <Plus className="ml-2 h-4 w-4" />
               طلب جديد
             </Link>
@@ -280,7 +280,7 @@ export default function RequestsList() {
             <Card
               key={request.id}
               className="dark:border-border/50 hover:shadow-md dark:hover:shadow-primary/5 transition-all duration-200 cursor-pointer active:scale-[0.99]"
-              onClick={() => navigate(`/requests/${request.id}`)}
+              onClick={() => navigate(`/app/requests/${request.id}`)}
             >
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-3 mb-3">
@@ -331,7 +331,7 @@ export default function RequestsList() {
                     className="flex-1 justify-center text-primary hover:text-primary hover:bg-primary/10"
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/requests/${request.id}`);
+                      navigate(`/app/requests/${request.id}`);
                     }}
                   >
                     <Eye className="h-4 w-4 ml-2" />
@@ -346,7 +346,7 @@ export default function RequestsList() {
                         className="flex-1 justify-center text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/requests/${request.id}?edit=true`);
+                          navigate(`/app/requests/${request.id}?edit=true`);
                         }}
                       >
                         <Edit className="h-4 w-4 ml-2" />
@@ -396,7 +396,7 @@ export default function RequestsList() {
                     <tr
                       key={request.id}
                       className="hover:bg-muted/30 dark:hover:bg-muted/10 transition-colors cursor-pointer"
-                      onClick={() => navigate(`/requests/${request.id}`)}
+                      onClick={() => navigate(`/app/requests/${request.id}`)}
                     >
                       <td className="font-medium text-foreground">
                         {request.requestCode}
@@ -432,7 +432,7 @@ export default function RequestsList() {
                             className="text-primary hover:text-primary hover:bg-primary/10"
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigate(`/requests/${request.id}`);
+                              navigate(`/app/requests/${request.id}`);
                             }}
                           >
                             <Eye className="h-4 w-4 ml-1" />
@@ -447,7 +447,7 @@ export default function RequestsList() {
                                 className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate(`/requests/${request.id}?edit=true`);
+                                  navigate(`/app/requests/${request.id}?edit=true`);
                                 }}
                               >
                                 <Edit className="h-4 w-4 ml-1" />

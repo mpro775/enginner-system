@@ -10,18 +10,6 @@ export class CreateComplaintDto {
   reporterName: string;
 
   @IsString()
-  @IsNotEmpty({ message: "Department is required" })
-  department: string;
-
-  @IsString()
-  @IsNotEmpty({ message: "Machine is required" })
-  machine: string;
-
-  @IsOptional()
-  @IsString()
-  machineNumber?: string;
-
-  @IsString()
   @IsNotEmpty({ message: "Location is required" })
   location: string;
 
@@ -33,5 +21,6 @@ export class CreateComplaintDto {
   @IsString()
   notes?: string;
 }
+
 
 
