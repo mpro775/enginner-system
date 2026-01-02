@@ -149,7 +149,7 @@ export default function ScheduledTaskForm() {
     mutationFn: scheduledTasksService.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["scheduled-tasks"] });
-      navigate("/admin/scheduled-tasks");
+      navigate("/app/admin/scheduled-tasks");
     },
   });
 
@@ -158,7 +158,7 @@ export default function ScheduledTaskForm() {
       scheduledTasksService.update(id!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["scheduled-tasks"] });
-      navigate("/admin/scheduled-tasks");
+      navigate("/app/admin/scheduled-tasks");
     },
   });
 

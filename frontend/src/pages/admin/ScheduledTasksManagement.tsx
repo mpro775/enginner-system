@@ -153,7 +153,7 @@ export default function ScheduledTasksManagement() {
             إدارة الصيانة الوقائية المخصصة للمهندسين
           </p>
         </div>
-        <Button onClick={() => navigate("/admin/scheduled-tasks/new")}>
+        <Button onClick={() => navigate("/app/admin/scheduled-tasks/new")}>
           <Plus className="ml-2 h-4 w-4" />
           إضافة صيانة وقائية جديدة
         </Button>
@@ -295,7 +295,7 @@ export default function ScheduledTasksManagement() {
                       variant="outline"
                       size="sm"
                       onClick={() =>
-                        navigate(`/admin/scheduled-tasks/${task.id}/edit`)
+                        navigate(`/app/admin/scheduled-tasks/${task.id}/edit`)
                       }
                     >
                       <Edit className="h-4 w-4" />
