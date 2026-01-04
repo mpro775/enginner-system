@@ -38,8 +38,8 @@ export default function Home() {
           theme === "light"
             ? "الوضع الفاتح"
             : theme === "dark"
-            ? "الوضع الداكن"
-            : "تلقائي (النظام)"
+              ? "الوضع الداكن"
+              : "تلقائي (النظام)"
         }
       >
         {getThemeIcon()}
@@ -85,7 +85,7 @@ export default function Home() {
             size="lg"
           >
             <AlertCircle className="ml-2 h-6 w-6 animate-pulse" />
-            تقديم بلاغ
+            تقديم بلاغ - Maint. Ntce
           </Button>
 
           <Button
