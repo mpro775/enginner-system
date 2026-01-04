@@ -14,6 +14,8 @@ import {
 import { User, UserDocument } from "../users/schemas/user.schema";
 import { ReportFilterDto } from "./dto/report-filter.dto";
 import { StatisticsService } from "../statistics/statistics.service";
+import { EntityNotFoundException } from "../../common/exceptions/business.exception";
+import { RequestStatus, MaintenanceType } from "../../common/enums";
 
 // Convert logo to base64 for embedding in HTML
 function convertLogoToBase64(): string {
@@ -139,6 +141,7 @@ function generateReportContent(data: RequestReportData[], stats: any): string {
             <th>النوع</th>
             <th>المهندس</th>
             <th>الكود</th>
+            <th>سبب الطلب</th>
           </tr>
         </thead>
         <tbody>
@@ -181,6 +184,7 @@ function generateReportContent(data: RequestReportData[], stats: any): string {
         <td>${escapeHtml(typeText)}</td>
         <td>${escapeHtml(row.engineerName || "N/A")}</td>
         <td>${escapeHtml(row.requestCode || "N/A")}</td>
+        <td>${escapeHtml(row.reasonText || "-")}</td>
       </tr>
     `;
   });
@@ -195,6 +199,191 @@ function generateReportContent(data: RequestReportData[], stats: any): string {
   }
 
   html += `
+    </div>
+  `;
+
+  return html;
+}
+
+// Generate HTML content for single request details
+function generateSingleRequestContent(request: MaintenanceRequestDocument): string {
+  let html = "";
+
+  // Status translation map
+  const statusMap: Record<string, string> = {
+    in_progress: "قيد التنفيذ",
+    completed: "مكتملة",
+    stopped: "متوقفة",
+    pending: "معلقة",
+  };
+
+  // Maintenance type translation map
+  const typeMap: Record<string, string> = {
+    emergency: "طوارئ",
+    preventive: "وقائية",
+  };
+
+  const statusText = statusMap[request.status] || request.status;
+  const typeText = typeMap[request.maintenanceType] || request.maintenanceType;
+  
+  const engineer = request.engineerId as any;
+  const consultant = request.consultantId as any;
+  const healthSafety = request.healthSafetySupervisorId as any;
+  const location = request.locationId as any;
+  const department = request.departmentId as any;
+  const system = request.systemId as any;
+  const machine = request.machineId as any;
+
+  html += `
+    <div class="content-section">
+      <h2 class="section-title">تفاصيل طلب الصيانة</h2>
+      
+      <div style="margin-bottom: 20px;">
+        <table class="data-table" style="width: 100%;">
+          <tr>
+            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">كود الطلب</td>
+            <td>${escapeHtml(request.requestCode)}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">النوع</td>
+            <td>${escapeHtml(typeText)}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">الحالة</td>
+            <td>${escapeHtml(statusText)}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ الفتح</td>
+            <td>${request.openedAt ? formatDateEnglish(new Date(request.openedAt)) : "-"}</td>
+          </tr>
+          ${request.closedAt ? `
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ الإغلاق</td>
+            <td>${formatDateEnglish(new Date(request.closedAt))}</td>
+          </tr>
+          ` : ""}
+          ${request.stoppedAt ? `
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ التوقف</td>
+            <td>${formatDateEnglish(new Date(request.stoppedAt))}</td>
+          </tr>
+          ` : ""}
+        </table>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">معلومات المهندسين</h3>
+        <table class="data-table" style="width: 100%;">
+          <tr>
+            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">المهندس</td>
+            <td>${escapeHtml(engineer?.name || "-")}</td>
+          </tr>
+          ${consultant ? `
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">المستشار</td>
+            <td>${escapeHtml(consultant.name || "-")}</td>
+          </tr>
+          ` : ""}
+          ${healthSafety ? `
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">مشرف الصحة والسلامة</td>
+            <td>${escapeHtml(healthSafety.name || "-")}</td>
+          </tr>
+          ` : ""}
+        </table>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">معلومات الموقع والآلة</h3>
+        <table class="data-table" style="width: 100%;">
+          <tr>
+            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">الموقع</td>
+            <td>${escapeHtml(location?.name || "-")}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">القسم</td>
+            <td>${escapeHtml(department?.name || "-")}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">النظام</td>
+            <td>${escapeHtml(system?.name || "-")}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">الآلة</td>
+            <td>${escapeHtml(machine?.name || "-")}</td>
+          </tr>
+          ${request.machineNumber ? `
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">رقم الآلة</td>
+            <td>${escapeHtml(request.machineNumber)}</td>
+          </tr>
+          ` : ""}
+        </table>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">سبب طلب الصيانة</h3>
+        <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; min-height: 40px;">
+          ${escapeHtml(request.reasonText || "-")}
+        </div>
+      </div>
+
+      ${request.maintainAllComponents !== undefined || request.selectedComponents?.length ? `
+      <div style="margin-bottom: 20px;">
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">معلومات المكونات</h3>
+        <table class="data-table" style="width: 100%;">
+          <tr>
+            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">صيانة جميع المكونات</td>
+            <td>${request.maintainAllComponents ? "نعم" : "لا"}</td>
+          </tr>
+          ${request.selectedComponents?.length ? `
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">المكونات المحددة</td>
+            <td>${escapeHtml(request.selectedComponents.join(", "))}</td>
+          </tr>
+          ` : ""}
+        </table>
+      </div>
+      ` : ""}
+
+      ${request.engineerNotes || request.consultantNotes || request.healthSafetyNotes ? `
+      <div style="margin-bottom: 20px;">
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">الملاحظات</h3>
+        ${request.engineerNotes ? `
+        <div style="margin-bottom: 10px;">
+          <strong>ملاحظات المهندس:</strong>
+          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px;">
+            ${escapeHtml(request.engineerNotes)}
+          </div>
+        </div>
+        ` : ""}
+        ${request.consultantNotes ? `
+        <div style="margin-bottom: 10px;">
+          <strong>ملاحظات المستشار:</strong>
+          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px;">
+            ${escapeHtml(request.consultantNotes)}
+          </div>
+        </div>
+        ` : ""}
+        ${request.healthSafetyNotes ? `
+        <div style="margin-bottom: 10px;">
+          <strong>ملاحظات الصحة والسلامة:</strong>
+          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px;">
+            ${escapeHtml(request.healthSafetyNotes)}
+          </div>
+        </div>
+        ` : ""}
+      </div>
+      ` : ""}
+
+      ${request.stopReason ? `
+      <div style="margin-bottom: 20px;">
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">سبب التوقف</h3>
+        <div style="padding: 10px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
+          ${escapeHtml(request.stopReason)}
+        </div>
+      </div>
+      ` : ""}
     </div>
   `;
 
@@ -683,5 +872,173 @@ export class ReportsService {
     }
 
     return matchStage;
+  }
+
+  async getSingleRequestDetails(
+    requestId: string
+  ): Promise<MaintenanceRequestDocument> {
+    const request = await this.requestModel
+      .findById(requestId)
+      .populate("engineerId", "name email")
+      .populate("consultantId", "name email")
+      .populate("healthSafetySupervisorId", "name email")
+      .populate("locationId", "name")
+      .populate("departmentId", "name")
+      .populate("systemId", "name")
+      .populate("machineId", "name components description")
+      .exec();
+
+    if (!request) {
+      throw new EntityNotFoundException("Maintenance Request", requestId);
+    }
+
+    return request as MaintenanceRequestDocument;
+  }
+
+  async generateSingleRequestPdfBuffer(
+    requestId: string
+  ): Promise<Buffer> {
+    const request = await this.getSingleRequestDetails(requestId);
+
+    // 1. تجهيز الصور والبيانات
+    const logoBase64 = convertLogoToBase64();
+    const reportNumber = `REQ-${request.requestCode}`;
+    const reportDate = formatDateEnglish(new Date());
+    const reportContent = generateSingleRequestContent(request);
+
+    // 2. تصميم الهيدر (HTML + CSS مدمج)
+    const headerTemplate = `
+    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: flex-start; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
+        
+        <div style="text-align: right; width: 30%;">
+            <p style="margin: 2px 0; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
+            <p style="margin: 2px 0; font-weight: bold; color: #0f5b7a;">جامعة الملك سعود</p>
+            <p style="margin: 2px 0;">إدارة التشغيل والصيانة</p>
+            <p style="margin: 2px 0;">بكليات الجامعة - فرع المزاحمية</p>
+        </div>
+
+        <div style="text-align: center; width: 30%;">
+            <p style="margin: 0 0 5px 0; font-size: 12px; color: #0f5b7a;">بسم الله الرحمن الرحيم</p>
+            <img src="${logoBase64}" style="width: 100px; height: auto;" />
+        </div>
+
+        <div style="text-align: left; width: 30%; padding-top: 15px; direction: rtl;">
+            <p style="margin: 2px 0;"><strong>رقم التقرير:</strong> ${reportNumber}</p>
+            <p style="margin: 2px 0;"><strong>التاريخ:</strong> ${reportDate}</p>
+        </div>
+    </div>`;
+
+    // 3. تصميم الفوتر (HTML + CSS مدمج)
+    const footerTemplate = `
+    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 8px; padding: 0 40px; border-top: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center; direction: rtl;">
+        
+        <div style="text-align: right;">
+            <p style="margin: 1px 0;">المملكة العربية السعودية</p>
+            <p style="margin: 1px 0;">ص.ب 2454 الرياض 11451</p>
+        </div>
+
+        <div style="text-align: center;">
+            <p style="margin: 1px 0;">العنوان الوطني</p>
+            <p style="margin: 1px 0;">RGSA8707</p>
+        </div>
+
+        <div style="text-align: center;">
+             <p style="margin: 1px 0;">هاتف +966 11 4686275</p>
+        </div>
+
+        <div style="text-align: left; direction: ltr;">
+            <p style="margin: 1px 0;">www.ksu.edu.sa</p>
+            <p style="margin: 1px 0;">hm@ksu.edu.sa</p>
+        </div>
+    </div>`;
+
+    // Read HTML template
+    const templatePath = path.join(
+      __dirname,
+      "templates",
+      "report-template.html"
+    );
+    if (!fs.existsSync(templatePath)) {
+      throw new Error(`Template file not found at: ${templatePath}`);
+    }
+    let htmlContent = fs.readFileSync(templatePath, "utf-8");
+    htmlContent = htmlContent.replace(/{{{report_content}}}/g, reportContent);
+
+    // إعدادات المتصفح المحسنة للدوكر
+    const browser = await puppeteer.launch({
+      headless: true,
+      executablePath:
+        process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
+      dumpio: false,
+      env: {
+        ...process.env,
+        DBUS_SESSION_BUS_ADDRESS: "autolaunch:",
+      },
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--font-render-hinting=none",
+        "--disable-web-security",
+        "--disable-software-rasterizer",
+        "--disable-gl-drawing-for-tests",
+        "--use-gl=swiftshader",
+        "--mute-audio",
+        "--no-first-run",
+        "--disable-extensions",
+      ],
+    });
+
+    try {
+      const page = await browser.newPage();
+
+      // ضبط المتصفح ليعرض محتوى الطباعة
+      await page.emulateMediaType("print");
+
+      await page.setContent(htmlContent, {
+        waitUntil: ["load", "networkidle0"],
+        timeout: 60000,
+      });
+
+      // التوليد مع الهيدر والفوتر
+      const pdfBuffer = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        displayHeaderFooter: true,
+        headerTemplate: headerTemplate,
+        footerTemplate: footerTemplate,
+        margin: {
+          top: "160px",
+          bottom: "80px",
+          right: "20px",
+          left: "20px",
+        },
+      });
+
+      // Verify PDF buffer is valid
+      if (!pdfBuffer || pdfBuffer.length === 0) {
+        throw new Error("Generated PDF buffer is empty or invalid");
+      }
+
+      // Check if buffer starts with PDF header
+      const pdfHeader = String.fromCharCode(
+        pdfBuffer[0],
+        pdfBuffer[1],
+        pdfBuffer[2],
+        pdfBuffer[3]
+      );
+      if (pdfHeader !== "%PDF") {
+        console.error("Invalid PDF format, header:", pdfHeader);
+        throw new Error("Generated PDF is not in valid PDF format");
+      }
+
+      return Buffer.from(pdfBuffer);
+    } catch (e) {
+      console.error("Puppeteer Error:", e);
+      throw e;
+    } finally {
+      if (browser) await browser.close();
+    }
   }
 }

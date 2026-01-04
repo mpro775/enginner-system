@@ -142,4 +142,40 @@ export const reportsService = {
     );
     return response.data.data;
   },
+
+  async downloadSingleRequestReport(requestId: string): Promise<void> {
+    try {
+      const response = await api.get(`/reports/requests/${requestId}`, {
+        params: { format: "pdf" },
+        responseType: "blob",
+      });
+
+      // Check if response is actually a blob (not an error JSON)
+      if (response.data instanceof Blob) {
+        const blob = response.data;
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+
+        const filename = `maintenance-request-${requestId}-${new Date().toISOString().split("T")[0]}.pdf`;
+        link.setAttribute("download", filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      } else {
+        // If response is not a blob, it might be an error JSON
+        const text = await response.data.text();
+        try {
+          const errorData = JSON.parse(text);
+          throw new Error(errorData.message || "Failed to download report");
+        } catch (e) {
+          throw new Error("Failed to download report: Invalid response format");
+        }
+      }
+    } catch (error: any) {
+      console.error("Error downloading single request report:", error);
+      throw error;
+    }
+  },
 };

@@ -13,6 +13,48 @@ import { Role } from "../../common/enums";
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
+  @Get("requests/:id")
+  async getSingleRequestReport(
+    @Param("id") id: string,
+    @Res() res: Response,
+    @Query("format") format?: string
+  ) {
+    try {
+      const reportFormat = format || "pdf";
+
+      if (reportFormat === "pdf") {
+        const buffer = await this.reportsService.generateSingleRequestPdfBuffer(id);
+
+        res.set({
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename=maintenance-request-${id}-${Date.now()}.pdf`,
+          "Content-Length": buffer.length.toString(),
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        });
+
+        res.end(buffer);
+        return;
+      }
+
+      // JSON Response
+      const request = await this.reportsService.getSingleRequestDetails(id);
+      res.json({
+        success: true,
+        statusCode: 200,
+        message: "Request details retrieved successfully",
+        data: request,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Single Request Report Error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Failed to generate report" });
+      }
+    }
+  }
+
   @Get("requests")
   async getRequestsReport(
     @Query() filter: ReportFilterDto,

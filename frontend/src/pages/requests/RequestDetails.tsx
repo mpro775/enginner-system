@@ -20,6 +20,7 @@ import {
   Edit,
   RefreshCw,
   AlertCircle,
+  Printer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,7 @@ import {
 } from "@/components/shared/StatusBadge";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
 import { requestsService } from "@/services/requests";
+import { reportsService } from "@/services/reports";
 import {
   locationsService,
   departmentsService,
@@ -87,6 +89,7 @@ export default function RequestDetails() {
   const [stopReason, setStopReason] = useState("");
   const [consultantNotes, setConsultantNotes] = useState("");
   const [healthSafetyNotes, setHealthSafetyNotes] = useState("");
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const {
     register,
@@ -275,6 +278,20 @@ export default function RequestDetails() {
     queryClient.invalidateQueries({ queryKey: ["request", id] });
   };
 
+  const handlePrint = async () => {
+    if (!id || downloadingPdf) return;
+
+    try {
+      setDownloadingPdf(true);
+      await reportsService.downloadSingleRequestReport(id);
+    } catch (error) {
+      console.error("Error downloading PDF:", error);
+      alert("حدث خطأ أثناء تحميل التقرير");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   const handleEdit = () => {
     if (request) {
       reset({
@@ -333,6 +350,18 @@ export default function RequestDetails() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={handlePrint}
+            disabled={downloadingPdf}
+          >
+            {downloadingPdf ? (
+              <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Printer className="ml-2 h-4 w-4" />
+            )}
+            {downloadingPdf ? "جاري التحميل..." : "طباعة التقرير"}
+          </Button>
           <StatusBadge status={request.status} />
           <MaintenanceTypeBadge type={request.maintenanceType} />
         </div>
