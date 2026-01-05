@@ -337,21 +337,45 @@ export default function RequestDetails() {
 
   return (
     <div className="space-y-6 animate-in">
-      <div className="flex items-center justify-between">
+      {/* Header - Responsive */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
             <ArrowRight className="h-5 w-5" />
           </Button>
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">
-              {request.requestCode}
-            </h2>
-            <p className="text-muted-foreground">تفاصيل طلب الصيانة</p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight truncate">
+                {request.requestCode}
+              </h2>
+              {/* Badges inline with title on mobile */}
+              <div className="flex items-center gap-2 sm:hidden">
+                <StatusBadge status={request.status} />
+                <MaintenanceTypeBadge type={request.maintenanceType} />
+              </div>
+            </div>
+            <p className="text-muted-foreground text-sm sm:text-base">تفاصيل طلب الصيانة</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 justify-end">
+          {/* Print button - icon only on mobile */}
           <Button
             variant="outline"
+            size="icon"
+            className="sm:hidden"
+            onClick={handlePrint}
+            disabled={downloadingPdf}
+          >
+            {downloadingPdf ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Printer className="h-4 w-4" />
+            )}
+          </Button>
+          {/* Print button - full on desktop */}
+          <Button
+            variant="outline"
+            className="hidden sm:inline-flex"
             onClick={handlePrint}
             disabled={downloadingPdf}
           >
@@ -362,8 +386,11 @@ export default function RequestDetails() {
             )}
             {downloadingPdf ? "جاري التحميل..." : "طباعة التقرير"}
           </Button>
-          <StatusBadge status={request.status} />
-          <MaintenanceTypeBadge type={request.maintenanceType} />
+          {/* Badges hidden on mobile (shown inline with title) */}
+          <div className="hidden sm:flex sm:items-center sm:gap-3">
+            <StatusBadge status={request.status} />
+            <MaintenanceTypeBadge type={request.maintenanceType} />
+          </div>
         </div>
       </div>
 
@@ -428,7 +455,7 @@ export default function RequestDetails() {
                 ) : (
                   <div>
                     {request.selectedComponents &&
-                    request.selectedComponents.length > 0 ? (
+                      request.selectedComponents.length > 0 ? (
                       <ul className="list-disc list-inside space-y-1">
                         {request.selectedComponents.map((component, index) => (
                           <li key={index} className="font-medium">
@@ -537,10 +564,9 @@ export default function RequestDetails() {
                     size="sm"
                     onClick={() =>
                       navigate(
-                        `/app/complaints/${
-                          typeof request.complaintId === "string"
-                            ? request.complaintId
-                            : (request.complaintId as any).id
+                        `/app/complaints/${typeof request.complaintId === "string"
+                          ? request.complaintId
+                          : (request.complaintId as any).id
                         }`
                       )
                     }
@@ -559,82 +585,82 @@ export default function RequestDetails() {
             canComplete ||
             canAddNote ||
             canAddHealthSafetyNote) && (
-            <Card>
-              <CardHeader>
-                <CardTitle>الإجراءات المتاحة</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-3">
-                  {canEdit && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>الإجراءات المتاحة</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-3">
+                    {canEdit && (
+                      <Button
+                        variant="outline"
+                        onClick={handleEdit}
+                        className="flex-1"
+                      >
+                        <Edit className="ml-2 h-4 w-4" />
+                        تعديل الطلب
+                      </Button>
+                    )}
+                    {canComplete && (
+                      <Button
+                        onClick={() => completeMutation.mutate()}
+                        disabled={completeMutation.isPending}
+                        className="flex-1"
+                      >
+                        {completeMutation.isPending ? (
+                          <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="ml-2 h-4 w-4" />
+                        )}
+                        إكمال الطلب
+                      </Button>
+                    )}
+                    {canStop && (
+                      <Button
+                        variant="destructive"
+                        onClick={handleStop}
+                        className="flex-1"
+                      >
+                        <StopCircle className="ml-2 h-4 w-4" />
+                        إيقاف الطلب
+                      </Button>
+                    )}
+                    {canAddNote && (
+                      <Button
+                        variant="outline"
+                        onClick={handleAddNote}
+                        className="flex-1"
+                      >
+                        <MessageSquarePlus className="ml-2 h-4 w-4" />
+                        {request.consultantNotes
+                          ? "تعديل الملاحظة"
+                          : "إضافة ملاحظة"}
+                      </Button>
+                    )}
+                    {canAddHealthSafetyNote && (
+                      <Button
+                        variant="outline"
+                        onClick={handleAddHealthSafetyNote}
+                        className="flex-1"
+                      >
+                        <MessageSquarePlus className="ml-2 h-4 w-4" />
+                        {request.healthSafetyNotes
+                          ? "تعديل ملاحظة الصحة والسلامة"
+                          : "إضافة ملاحظة الصحة والسلامة"}
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
-                      onClick={handleEdit}
+                      onClick={handleRefresh}
                       className="flex-1"
                     >
-                      <Edit className="ml-2 h-4 w-4" />
-                      تعديل الطلب
+                      <RefreshCw className="ml-2 h-4 w-4" />
+                      تحديث
                     </Button>
-                  )}
-                  {canComplete && (
-                    <Button
-                      onClick={() => completeMutation.mutate()}
-                      disabled={completeMutation.isPending}
-                      className="flex-1"
-                    >
-                      {completeMutation.isPending ? (
-                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="ml-2 h-4 w-4" />
-                      )}
-                      إكمال الطلب
-                    </Button>
-                  )}
-                  {canStop && (
-                    <Button
-                      variant="destructive"
-                      onClick={handleStop}
-                      className="flex-1"
-                    >
-                      <StopCircle className="ml-2 h-4 w-4" />
-                      إيقاف الطلب
-                    </Button>
-                  )}
-                  {canAddNote && (
-                    <Button
-                      variant="outline"
-                      onClick={handleAddNote}
-                      className="flex-1"
-                    >
-                      <MessageSquarePlus className="ml-2 h-4 w-4" />
-                      {request.consultantNotes
-                        ? "تعديل الملاحظة"
-                        : "إضافة ملاحظة"}
-                    </Button>
-                  )}
-                  {canAddHealthSafetyNote && (
-                    <Button
-                      variant="outline"
-                      onClick={handleAddHealthSafetyNote}
-                      className="flex-1"
-                    >
-                      <MessageSquarePlus className="ml-2 h-4 w-4" />
-                      {request.healthSafetyNotes
-                        ? "تعديل ملاحظة الصحة والسلامة"
-                        : "إضافة ملاحظة الصحة والسلامة"}
-                    </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    onClick={handleRefresh}
-                    className="flex-1"
-                  >
-                    <RefreshCw className="ml-2 h-4 w-4" />
-                    تحديث
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
         </div>
 
         {/* Sidebar */}
@@ -1005,22 +1031,22 @@ export default function RequestDetails() {
                         !watchSystemId
                           ? "اختر النظام أولاً"
                           : isLoadingMachines
-                          ? "جاري التحميل..."
-                          : isMachinesError
-                          ? "حدث خطأ في التحميل"
-                          : machines && machines.length === 0
-                          ? "لا توجد آلات متاحة"
-                          : "اختر الآلة"
+                            ? "جاري التحميل..."
+                            : isMachinesError
+                              ? "حدث خطأ في التحميل"
+                              : machines && machines.length === 0
+                                ? "لا توجد آلات متاحة"
+                                : "اختر الآلة"
                       }
                     />
                   </SelectTrigger>
                   <SelectContent>
                     {machines && machines.length > 0
                       ? machines.map((machine) => (
-                          <SelectItem key={machine.id} value={machine.id}>
-                            {machine.name}
-                          </SelectItem>
-                        ))
+                        <SelectItem key={machine.id} value={machine.id}>
+                          {machine.name}
+                        </SelectItem>
+                      ))
                       : null}
                   </SelectContent>
                 </Select>
