@@ -121,9 +121,10 @@ export default function NewRequest() {
 
   const createMutation = useMutation({
     mutationFn: requestsService.create,
-    onSuccess: () => {
+    onSuccess: (newRequest) => {
       queryClient.invalidateQueries({ queryKey: ["requests"] });
-      navigate("/requests");
+      // Navigate to the newly created request details page
+      navigate(`/app/requests/${newRequest.id}`);
     },
   });
 
@@ -232,11 +233,10 @@ export default function NewRequest() {
                 return (
                   <div
                     key={task.id}
-                    className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                      isOverdue
-                        ? "border-destructive bg-destructive/5 hover:bg-destructive/10"
-                        : "border-border hover:bg-accent"
-                    }`}
+                    className={`p-4 border rounded-lg cursor-pointer transition-colors ${isOverdue
+                      ? "border-destructive bg-destructive/5 hover:bg-destructive/10"
+                      : "border-border hover:bg-accent"
+                      }`}
                     onClick={() => handleTaskSelect(task)}
                   >
                     <div className="flex items-start justify-between">
@@ -427,22 +427,22 @@ export default function NewRequest() {
                         !watchSystemId
                           ? "اختر النظام أولاً"
                           : isLoadingMachines
-                          ? "جاري التحميل..."
-                          : isMachinesError
-                          ? "حدث خطأ في التحميل"
-                          : machines && machines.length === 0
-                          ? "لا توجد آلات متاحة"
-                          : "اختر الآلة"
+                            ? "جاري التحميل..."
+                            : isMachinesError
+                              ? "حدث خطأ في التحميل"
+                              : machines && machines.length === 0
+                                ? "لا توجد آلات متاحة"
+                                : "اختر الآلة"
                       }
                     />
                   </SelectTrigger>
                   <SelectContent>
                     {machines && machines.length > 0
                       ? machines.map((machine) => (
-                          <SelectItem key={machine.id} value={machine.id}>
-                            {machine.name}
-                          </SelectItem>
-                        ))
+                        <SelectItem key={machine.id} value={machine.id}>
+                          {machine.name}
+                        </SelectItem>
+                      ))
                       : null}
                   </SelectContent>
                 </Select>
