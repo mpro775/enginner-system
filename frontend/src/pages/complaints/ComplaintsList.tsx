@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
@@ -11,6 +11,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
+  Trash2,
+  MoreVertical,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,11 +25,29 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
 import { complaintsService } from "@/services/complaints";
 import { formatDate } from "@/lib/utils";
-import { ComplaintStatus, Complaint } from "@/types";
+import { ComplaintStatus, Complaint, Role } from "@/types";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/store/auth";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2 } from "lucide-react";
 
 const getComplaintStatusLabel = (status: ComplaintStatus): string => {
   const labels: Record<ComplaintStatus, string> = {
@@ -63,6 +84,10 @@ export function ComplaintStatusBadge({ status }: { status: ComplaintStatus }) {
 
 export default function ComplaintsList() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const { toast } = useToast();
+  const isAdmin = user?.role === Role.ADMIN;
 
   const [filters, setFilters] = useState({
     page: 1,
@@ -70,6 +95,9 @@ export default function ComplaintsList() {
     status: "all" as ComplaintStatus | "all",
     search: "",
   });
+
+  const [softDeleteDialog, setSoftDeleteDialog] = useState<Complaint | null>(null);
+  const [hardDeleteDialog, setHardDeleteDialog] = useState<Complaint | null>(null);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["complaints", filters],
@@ -79,6 +107,24 @@ export default function ComplaintsList() {
         status: filters.status === "all" ? undefined : filters.status,
         search: filters.search || undefined,
       }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: complaintsService.softDelete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["complaints"] });
+      setSoftDeleteDialog(null);
+      toast({ title: "تم نقل البلاغ إلى سلة المهملات بنجاح" });
+    },
+  });
+
+  const hardDeleteMutation = useMutation({
+    mutationFn: complaintsService.hardDelete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["complaints"] });
+      setHardDeleteDialog(null);
+      toast({ title: "تم حذف البلاغ نهائياً", variant: "destructive" });
+    },
   });
 
   if (isLoading) {
@@ -269,6 +315,41 @@ export default function ComplaintsList() {
                         <Eye className="h-4 w-4 ml-2" />
                         عرض التفاصيل
                       </Button>
+                      {isAdmin && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSoftDeleteDialog(complaint);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4 ml-2" />
+                              نقل إلى سلة المهملات
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setHardDeleteDialog(complaint);
+                              }}
+                            >
+                              <AlertTriangle className="h-4 w-4 ml-2" />
+                              حذف نهائي
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -311,6 +392,75 @@ export default function ComplaintsList() {
           )}
         </>
       )}
+
+      {/* Soft Delete Dialog */}
+      <Dialog open={!!softDeleteDialog} onOpenChange={() => setSoftDeleteDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              تأكيد النقل إلى سلة المهملات
+            </DialogTitle>
+            <DialogDescription>
+              هل أنت متأكد من نقل البلاغ "{softDeleteDialog?.complaintCode}" إلى سلة المهملات؟ يمكنك استعادته لاحقاً.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSoftDeleteDialog(null)}>
+              إلغاء
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                if (softDeleteDialog) {
+                  deleteMutation.mutate(softDeleteDialog.id);
+                }
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending && (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              )}
+              نقل إلى سلة المهملات
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hard Delete Dialog */}
+      <Dialog open={!!hardDeleteDialog} onOpenChange={() => setHardDeleteDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              تأكيد الحذف النهائي
+            </DialogTitle>
+            <DialogDescription>
+              هل أنت متأكد من الحذف النهائي للبلاغ "{hardDeleteDialog?.complaintCode}"؟ هذا الإجراء لا يمكن
+              التراجع عنه!
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHardDeleteDialog(null)}>
+              إلغاء
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (hardDeleteDialog) {
+                  hardDeleteMutation.mutate(hardDeleteDialog.id);
+                }
+              }}
+              disabled={hardDeleteMutation.isPending}
+            >
+              {hardDeleteMutation.isPending && (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              )}
+              حذف نهائي
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

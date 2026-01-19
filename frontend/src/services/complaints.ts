@@ -69,7 +69,30 @@ export const complaintsService = {
     );
     return response.data.data;
   },
+
+  async softDelete(id: string): Promise<void> {
+    await api.delete(`/complaints/${id}`);
+  },
+
+  async hardDelete(id: string): Promise<void> {
+    await api.delete(`/complaints/${id}/hard`);
+  },
+
+  async restore(id: string): Promise<Complaint> {
+    const response = await api.post<ApiResponse<Complaint>>(`/complaints/${id}/restore`);
+    return response.data.data;
+  },
+
+  async getDeleted(filters?: ComplaintFilters): Promise<ComplaintsResponse> {
+    const response = await api.get<ApiResponse<Complaint[]> & { meta: PaginationMeta }>(
+      '/complaints/trash',
+      { params: filters }
+    );
+    return { data: response.data.data, meta: response.data.meta! };
+  },
 };
+
+
 
 
 

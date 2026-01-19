@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -14,6 +14,10 @@ import {
   ChevronRight,
   Clock,
   Edit,
+  Trash2,
+  MoreVertical,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,11 +29,27 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   StatusBadge,
   MaintenanceTypeBadge,
 } from "@/components/shared/StatusBadge";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
 import { requestsService } from "@/services/requests";
+import { useToast } from "@/hooks/use-toast";
 import {
   locationsService,
   departmentsService,
@@ -45,10 +65,15 @@ import {
 
 export default function RequestsList() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuthStore();
+  const { toast } = useToast();
   const isEngineer = user?.role === Role.ENGINEER;
+  const isAdmin = user?.role === Role.ADMIN;
 
   const [now, setNow] = useState<Date>(new Date());
+  const [softDeleteDialog, setSoftDeleteDialog] = useState<MaintenanceRequest | null>(null);
+  const [hardDeleteDialog, setHardDeleteDialog] = useState<MaintenanceRequest | null>(null);
 
   const [filters, setFilters] = useState({
     page: 1,
@@ -79,6 +104,24 @@ export default function RequestsList() {
   const { data: departments } = useQuery({
     queryKey: ["departments"],
     queryFn: () => departmentsService.getAll(),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: requestsService.softDelete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["requests"] });
+      setSoftDeleteDialog(null);
+      toast({ title: "تم نقل الطلب إلى سلة المهملات بنجاح" });
+    },
+  });
+
+  const hardDeleteMutation = useMutation({
+    mutationFn: requestsService.hardDelete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["requests"] });
+      setHardDeleteDialog(null);
+      toast({ title: "تم حذف الطلب نهائياً", variant: "destructive" });
+    },
   });
 
   useEffect(() => {
@@ -353,6 +396,41 @@ export default function RequestsList() {
                         تعديل
                       </Button>
                     )}
+                  {isAdmin && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSoftDeleteDialog(request);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 ml-2" />
+                          نقل إلى سلة المهملات
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setHardDeleteDialog(request);
+                          }}
+                        >
+                          <AlertTriangle className="h-4 w-4 ml-2" />
+                          حذف نهائي
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -454,6 +532,41 @@ export default function RequestsList() {
                                 تعديل
                               </Button>
                             )}
+                          {isAdmin && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSoftDeleteDialog(request);
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4 ml-2" />
+                                  نقل إلى سلة المهملات
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setHardDeleteDialog(request);
+                                  }}
+                                >
+                                  <AlertTriangle className="h-4 w-4 ml-2" />
+                                  حذف نهائي
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -518,6 +631,75 @@ export default function RequestsList() {
           </CardContent>
         </Card>
       )}
+
+      {/* Soft Delete Dialog */}
+      <Dialog open={!!softDeleteDialog} onOpenChange={() => setSoftDeleteDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              تأكيد النقل إلى سلة المهملات
+            </DialogTitle>
+            <DialogDescription>
+              هل أنت متأكد من نقل طلب الصيانة "{softDeleteDialog?.requestCode}" إلى سلة المهملات؟ يمكنك استعادته لاحقاً.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSoftDeleteDialog(null)}>
+              إلغاء
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                if (softDeleteDialog) {
+                  deleteMutation.mutate(softDeleteDialog.id);
+                }
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending && (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              )}
+              نقل إلى سلة المهملات
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hard Delete Dialog */}
+      <Dialog open={!!hardDeleteDialog} onOpenChange={() => setHardDeleteDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              تأكيد الحذف النهائي
+            </DialogTitle>
+            <DialogDescription>
+              هل أنت متأكد من الحذف النهائي لطلب الصيانة "{hardDeleteDialog?.requestCode}"؟ هذا الإجراء لا يمكن
+              التراجع عنه!
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHardDeleteDialog(null)}>
+              إلغاء
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (hardDeleteDialog) {
+                  hardDeleteMutation.mutate(hardDeleteDialog.id);
+                }
+              }}
+              disabled={hardDeleteMutation.isPending}
+            >
+              {hardDeleteMutation.isPending && (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              )}
+              حذف نهائي
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

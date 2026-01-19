@@ -99,6 +99,27 @@ export const scheduledTasksService = {
     await api.delete(`/scheduled-tasks/${id}`);
   },
 
+  async softDelete(id: string): Promise<void> {
+    await api.delete(`/scheduled-tasks/${id}`);
+  },
+
+  async hardDelete(id: string): Promise<void> {
+    await api.delete(`/scheduled-tasks/${id}/hard`);
+  },
+
+  async restore(id: string): Promise<ScheduledTask> {
+    const response = await api.post<ApiResponse<ScheduledTask>>(`/scheduled-tasks/${id}/restore`);
+    return response.data.data;
+  },
+
+  async getDeleted(filters?: ScheduledTaskFilters): Promise<ScheduledTasksResponse> {
+    const response = await api.get<ApiResponse<ScheduledTask[]> & { meta: PaginationMeta }>(
+      '/scheduled-tasks/trash',
+      { params: filters }
+    );
+    return { data: response.data.data, meta: response.data.meta! };
+  },
+
   async getAvailableTasks(): Promise<ScheduledTask[]> {
     const response = await api.get<ApiResponse<ScheduledTask[]>>('/scheduled-tasks/available');
     return response.data.data;

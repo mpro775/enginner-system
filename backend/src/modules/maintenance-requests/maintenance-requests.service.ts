@@ -156,10 +156,12 @@ export class MaintenanceRequestsService {
         .find(filter)
         .populate("engineerId", "name email")
         .populate("consultantId", "name email")
+        .populate("healthSafetySupervisorId", "name email")
         .populate("locationId", "name")
         .populate("departmentId", "name")
         .populate("systemId", "name")
         .populate("machineId", "name components description")
+        .populate("deletedBy", "name email")
         .sort(sortOptions)
         .skip(skip)
         .limit(limit)
@@ -478,7 +480,9 @@ export class MaintenanceRequestsService {
     filterDto: FilterRequestsDto,
     user: { userId: string; role: string }
   ): FilterQuery<MaintenanceRequestDocument> {
-    const filter: FilterQuery<MaintenanceRequestDocument> = {};
+    const filter: FilterQuery<MaintenanceRequestDocument> = {
+      deletedAt: null, // استبعاد المحذوفين ناعماً
+    };
 
     // Engineers can only see their own requests
     if (user.role === Role.ENGINEER) {
@@ -566,6 +570,7 @@ export class MaintenanceRequestsService {
       .populate("departmentId", "name")
       .populate("systemId", "name")
       .populate("machineId", "name components description")
+      .populate("deletedBy", "name email")
       .exec() as Promise<MaintenanceRequestDocument>;
   }
 
@@ -590,6 +595,165 @@ export class MaintenanceRequestsService {
       acc[curr._id] = curr.count;
       return acc;
     }, {});
+  }
+
+  async softDelete(
+    id: string,
+    user: { userId: string; name: string }
+  ): Promise<void> {
+    const request = await this.requestModel.findById(id);
+    if (!request || request.deletedAt) {
+      throw new EntityNotFoundException("Maintenance Request", id);
+    }
+
+    await this.requestModel.findByIdAndUpdate(id, {
+      deletedAt: new Date(),
+      deletedBy: user.userId,
+    });
+
+    // Log the action
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.SOFT_DELETE,
+      entity: "MaintenanceRequest",
+      entityId: id,
+      changes: { requestCode: request.requestCode },
+    });
+  }
+
+  async hardDelete(
+    id: string,
+    user: { userId: string; name: string }
+  ): Promise<void> {
+    const request = await this.requestModel.findById(id);
+    if (!request) {
+      throw new EntityNotFoundException("Maintenance Request", id);
+    }
+
+    await this.requestModel.findByIdAndDelete(id);
+
+    // Log the action
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.HARD_DELETE,
+      entity: "MaintenanceRequest",
+      entityId: id,
+      changes: { requestCode: request.requestCode },
+    });
+  }
+
+  async restore(
+    id: string,
+    user: { userId: string; name: string }
+  ): Promise<MaintenanceRequestDocument> {
+    const request = await this.requestModel.findById(id);
+    if (!request || !request.deletedAt) {
+      throw new EntityNotFoundException("Maintenance Request", id);
+    }
+
+    const restored = await this.requestModel.findByIdAndUpdate(
+      id,
+      { $unset: { deletedAt: 1, deletedBy: 1 } },
+      { new: true }
+    );
+
+    if (!restored) {
+      throw new EntityNotFoundException("Maintenance Request", id);
+    }
+
+    const populated = await this.populateRequest(id);
+
+    // Log the action
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.RESTORE,
+      entity: "MaintenanceRequest",
+      entityId: id,
+      changes: { requestCode: request.requestCode },
+    });
+
+    return populated;
+  }
+
+  async findDeleted(
+    filterDto: FilterRequestsDto
+  ): Promise<PaginatedResult<MaintenanceRequestDocument>> {
+    const { skip, limit } = getSkipAndLimit(filterDto);
+    const sortOptions = getSortOptions(filterDto);
+
+    const filter: FilterQuery<MaintenanceRequestDocument> = {
+      deletedAt: { $ne: null },
+    };
+
+    if (filterDto.status) {
+      filter.status = filterDto.status;
+    }
+
+    if (filterDto.engineerId) {
+      filter.engineerId = Types.ObjectId.isValid(filterDto.engineerId)
+        ? new Types.ObjectId(filterDto.engineerId)
+        : filterDto.engineerId;
+    }
+
+    if (filterDto.consultantId) {
+      filter.consultantId = Types.ObjectId.isValid(filterDto.consultantId)
+        ? new Types.ObjectId(filterDto.consultantId)
+        : filterDto.consultantId;
+    }
+
+    if (filterDto.locationId) {
+      filter.locationId = Types.ObjectId.isValid(filterDto.locationId)
+        ? new Types.ObjectId(filterDto.locationId)
+        : filterDto.locationId;
+    }
+
+    if (filterDto.departmentId) {
+      filter.departmentId = Types.ObjectId.isValid(filterDto.departmentId)
+        ? new Types.ObjectId(filterDto.departmentId)
+        : filterDto.departmentId;
+    }
+
+    if (filterDto.systemId) {
+      filter.systemId = Types.ObjectId.isValid(filterDto.systemId)
+        ? new Types.ObjectId(filterDto.systemId)
+        : filterDto.systemId;
+    }
+
+    if (filterDto.machineId) {
+      filter.machineId = Types.ObjectId.isValid(filterDto.machineId)
+        ? new Types.ObjectId(filterDto.machineId)
+        : filterDto.machineId;
+    }
+
+    if (filterDto.maintenanceType) {
+      filter.maintenanceType = filterDto.maintenanceType;
+    }
+
+    const [requests, total] = await Promise.all([
+      this.requestModel
+        .find(filter)
+        .populate("engineerId", "name email")
+        .populate("consultantId", "name email")
+        .populate("healthSafetySupervisorId", "name email")
+        .populate("locationId", "name")
+        .populate("departmentId", "name")
+        .populate("systemId", "name")
+        .populate("machineId", "name components description")
+        .populate("deletedBy", "name email")
+        .sort({ deletedAt: -1, ...sortOptions })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.requestModel.countDocuments(filter),
+    ]);
+
+    return {
+      data: requests,
+      meta: createPaginationMeta(total, filterDto.page || 1, limit),
+    };
   }
 
   async getModel(): Promise<Model<MaintenanceRequestDocument>> {

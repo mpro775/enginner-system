@@ -78,6 +78,12 @@ export class ScheduledTask {
 
   @Prop({ type: Types.ObjectId, ref: "User", required: true })
   createdBy: Types.ObjectId;
+
+  @Prop({ type: Date, default: null })
+  deletedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: "User" })
+  deletedBy?: Types.ObjectId;
 }
 
 export const ScheduledTaskSchema = SchemaFactory.createForClass(ScheduledTask);
@@ -106,3 +112,4 @@ ScheduledTaskSchema.index({ createdAt: -1 });
 ScheduledTaskSchema.index({ parentTaskId: 1 });
 ScheduledTaskSchema.index({ repetitionInterval: 1 });
 ScheduledTaskSchema.index({ engineerId: 1 }, { sparse: true }); // Sparse index for unassigned tasks
+ScheduledTaskSchema.index({ deletedAt: 1 });

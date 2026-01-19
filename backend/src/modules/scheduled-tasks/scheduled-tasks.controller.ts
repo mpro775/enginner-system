@@ -36,7 +36,7 @@ export class ScheduledTasksController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.CONSULTANT)
   @HttpCode(HttpStatus.CREATED)
   async create(
     @Body() createDto: CreateScheduledTaskDto,
@@ -54,7 +54,7 @@ export class ScheduledTasksController {
 
   @Get()
   @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.CONSULTANT)
   async findAll(@Query() filterDto: FilterScheduledTasksDto, @CurrentUser() user: CurrentUserData) {
     const result = await this.scheduledTasksService.findAll(filterDto, {
       userId: user.userId,
@@ -128,6 +128,18 @@ export class ScheduledTasksController {
     };
   }
 
+  @Get("trash")
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async findDeleted(@Query() filterDto: FilterScheduledTasksDto) {
+    const result = await this.scheduledTasksService.findDeleted(filterDto);
+    return {
+      data: result.data,
+      meta: result.meta,
+      message: "Deleted scheduled tasks retrieved successfully",
+    };
+  }
+
   @Get(":id")
   async findOne(@Param("id") id: string) {
     const task = await this.scheduledTasksService.findById(id);
@@ -139,7 +151,7 @@ export class ScheduledTasksController {
 
   @Patch(":id")
   @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.CONSULTANT)
   async update(
     @Param("id") id: string,
     @Body() updateDto: UpdateScheduledTaskDto,
@@ -157,16 +169,48 @@ export class ScheduledTasksController {
 
   @Delete(":id")
   @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.CONSULTANT)
+  @HttpCode(HttpStatus.OK)
+  async softDelete(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
+    await this.scheduledTasksService.softDelete(id, {
+      userId: user.userId,
+      name: user.name,
+      role: user.role,
+    });
+    return {
+      data: null,
+      message: "Scheduled task deleted successfully (soft delete)",
+    };
+  }
+
+  @Delete(":id/hard")
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async delete(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
-    await this.scheduledTasksService.delete(id, {
+  @HttpCode(HttpStatus.OK)
+  async hardDelete(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
+    await this.scheduledTasksService.hardDelete(id, {
+      userId: user.userId,
+      name: user.name,
+      role: user.role,
+    });
+    return {
+      data: null,
+      message: "Scheduled task permanently deleted",
+    };
+  }
+
+  @Post(":id/restore")
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async restore(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
+    const task = await this.scheduledTasksService.restore(id, {
       userId: user.userId,
       name: user.name,
     });
     return {
-      data: null,
-      message: "Scheduled task deleted successfully",
+      data: task,
+      message: "Scheduled task restored successfully",
     };
   }
 }

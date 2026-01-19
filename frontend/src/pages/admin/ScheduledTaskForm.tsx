@@ -34,6 +34,7 @@ import {
 } from "@/services/reference-data";
 import { usersService } from "@/services/users";
 import { RepetitionInterval } from "@/types";
+import { PageLoader } from "@/components/shared/LoadingSpinner";
 
 const taskSchema = z
   .object({
@@ -79,7 +80,6 @@ export default function ScheduledTaskForm() {
     handleSubmit,
     setValue,
     watch,
-    reset,
     formState: { errors },
   } = useForm<TaskFormData>({
     resolver: zodResolver(taskSchema),
@@ -89,23 +89,23 @@ export default function ScheduledTaskForm() {
   const watchMachineId = watch("machineId");
   const watchMaintainAllComponents = watch("maintainAllComponents");
 
-  const { data: task } = useQuery({
+  const { data: task, isLoading: isLoadingTask } = useQuery({
     queryKey: ["scheduled-task", id],
     queryFn: () => scheduledTasksService.getById(id!),
     enabled: isEditing,
   });
 
-  const { data: locations } = useQuery({
+  const { data: locations, isLoading: isLoadingLocations } = useQuery({
     queryKey: ["locations"],
     queryFn: () => locationsService.getAll(),
   });
 
-  const { data: departments } = useQuery({
+  const { data: departments, isLoading: isLoadingDepartments } = useQuery({
     queryKey: ["departments"],
     queryFn: () => departmentsService.getAll(),
   });
 
-  const { data: systems } = useQuery({
+  const { data: systems, isLoading: isLoadingSystems } = useQuery({
     queryKey: ["systems"],
     queryFn: () => systemsService.getAll(),
   });
@@ -115,35 +115,90 @@ export default function ScheduledTaskForm() {
     queryFn: () => usersService.getEngineers(),
   });
 
+  // Helper function to get ID from field (used in multiple places)
+  const getIdFromFieldHelper = (field: { id?: string; _id?: string } | string | undefined | null): string => {
+    if (!field) return "";
+    if (typeof field === "string") return field;
+    return field.id || field._id || "";
+  };
+
+  const taskSystemId = task ? getIdFromFieldHelper(task.systemId) : "";
+
+  // Load machines for the task's system when editing
+  const { data: taskMachines, isLoading: isLoadingTaskMachines } = useQuery({
+    queryKey: ["machines", taskSystemId],
+    queryFn: () => machinesService.getBySystem(taskSystemId),
+    enabled: !!(isEditing && taskSystemId),
+  });
+
   const { data: machines, isLoading: isLoadingMachines } = useQuery({
     queryKey: ["machines", watchSystemId],
     queryFn: () => machinesService.getBySystem(watchSystemId),
-    enabled: !!watchSystemId,
+    enabled: !!watchSystemId && watchSystemId !== taskSystemId,
   });
 
+  // Track if form has been initialized
+  const [formInitialized, setFormInitialized] = useState(false);
+
+  // Check if all reference data is loaded
+  const isReferenceDataLoaded = !isLoadingLocations && !isLoadingDepartments && !isLoadingSystems && locations && departments && systems;
+  const isEditDataReady = isEditing ? (task && !isLoadingTask && !isLoadingTaskMachines && taskMachines) : true;
+
   useEffect(() => {
-    if (task && isEditing) {
-      reset({
-        title: task.title,
-        engineerId: task.engineerId?.id,
-        locationId: task.locationId.id,
-        departmentId: task.departmentId.id,
-        systemId: task.systemId.id,
-        machineId: task.machineId.id,
-        maintainAllComponents: task.maintainAllComponents,
-        selectedComponents: task.selectedComponents || [],
-        scheduledMonth: task.scheduledMonth,
-        scheduledYear: task.scheduledYear,
-        scheduledDay: task.scheduledDay || 1,
-        description: task.description || "",
-        repetitionInterval: task.repetitionInterval,
+    if (task && isEditing && isReferenceDataLoaded && isEditDataReady && !formInitialized) {
+      // Get IDs from nested objects - handle both object format and direct ID format
+      const getIdFromField = (field: { id?: string; _id?: string } | string | undefined | null): string => {
+        if (!field) return "";
+        if (typeof field === "string") return field;
+        return field.id || field._id || "";
+      };
+
+      const locationId = getIdFromField(task.locationId);
+      const departmentId = getIdFromField(task.departmentId);
+      const systemId = getIdFromField(task.systemId);
+      const machineId = getIdFromField(task.machineId);
+      const engineerId = getIdFromField(task.engineerId);
+
+      console.log("Setting form values:", {
+        locationId,
+        departmentId,
+        systemId,
+        machineId,
+        engineerId,
+        repetitionInterval: task.repetitionInterval
       });
+
+      // Use setTimeout to ensure components are rendered before setting values
+      setTimeout(() => {
+        // Set each field individually using setValue with shouldValidate: false
+        setValue("title", task.title, { shouldValidate: false, shouldDirty: false });
+        setValue("engineerId", engineerId || undefined, { shouldValidate: false, shouldDirty: false });
+        setValue("locationId", locationId, { shouldValidate: false, shouldDirty: false });
+        setValue("departmentId", departmentId, { shouldValidate: false, shouldDirty: false });
+        setValue("systemId", systemId, { shouldValidate: false, shouldDirty: false });
+        setValue("machineId", machineId, { shouldValidate: false, shouldDirty: false });
+        setValue("maintainAllComponents", task.maintainAllComponents ?? true, { shouldValidate: false, shouldDirty: false });
+        setValue("selectedComponents", task.selectedComponents || [], { shouldValidate: false, shouldDirty: false });
+        setValue("scheduledMonth", task.scheduledMonth, { shouldValidate: false, shouldDirty: false });
+        setValue("scheduledYear", task.scheduledYear, { shouldValidate: false, shouldDirty: false });
+        setValue("scheduledDay", task.scheduledDay || 1, { shouldValidate: false, shouldDirty: false });
+        setValue("description", task.description || "", { shouldValidate: false, shouldDirty: false });
+        setValue("repetitionInterval", task.repetitionInterval, { shouldValidate: false, shouldDirty: false });
+        
+        console.log("Form values set, current values:", {
+          locationId: watch("locationId"),
+          departmentId: watch("departmentId"),
+          systemId: watch("systemId"),
+        });
+      }, 100);
+      
+      setFormInitialized(true);
       
       // Set the date picker value
       const day = task.scheduledDay || 1;
       setScheduledDate(new Date(task.scheduledYear, task.scheduledMonth - 1, day));
     }
-  }, [task, isEditing, reset]);
+  }, [task, isEditing, setValue, isReferenceDataLoaded, isEditDataReady, formInitialized]);
 
   const createMutation = useMutation({
     mutationFn: scheduledTasksService.create,
@@ -189,7 +244,25 @@ export default function ScheduledTaskForm() {
     setValue("selectedComponents", []);
   };
 
-  const selectedMachine = machines?.find((m) => m.id === watchMachineId);
+  // Use taskMachines when editing, otherwise use machines
+  const availableMachines = taskMachines || machines;
+  
+  const selectedMachine = availableMachines?.find((m) => m.id === watchMachineId);
+
+  // Show loader while loading data for editing
+  const isLoadingEditData = isEditing && (!isReferenceDataLoaded || !isEditDataReady);
+
+  // Debug logging
+  if (isEditing && formInitialized) {
+    console.log("Current form values:", {
+      locationId: watch("locationId"),
+      departmentId: watch("departmentId"),
+      systemId: watch("systemId"),
+      machineId: watch("machineId"),
+      engineerId: watch("engineerId"),
+      repetitionInterval: watch("repetitionInterval"),
+    });
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-in">
@@ -209,18 +282,21 @@ export default function ScheduledTaskForm() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>بيانات الصيانة الوقائية</CardTitle>
-          <CardDescription>أدخل تفاصيل الصيانة الوقائية</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            {(createMutation.isError || updateMutation.isError) && (
-              <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                حدث خطأ أثناء {isEditing ? "تعديل" : "إنشاء"} الصيانة الوقائية
-              </div>
-            )}
+      {isLoadingEditData ? (
+        <PageLoader />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>بيانات الصيانة الوقائية</CardTitle>
+            <CardDescription>أدخل تفاصيل الصيانة الوقائية</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form key={isEditing ? task?.id : 'new'} onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              {(createMutation.isError || updateMutation.isError) && (
+                <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                  حدث خطأ أثناء {isEditing ? "تعديل" : "إنشاء"} الصيانة الوقائية
+                </div>
+              )}
 
             <div className="space-y-2">
               <Label>عنوان المهمة *</Label>
@@ -266,7 +342,7 @@ export default function ScheduledTaskForm() {
                 <Label>الموقع *</Label>
                 <Select
                   onValueChange={(value) => setValue("locationId", value)}
-                  value={watch("locationId")}
+                  value={watch("locationId") || undefined}
                 >
                   <SelectTrigger
                     className={errors.locationId ? "border-destructive" : ""}
@@ -292,7 +368,7 @@ export default function ScheduledTaskForm() {
                 <Label>القسم *</Label>
                 <Select
                   onValueChange={(value) => setValue("departmentId", value)}
-                  value={watch("departmentId")}
+                  value={watch("departmentId") || undefined}
                 >
                   <SelectTrigger
                     className={errors.departmentId ? "border-destructive" : ""}
@@ -318,7 +394,7 @@ export default function ScheduledTaskForm() {
                 <Label>النظام *</Label>
                 <Select
                   onValueChange={handleSystemChange}
-                  value={watch("systemId")}
+                  value={watch("systemId") || undefined}
                 >
                   <SelectTrigger
                     className={errors.systemId ? "border-destructive" : ""}
@@ -361,7 +437,7 @@ export default function ScheduledTaskForm() {
                     />
                   </SelectTrigger>
                   <SelectContent>
-                    {machines?.map((machine) => (
+                    {availableMachines?.map((machine) => (
                       <SelectItem key={machine.id} value={machine.id}>
                         {machine.name}
                       </SelectItem>
@@ -561,6 +637,7 @@ export default function ScheduledTaskForm() {
           </form>
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

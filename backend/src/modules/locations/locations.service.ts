@@ -2,13 +2,15 @@ import { Injectable, Inject } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Location, LocationDocument } from './schemas/location.schema';
 import { CreateLocationDto, UpdateLocationDto } from './dto';
 import {
   EntityNotFoundException,
   DuplicateEntityException,
 } from '../../common/exceptions';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import { AuditAction } from '../../common/enums';
 
 const CACHE_KEY = 'locations:all';
 const CACHE_TTL = 300000; // 5 minutes
@@ -18,6 +20,7 @@ export class LocationsService {
   constructor(
     @InjectModel(Location.name) private locationModel: Model<LocationDocument>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   async create(createLocationDto: CreateLocationDto): Promise<LocationDocument> {
@@ -48,7 +51,10 @@ export class LocationsService {
       return cached;
     }
 
-    const filter = activeOnly ? { isActive: true } : {};
+    const filter: any = { deletedAt: null };
+    if (activeOnly) {
+      filter.isActive = true;
+    }
     const locations = await this.locationModel.find(filter).sort({ createdAt: -1 });
 
     // Store in cache
@@ -98,19 +104,93 @@ export class LocationsService {
     return updated!;
   }
 
-  async remove(id: string): Promise<void> {
+  async softDelete(id: string, user: { userId: string; name: string }): Promise<void> {
     const location = await this.locationModel.findById(id);
+    if (!location || location.deletedAt) {
+      throw new EntityNotFoundException('Location', id);
+    }
 
+    await this.locationModel.findByIdAndUpdate(id, {
+      deletedAt: new Date(),
+      deletedBy: user.userId,
+    });
+
+    await this.cacheManager.del(CACHE_KEY);
+    await this.cacheManager.del(`${CACHE_KEY}:all`);
+
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.SOFT_DELETE,
+      entity: 'Location',
+      entityId: id,
+      changes: { name: location.name },
+    });
+  }
+
+  async hardDelete(id: string, user: { userId: string; name: string }): Promise<void> {
+    const location = await this.locationModel.findById(id);
     if (!location) {
       throw new EntityNotFoundException('Location', id);
     }
 
-    // Hard delete - actually remove from database
     await this.locationModel.findByIdAndDelete(id);
 
-    // Invalidate cache
     await this.cacheManager.del(CACHE_KEY);
     await this.cacheManager.del(`${CACHE_KEY}:all`);
+
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.HARD_DELETE,
+      entity: 'Location',
+      entityId: id,
+      changes: { name: location.name },
+    });
+  }
+
+  async restore(id: string, user: { userId: string; name: string }): Promise<LocationDocument> {
+    const location = await this.locationModel.findById(id);
+    if (!location || !location.deletedAt) {
+      throw new EntityNotFoundException('Location', id);
+    }
+
+    const restored = await this.locationModel.findByIdAndUpdate(
+      id,
+      { $unset: { deletedAt: 1, deletedBy: 1 } },
+      { new: true }
+    );
+
+    if (!restored) {
+      throw new EntityNotFoundException('Location', id);
+    }
+
+    await this.cacheManager.del(CACHE_KEY);
+    await this.cacheManager.del(`${CACHE_KEY}:all`);
+
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.RESTORE,
+      entity: 'Location',
+      entityId: id,
+      changes: { name: restored.name },
+    });
+
+    return restored;
+  }
+
+  async findDeleted(): Promise<LocationDocument[]> {
+    const locations = await this.locationModel
+      .find({ deletedAt: { $ne: null } })
+      .populate('deletedBy', 'name email')
+      .sort({ deletedAt: -1 });
+    return locations;
+  }
+
+  // Keep for backward compatibility
+  async remove(id: string): Promise<void> {
+    throw new Error('Use softDelete or hardDelete instead');
   }
 }
 

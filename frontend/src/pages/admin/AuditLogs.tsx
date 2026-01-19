@@ -31,6 +31,9 @@ const actionLabels: Record<AuditAction, string> = {
   [AuditAction.LOGIN]: 'تسجيل دخول',
   [AuditAction.LOGOUT]: 'تسجيل خروج',
   [AuditAction.STATUS_CHANGE]: 'تغيير الحالة',
+  [AuditAction.SOFT_DELETE]: 'نقل إلى سلة المهملات',
+  [AuditAction.HARD_DELETE]: 'حذف نهائي',
+  [AuditAction.RESTORE]: 'استعادة',
 };
 
 const actionColors: Record<AuditAction, string> = {
@@ -40,6 +43,9 @@ const actionColors: Record<AuditAction, string> = {
   [AuditAction.LOGIN]: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
   [AuditAction.LOGOUT]: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
   [AuditAction.STATUS_CHANGE]: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
+  [AuditAction.SOFT_DELETE]: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+  [AuditAction.HARD_DELETE]: 'bg-red-200 text-red-900 dark:bg-red-950 dark:text-red-200',
+  [AuditAction.RESTORE]: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300',
 };
 
 export default function AuditLogs() {

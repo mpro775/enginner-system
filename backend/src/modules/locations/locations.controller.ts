@@ -16,6 +16,10 @@ import { CreateLocationDto, UpdateLocationDto } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  CurrentUser,
+  CurrentUserData,
+} from '../../common/decorators/current-user.decorator';
 import { Role } from '../../common/enums';
 
 @Controller('locations')
@@ -41,6 +45,17 @@ export class LocationsController {
     return {
       data: locations,
       message: 'Locations retrieved successfully',
+    };
+  }
+
+  @Get('trash')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async findDeleted() {
+    const locations = await this.locationsService.findDeleted();
+    return {
+      data: locations,
+      message: 'Deleted locations retrieved successfully',
     };
   }
 
@@ -71,11 +86,44 @@ export class LocationsController {
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.OK)
-  async remove(@Param('id') id: string) {
-    await this.locationsService.remove(id);
+  async softDelete(@Param('id') id: string, @CurrentUser() user: CurrentUserData) {
+    await this.locationsService.softDelete(id, {
+      userId: user.userId,
+      name: user.name,
+    });
     return {
       data: null,
-      message: 'Location deleted successfully',
+      message: 'Location deleted successfully (soft delete)',
+    };
+  }
+
+  @Delete(':id/hard')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async hardDelete(@Param('id') id: string, @CurrentUser() user: CurrentUserData) {
+    await this.locationsService.hardDelete(id, {
+      userId: user.userId,
+      name: user.name,
+    });
+    return {
+      data: null,
+      message: 'Location permanently deleted',
+    };
+  }
+
+  @Post(':id/restore')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async restore(@Param('id') id: string, @CurrentUser() user: CurrentUserData) {
+    const location = await this.locationsService.restore(id, {
+      userId: user.userId,
+      name: user.name,
+    });
+    return {
+      data: location,
+      message: 'Location restored successfully',
     };
   }
 }

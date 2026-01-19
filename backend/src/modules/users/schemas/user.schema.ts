@@ -39,6 +39,12 @@ export class User {
 
   @Prop()
   lastLoginAt?: Date;
+
+  @Prop({ type: Date, default: null })
+  deletedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  deletedBy?: Types.ObjectId;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
@@ -46,6 +52,7 @@ export const UserSchema = SchemaFactory.createForClass(User);
 // Indexes
 UserSchema.index({ email: 1 }, { unique: true });
 UserSchema.index({ role: 1, isActive: 1 });
+UserSchema.index({ deletedAt: 1 });
 
 
 

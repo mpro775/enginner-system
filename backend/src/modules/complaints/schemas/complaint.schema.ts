@@ -60,6 +60,12 @@ export class Complaint {
 
   @Prop()
   closedAt?: Date;
+
+  @Prop({ type: Date, default: null })
+  deletedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: "User" })
+  deletedBy?: Types.ObjectId;
 }
 
 export const ComplaintSchema = SchemaFactory.createForClass(Complaint);
@@ -70,6 +76,7 @@ ComplaintSchema.index({ status: 1 });
 ComplaintSchema.index({ assignedEngineerId: 1 });
 ComplaintSchema.index({ maintenanceRequestId: 1 });
 ComplaintSchema.index({ createdAt: -1 });
+ComplaintSchema.index({ deletedAt: 1 });
 // Text indexes for bilingual search
 ComplaintSchema.index({ reporterNameAr: "text", reporterNameEn: "text" });
 ComplaintSchema.index({ locationAr: "text", locationEn: "text" });

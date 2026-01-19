@@ -16,6 +16,10 @@ import { CreateDepartmentDto, UpdateDepartmentDto } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  CurrentUser,
+  CurrentUserData,
+} from '../../common/decorators/current-user.decorator';
 import { Role } from '../../common/enums';
 
 @Controller('departments')
@@ -41,6 +45,17 @@ export class DepartmentsController {
     return {
       data: departments,
       message: 'Departments retrieved successfully',
+    };
+  }
+
+  @Get('trash')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async findDeleted() {
+    const departments = await this.departmentsService.findDeleted();
+    return {
+      data: departments,
+      message: 'Deleted departments retrieved successfully',
     };
   }
 
@@ -71,11 +86,44 @@ export class DepartmentsController {
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.OK)
-  async remove(@Param('id') id: string) {
-    await this.departmentsService.remove(id);
+  async softDelete(@Param('id') id: string, @CurrentUser() user: CurrentUserData) {
+    await this.departmentsService.softDelete(id, {
+      userId: user.userId,
+      name: user.name,
+    });
     return {
       data: null,
-      message: 'Department deleted successfully',
+      message: 'Department deleted successfully (soft delete)',
+    };
+  }
+
+  @Delete(':id/hard')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async hardDelete(@Param('id') id: string, @CurrentUser() user: CurrentUserData) {
+    await this.departmentsService.hardDelete(id, {
+      userId: user.userId,
+      name: user.name,
+    });
+    return {
+      data: null,
+      message: 'Department permanently deleted',
+    };
+  }
+
+  @Post(':id/restore')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async restore(@Param('id') id: string, @CurrentUser() user: CurrentUserData) {
+    const department = await this.departmentsService.restore(id, {
+      userId: user.userId,
+      name: user.name,
+    });
+    return {
+      data: department,
+      message: 'Department restored successfully',
     };
   }
 }

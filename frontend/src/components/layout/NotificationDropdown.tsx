@@ -1,4 +1,4 @@
-import { Bell, CheckCircle2, Clock, XCircle, AlertCircle } from "lucide-react";
+import { Bell, CheckCircle2, Clock, XCircle, AlertCircle, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -7,20 +7,60 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useNotificationsStore } from "@/store/notifications";
+import { useAuthStore } from "@/store/auth";
 import { formatDateTime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Role } from "@/types";
 
 export function NotificationDropdown() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, fetchNotifications } =
     useNotificationsStore();
+  const { user } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
     if (open) {
       // Fetch notifications when dropdown is opened
       fetchNotifications();
+    }
+  };
+
+  // Handle notification click - navigate to related page
+  const handleNotificationClick = (notification: typeof notifications[0]) => {
+    // Mark as read if not already read
+    if (!notification.read) {
+      markAsRead(notification.id);
+    }
+
+    // Determine navigation path based on notification type
+    const notificationId = notification.data.id as string;
+    
+    if (notification.type.startsWith('request:')) {
+      // Navigate to request details page
+      if (notificationId) {
+        navigate(`/app/requests/${notificationId}`);
+        setIsOpen(false);
+      }
+    } else if (notification.type.startsWith('complaint:')) {
+      // Navigate to complaint details page
+      if (notificationId) {
+        navigate(`/app/complaints/${notificationId}`);
+        setIsOpen(false);
+      }
+    } else if (notification.type.startsWith('task:')) {
+      // Navigate to scheduled tasks page based on user role
+      // Admin and Consultant go to admin scheduled tasks page
+      // Engineers go to their my-tasks page
+      if (user?.role === Role.ADMIN || user?.role === Role.CONSULTANT) {
+        navigate('/app/admin/scheduled-tasks');
+      } else {
+        navigate('/app/engineer/my-tasks');
+      }
+      setIsOpen(false);
     }
   };
 
@@ -34,6 +74,13 @@ export function NotificationDropdown() {
         return <XCircle className="h-4 w-4 text-orange-500" />;
       case "request:updated":
         return <Clock className="h-4 w-4 text-yellow-500" />;
+      case "complaint:created":
+      case "complaint:resolved":
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      case "task:created":
+      case "task:overdue":
+      case "task:pending":
+        return <Calendar className="h-4 w-4 text-purple-500" />;
       default:
         return <Bell className="h-4 w-4 text-muted-foreground" />;
     }
@@ -49,6 +96,16 @@ export function NotificationDropdown() {
         return "تم إيقاف الطلب";
       case "request:updated":
         return "تم تحديث الطلب";
+      case "complaint:created":
+        return "بلاغ جديد";
+      case "complaint:resolved":
+        return "تم حل البلاغ";
+      case "task:created":
+        return "مهمة جديدة";
+      case "task:overdue":
+        return "مهام متأخرة";
+      case "task:pending":
+        return "مهام معلقة";
       default:
         return "إشعار";
     }
@@ -101,9 +158,7 @@ export function NotificationDropdown() {
                   "px-3 py-2 hover:bg-accent cursor-pointer transition-colors",
                   !notification.read && "bg-muted/50"
                 )}
-                onClick={() =>
-                  !notification.read && markAsRead(notification.id)
-                }
+                onClick={() => handleNotificationClick(notification)}
               >
                 <div className="flex items-start gap-3">
                   <div className="mt-0.5 flex-shrink-0">

@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Query,
+  Delete,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -58,6 +59,18 @@ export class ComplaintsController {
       data: result.data,
       meta: result.meta,
       message: "Complaints retrieved successfully",
+    };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Get("trash")
+  async findDeleted(@Query() filterDto: FilterComplaintsDto) {
+    const result = await this.complaintsService.findDeleted(filterDto);
+    return {
+      data: result.data,
+      meta: result.meta,
+      message: "Deleted complaints retrieved successfully",
     };
   }
 
@@ -158,6 +171,51 @@ export class ComplaintsController {
     return {
       data: complaint,
       message: "Complaint status changed successfully",
+    };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Delete(":id")
+  @HttpCode(HttpStatus.OK)
+  async softDelete(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
+    await this.complaintsService.softDelete(id, {
+      userId: user.userId,
+      name: user.name,
+    });
+    return {
+      data: null,
+      message: "Complaint deleted successfully (soft delete)",
+    };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Delete(":id/hard")
+  @HttpCode(HttpStatus.OK)
+  async hardDelete(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
+    await this.complaintsService.hardDelete(id, {
+      userId: user.userId,
+      name: user.name,
+    });
+    return {
+      data: null,
+      message: "Complaint permanently deleted",
+    };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Post(":id/restore")
+  @HttpCode(HttpStatus.OK)
+  async restore(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
+    const complaint = await this.complaintsService.restore(id, {
+      userId: user.userId,
+      name: user.name,
+    });
+    return {
+      data: complaint,
+      message: "Complaint restored successfully",
     };
   }
 }

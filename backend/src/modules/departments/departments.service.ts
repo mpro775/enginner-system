@@ -2,13 +2,15 @@ import { Injectable, Inject } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Department, DepartmentDocument } from './schemas/department.schema';
 import { CreateDepartmentDto, UpdateDepartmentDto } from './dto';
 import {
   EntityNotFoundException,
   DuplicateEntityException,
 } from '../../common/exceptions';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import { AuditAction } from '../../common/enums';
 
 const CACHE_KEY = 'departments:all';
 const CACHE_TTL = 300000; // 5 minutes
@@ -18,6 +20,7 @@ export class DepartmentsService {
   constructor(
     @InjectModel(Department.name) private departmentModel: Model<DepartmentDocument>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   async create(createDepartmentDto: CreateDepartmentDto): Promise<DepartmentDocument> {
@@ -47,7 +50,10 @@ export class DepartmentsService {
       return cached;
     }
 
-    const filter = activeOnly ? { isActive: true } : {};
+    const filter: any = { deletedAt: null };
+    if (activeOnly) {
+      filter.isActive = true;
+    }
     const departments = await this.departmentModel.find(filter).sort({ createdAt: -1 });
 
     await this.cacheManager.set(cacheKey, departments, CACHE_TTL);
@@ -95,18 +101,94 @@ export class DepartmentsService {
     return updated!;
   }
 
-  async remove(id: string): Promise<void> {
+  async softDelete(id: string, user: { userId: string; name: string }): Promise<void> {
     const department = await this.departmentModel.findById(id);
+    if (!department || department.deletedAt) {
+      throw new EntityNotFoundException('Department', id);
+    }
 
+    await this.departmentModel.findByIdAndUpdate(id, {
+      deletedAt: new Date(),
+      deletedBy: user.userId,
+    });
+
+    await this.cacheManager.del(CACHE_KEY);
+    await this.cacheManager.del(`${CACHE_KEY}:all`);
+
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.SOFT_DELETE,
+      entity: 'Department',
+      entityId: id,
+      changes: { name: department.name },
+    });
+  }
+
+  async hardDelete(id: string, user: { userId: string; name: string }): Promise<void> {
+    const department = await this.departmentModel.findById(id);
     if (!department) {
       throw new EntityNotFoundException('Department', id);
     }
 
-    // Hard delete - actually remove from database
     await this.departmentModel.findByIdAndDelete(id);
 
     await this.cacheManager.del(CACHE_KEY);
     await this.cacheManager.del(`${CACHE_KEY}:all`);
+
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.HARD_DELETE,
+      entity: 'Department',
+      entityId: id,
+      changes: { name: department.name },
+    });
+  }
+
+  async restore(id: string, user: { userId: string; name: string }): Promise<DepartmentDocument> {
+    const department = await this.departmentModel.findById(id);
+    if (!department || !department.deletedAt) {
+      throw new EntityNotFoundException('Department', id);
+    }
+
+    const restored = await this.departmentModel.findByIdAndUpdate(
+      id,
+      { $unset: { deletedAt: 1, deletedBy: 1 } },
+      { new: true }
+    );
+
+    if (!restored) {
+      throw new EntityNotFoundException('Department', id);
+    }
+
+    await this.cacheManager.del(CACHE_KEY);
+    await this.cacheManager.del(`${CACHE_KEY}:all`);
+
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.RESTORE,
+      entity: 'Department',
+      entityId: id,
+      changes: { name: restored.name },
+    });
+
+    return restored;
+  }
+
+  async findDeleted(): Promise<DepartmentDocument[]> {
+    const departments = await this.departmentModel
+      .find({ deletedAt: { $ne: null } })
+      .populate('deletedBy', 'name email')
+      .sort({ deletedAt: -1 });
+    return departments;
+  }
+
+  // Keep for backward compatibility
+  async remove(id: string): Promise<void> {
+    // This will be handled by controller with user context
+    throw new Error('Use softDelete or hardDelete instead');
   }
 }
 

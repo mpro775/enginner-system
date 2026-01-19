@@ -9,6 +9,8 @@ import {
   EntityNotFoundException,
   DuplicateEntityException,
 } from "../../common/exceptions";
+import { AuditLogsService } from "../audit-logs/audit-logs.service";
+import { AuditAction } from "../../common/enums";
 
 const CACHE_KEY = "machines:all";
 const CACHE_TTL = 300000; // 5 minutes
@@ -17,7 +19,8 @@ const CACHE_TTL = 300000; // 5 minutes
 export class MachinesService {
   constructor(
     @InjectModel(Machine.name) private machineModel: Model<MachineDocument>,
-    @Inject(CACHE_MANAGER) private cacheManager: Cache
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   async create(createMachineDto: CreateMachineDto): Promise<MachineDocument> {
@@ -52,7 +55,10 @@ export class MachinesService {
       return cached;
     }
 
-    const filter = activeOnly ? { isActive: true } : {};
+    const filter: any = { deletedAt: null };
+    if (activeOnly) {
+      filter.isActive = true;
+    }
     const machines = await this.machineModel
       .find(filter)
       .populate("systemId", "name")
@@ -77,6 +83,7 @@ export class MachinesService {
             : null,
         }, // Match ObjectId
       ],
+      deletedAt: null,
     };
 
     if (activeOnly) {
@@ -146,17 +153,93 @@ export class MachinesService {
     return updated!;
   }
 
-  async remove(id: string): Promise<void> {
+  async softDelete(id: string, user: { userId: string; name: string }): Promise<void> {
     const machine = await this.machineModel.findById(id);
+    if (!machine || machine.deletedAt) {
+      throw new EntityNotFoundException("Machine", id);
+    }
 
+    await this.machineModel.findByIdAndUpdate(id, {
+      deletedAt: new Date(),
+      deletedBy: user.userId,
+    });
+
+    await this.invalidateCache(machine.systemId.toString());
+
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.SOFT_DELETE,
+      entity: 'Machine',
+      entityId: id,
+      changes: { name: machine.name },
+    });
+  }
+
+  async hardDelete(id: string, user: { userId: string; name: string }): Promise<void> {
+    const machine = await this.machineModel.findById(id);
     if (!machine) {
       throw new EntityNotFoundException("Machine", id);
     }
 
-    // Hard delete - actually remove from database
+    const systemId = machine.systemId.toString();
+
     await this.machineModel.findByIdAndDelete(id);
 
-    await this.invalidateCache(machine.systemId.toString());
+    await this.invalidateCache(systemId);
+
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.HARD_DELETE,
+      entity: 'Machine',
+      entityId: id,
+      changes: { name: machine.name },
+    });
+  }
+
+  async restore(id: string, user: { userId: string; name: string }): Promise<MachineDocument> {
+    const machine = await this.machineModel.findById(id);
+    if (!machine || !machine.deletedAt) {
+      throw new EntityNotFoundException("Machine", id);
+    }
+
+    const restored = await this.machineModel.findByIdAndUpdate(
+      id,
+      { $unset: { deletedAt: 1, deletedBy: 1 } },
+      { new: true }
+    ).populate("systemId", "name");
+
+    if (!restored) {
+      throw new EntityNotFoundException("Machine", id);
+    }
+
+    await this.invalidateCache(restored.systemId.toString());
+
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.RESTORE,
+      entity: 'Machine',
+      entityId: id,
+      changes: { name: restored.name },
+    });
+
+    return restored;
+  }
+
+  async findDeleted(): Promise<MachineDocument[]> {
+    const machines = await this.machineModel
+      .find({ deletedAt: { $ne: null } })
+      .populate("systemId", "name")
+      .populate("deletedBy", "name email")
+      .sort({ deletedAt: -1 });
+    return machines;
+  }
+
+  // Keep for backward compatibility
+  async remove(id: string): Promise<void> {
+    throw new Error('Use softDelete or hardDelete instead');
   }
 
   private async invalidateCache(systemId: string): Promise<void> {

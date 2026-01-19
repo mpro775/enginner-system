@@ -24,6 +24,9 @@ export enum AuditAction {
   LOGIN = "login",
   LOGOUT = "logout",
   STATUS_CHANGE = "status_change",
+  SOFT_DELETE = "soft_delete",
+  HARD_DELETE = "hard_delete",
+  RESTORE = "restore",
 }
 
 export enum TaskStatus {

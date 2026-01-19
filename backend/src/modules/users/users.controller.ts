@@ -75,6 +75,17 @@ export class UsersController {
     };
   }
 
+  @Get("trash")
+  @Roles(Role.ADMIN)
+  async findDeleted(@Query() filterDto: FilterUsersDto) {
+    const result = await this.usersService.findDeleted(filterDto);
+    return {
+      data: result.data,
+      meta: result.meta,
+      message: "Deleted users retrieved successfully",
+    };
+  }
+
   @Get(":id")
   @Roles(Role.ADMIN)
   async findOne(@Param("id") id: string) {
@@ -121,14 +132,42 @@ export class UsersController {
   @Delete(":id")
   @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.OK)
-  async remove(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
-    await this.usersService.remove(id, {
+  async softDelete(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
+    await this.usersService.softDelete(id, {
       userId: user.userId,
       name: user.name,
     });
     return {
       data: null,
-      message: "User deleted successfully",
+      message: "User deleted successfully (soft delete)",
+    };
+  }
+
+  @Delete(":id/hard")
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async hardDelete(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
+    await this.usersService.hardDelete(id, {
+      userId: user.userId,
+      name: user.name,
+    });
+    return {
+      data: null,
+      message: "User permanently deleted",
+    };
+  }
+
+  @Post(":id/restore")
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async restore(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
+    const restoredUser = await this.usersService.restore(id, {
+      userId: user.userId,
+      name: user.name,
+    });
+    return {
+      data: restoredUser,
+      message: "User restored successfully",
     };
   }
 }

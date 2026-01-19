@@ -90,7 +90,7 @@ export class NotificationsGateway
     const notification = {
       type: "request:created",
       data: {
-        id: request._id,
+        id: request._id.toString(),
         requestCode: request.requestCode,
         maintenanceType: request.maintenanceType,
         status: request.status,
@@ -115,7 +115,7 @@ export class NotificationsGateway
     const notification = {
       type: "request:stopped",
       data: {
-        id: request._id,
+        id: request._id.toString(),
         requestCode: request.requestCode,
         status: request.status,
         stopReason: request.stopReason,
@@ -139,7 +139,7 @@ export class NotificationsGateway
     const notification = {
       type: "request:completed",
       data: {
-        id: request._id,
+        id: request._id.toString(),
         requestCode: request.requestCode,
         status: request.status,
         engineerName: (request.engineerId as any)?.name,
@@ -162,7 +162,7 @@ export class NotificationsGateway
     const notification = {
       type: "request:updated",
       data: {
-        id: request._id,
+        id: request._id.toString(),
         requestCode: request.requestCode,
         status: request.status,
         engineerName: (request.engineerId as any)?.name,
@@ -215,7 +215,7 @@ export class NotificationsGateway
     const notification = {
       type: "task:created",
       data: {
-        id: task._id,
+        id: task._id.toString(),
         taskCode: task.taskCode,
         title: task.title,
         locationName: (task.locationId as any)?.name,
@@ -256,7 +256,7 @@ export class NotificationsGateway
     const notification = {
       type: "complaint:created",
       data: {
-        id: complaint._id,
+        id: complaint._id.toString(),
         complaintCode: complaint.complaintCode,
         reporterNameAr: complaint.reporterNameAr,
         reporterNameEn: complaint.reporterNameEn,
@@ -280,7 +280,7 @@ export class NotificationsGateway
     const notification = {
       type: "complaint:resolved",
       data: {
-        id: complaint._id,
+        id: complaint._id.toString(),
         complaintCode: complaint.complaintCode,
         reporterNameAr: complaint.reporterNameAr,
         reporterNameEn: complaint.reporterNameEn,

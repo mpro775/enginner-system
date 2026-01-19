@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Query,
+  Delete,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -66,6 +67,18 @@ export class MaintenanceRequestsController {
       data: result.data,
       meta: result.meta,
       message: "Maintenance requests retrieved successfully",
+    };
+  }
+
+  @Get("trash")
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async findDeleted(@Query() filterDto: FilterRequestsDto) {
+    const result = await this.maintenanceRequestsService.findDeleted(filterDto);
+    return {
+      data: result.data,
+      meta: result.meta,
+      message: "Deleted maintenance requests retrieved successfully",
     };
   }
 
@@ -180,6 +193,51 @@ export class MaintenanceRequestsController {
     return {
       data: request,
       message: "Maintenance request completed successfully",
+    };
+  }
+
+  @Delete(":id")
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async softDelete(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
+    await this.maintenanceRequestsService.softDelete(id, {
+      userId: user.userId,
+      name: user.name,
+    });
+    return {
+      data: null,
+      message: "Maintenance request deleted successfully (soft delete)",
+    };
+  }
+
+  @Delete(":id/hard")
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async hardDelete(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
+    await this.maintenanceRequestsService.hardDelete(id, {
+      userId: user.userId,
+      name: user.name,
+    });
+    return {
+      data: null,
+      message: "Maintenance request permanently deleted",
+    };
+  }
+
+  @Post(":id/restore")
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async restore(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
+    const request = await this.maintenanceRequestsService.restore(id, {
+      userId: user.userId,
+      name: user.name,
+    });
+    return {
+      data: request,
+      message: "Maintenance request restored successfully",
     };
   }
 }

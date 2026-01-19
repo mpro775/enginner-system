@@ -35,6 +35,24 @@ export const locationsService = {
     });
     return response.data.data;
   },
+
+  async softDelete(id: string): Promise<void> {
+    await api.delete(`/locations/${id}`);
+  },
+
+  async hardDelete(id: string): Promise<void> {
+    await api.delete(`/locations/${id}/hard`);
+  },
+
+  async restore(id: string): Promise<Location> {
+    const response = await api.post<ApiResponse<Location>>(`/locations/${id}/restore`);
+    return response.data.data;
+  },
+
+  async getDeleted(): Promise<Location[]> {
+    const response = await api.get<ApiResponse<Location[]>>('/locations/trash');
+    return response.data.data;
+  },
 };
 
 // Departments
@@ -71,6 +89,24 @@ export const departmentsService = {
     });
     return response.data.data;
   },
+
+  async softDelete(id: string): Promise<void> {
+    await api.delete(`/departments/${id}`);
+  },
+
+  async hardDelete(id: string): Promise<void> {
+    await api.delete(`/departments/${id}/hard`);
+  },
+
+  async restore(id: string): Promise<Department> {
+    const response = await api.post<ApiResponse<Department>>(`/departments/${id}/restore`);
+    return response.data.data;
+  },
+
+  async getDeleted(): Promise<Department[]> {
+    const response = await api.get<ApiResponse<Department[]>>('/departments/trash');
+    return response.data.data;
+  },
 };
 
 // Systems
@@ -105,6 +141,24 @@ export const systemsService = {
     const response = await api.patch<ApiResponse<System>>(`/systems/${id}`, {
       isActive: !currentStatus,
     });
+    return response.data.data;
+  },
+
+  async softDelete(id: string): Promise<void> {
+    await api.delete(`/systems/${id}`);
+  },
+
+  async hardDelete(id: string): Promise<void> {
+    await api.delete(`/systems/${id}/hard`);
+  },
+
+  async restore(id: string): Promise<System> {
+    const response = await api.post<ApiResponse<System>>(`/systems/${id}/restore`);
+    return response.data.data;
+  },
+
+  async getDeleted(): Promise<System[]> {
+    const response = await api.get<ApiResponse<System[]>>('/systems/trash');
     return response.data.data;
   },
 };
@@ -148,6 +202,24 @@ export const machinesService = {
     const response = await api.patch<ApiResponse<Machine>>(`/machines/${id}`, {
       isActive: !currentStatus,
     });
+    return response.data.data;
+  },
+
+  async softDelete(id: string): Promise<void> {
+    await api.delete(`/machines/${id}`);
+  },
+
+  async hardDelete(id: string): Promise<void> {
+    await api.delete(`/machines/${id}/hard`);
+  },
+
+  async restore(id: string): Promise<Machine> {
+    const response = await api.post<ApiResponse<Machine>>(`/machines/${id}/restore`);
+    return response.data.data;
+  },
+
+  async getDeleted(): Promise<Machine[]> {
+    const response = await api.get<ApiResponse<Machine[]>>('/machines/trash');
     return response.data.data;
   },
 };

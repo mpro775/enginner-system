@@ -272,10 +272,10 @@ export default function MyScheduledTasks() {
 
       {/* Available Tasks Section */}
       {availableTasks.length > 0 && (
-        <Card className="border-blue-200 bg-blue-50/50">
+        <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/30">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <UserPlus className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+              <UserPlus className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400" />
               المهام المتاحة
             </CardTitle>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
@@ -289,7 +289,7 @@ export default function MyScheduledTasks() {
                 const isOverdue = daysRemaining < 0;
 
                 return (
-                  <Card key={task.id} className="bg-white">
+                  <Card key={task.id} className="bg-card">
                     <CardContent className="p-3 sm:p-4">
                       <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between gap-3 sm:gap-4">
                         <div className="flex-1 space-y-2 w-full">

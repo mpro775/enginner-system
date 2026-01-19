@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Edit, Trash2, UserCheck, UserX, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash2, UserCheck, UserX, Loader2, MoreVertical, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -21,6 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
@@ -28,6 +36,7 @@ import { usersService } from "@/services/users";
 import { departmentsService } from "@/services/reference-data";
 import { getRoleLabel } from "@/lib/utils";
 import { Role, User } from "@/types";
+import { useAuthStore } from "@/store/auth";
 
 const userSchema = z.object({
   name: z.string().min(2, "الاسم يجب أن يكون 2 أحرف على الأقل"),
@@ -46,8 +55,13 @@ type UserFormData = z.infer<typeof userSchema>;
 
 export default function UsersManagement() {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
   const [showDialog, setShowDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [hardDeleteDialog, setHardDeleteDialog] = useState<User | null>(null);
+  const [softDeleteDialog, setSoftDeleteDialog] = useState<User | null>(null);
+  
+  const isAdmin = user?.role === Role.ADMIN;
 
   const {
     register,
@@ -97,9 +111,17 @@ export default function UsersManagement() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: usersService.delete,
+    mutationFn: usersService.softDelete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+
+  const hardDeleteMutation = useMutation({
+    mutationFn: usersService.hardDelete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      setHardDeleteDialog(null);
     },
   });
 
@@ -238,18 +260,31 @@ export default function UsersManagement() {
                       </>
                     )}
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => {
-                      if (confirm("هل أنت متأكد من حذف هذا المستخدم؟")) {
-                        deleteMutation.mutate(user.id);
-                      }
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {isAdmin && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => setSoftDeleteDialog(user)}
+                        >
+                          <Trash2 className="h-4 w-4 ml-2" />
+                          نقل إلى سلة المهملات
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => setHardDeleteDialog(user)}
+                        >
+                          <AlertTriangle className="h-4 w-4 ml-2" />
+                          حذف نهائي
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -325,19 +360,31 @@ export default function UsersManagement() {
                               <UserCheck className="h-4 w-4 text-green-600" />
                             )}
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              if (
-                                confirm("هل أنت متأكد من حذف هذا المستخدم؟")
-                              ) {
-                                deleteMutation.mutate(user.id);
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          {isAdmin && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => setSoftDeleteDialog(user)}
+                              >
+                                <Trash2 className="h-4 w-4 ml-2" />
+                                نقل إلى سلة المهملات
+                              </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => setHardDeleteDialog(user)}
+                                >
+                                  <AlertTriangle className="h-4 w-4 ml-2" />
+                                  حذف نهائي
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -464,6 +511,77 @@ export default function UsersManagement() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Soft Delete Dialog */}
+      <Dialog open={!!softDeleteDialog} onOpenChange={() => setSoftDeleteDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              تأكيد النقل إلى سلة المهملات
+            </DialogTitle>
+            <DialogDescription>
+              هل أنت متأكد من نقل المستخدم "{softDeleteDialog?.name}" إلى سلة المهملات؟ يمكنك استعادته لاحقاً.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSoftDeleteDialog(null)}>
+              إلغاء
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                if (softDeleteDialog) {
+                  deleteMutation.mutate(softDeleteDialog.id);
+                  setSoftDeleteDialog(null);
+                }
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending && (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              )}
+              نقل إلى سلة المهملات
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hard Delete Dialog */}
+      <Dialog open={!!hardDeleteDialog} onOpenChange={() => setHardDeleteDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              تأكيد الحذف النهائي
+            </DialogTitle>
+            <DialogDescription>
+              هل أنت متأكد من الحذف النهائي للمستخدم "{hardDeleteDialog?.name}"؟ هذا الإجراء لا يمكن
+              التراجع عنه!
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHardDeleteDialog(null)}>
+              إلغاء
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (hardDeleteDialog) {
+                  hardDeleteMutation.mutate(hardDeleteDialog.id);
+                  setHardDeleteDialog(null);
+                }
+              }}
+              disabled={hardDeleteMutation.isPending}
+            >
+              {hardDeleteMutation.isPending && (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              )}
+              حذف نهائي
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

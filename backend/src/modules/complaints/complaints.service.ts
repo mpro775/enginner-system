@@ -103,6 +103,7 @@ export class ComplaintsService {
         .find(filter)
         .populate("assignedEngineerId", "name email")
         .populate("maintenanceRequestId", "requestCode status")
+        .populate("deletedBy", "name email")
         .sort(sortOptions)
         .skip(skip)
         .limit(limit)
@@ -421,6 +422,7 @@ export class ComplaintsService {
       .findById(id)
       .populate("assignedEngineerId", "name email role")
       .populate("maintenanceRequestId", "requestCode status maintenanceType")
+      .populate("deletedBy", "name email")
       .exec();
   }
 
@@ -428,7 +430,9 @@ export class ComplaintsService {
     filterDto: FilterComplaintsDto,
     user: { userId: string; role: string }
   ): FilterQuery<ComplaintDocument> {
-    const filter: FilterQuery<ComplaintDocument> = {};
+    const filter: FilterQuery<ComplaintDocument> = {
+      deletedAt: null, // استبعاد المحذوفين ناعماً
+    };
 
     // Status filter
     if (filterDto.status) {
@@ -482,6 +486,139 @@ export class ComplaintsService {
     }
 
     return `${prefix}-${year}-${String(sequence).padStart(3, "0")}`;
+  }
+
+  async softDelete(
+    id: string,
+    user: { userId: string; name: string }
+  ): Promise<void> {
+    const complaint = await this.complaintModel.findById(id);
+    if (!complaint || complaint.deletedAt) {
+      throw new EntityNotFoundException("Complaint", id);
+    }
+
+    await this.complaintModel.findByIdAndUpdate(id, {
+      deletedAt: new Date(),
+      deletedBy: user.userId,
+    });
+
+    // Log the action
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.SOFT_DELETE,
+      entity: "Complaint",
+      entityId: id,
+      changes: { complaintCode: complaint.complaintCode },
+    });
+  }
+
+  async hardDelete(
+    id: string,
+    user: { userId: string; name: string }
+  ): Promise<void> {
+    const complaint = await this.complaintModel.findById(id);
+    if (!complaint) {
+      throw new EntityNotFoundException("Complaint", id);
+    }
+
+    await this.complaintModel.findByIdAndDelete(id);
+
+    // Log the action
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.HARD_DELETE,
+      entity: "Complaint",
+      entityId: id,
+      changes: { complaintCode: complaint.complaintCode },
+    });
+  }
+
+  async restore(
+    id: string,
+    user: { userId: string; name: string }
+  ): Promise<ComplaintDocument> {
+    const complaint = await this.complaintModel.findById(id);
+    if (!complaint || !complaint.deletedAt) {
+      throw new EntityNotFoundException("Complaint", id);
+    }
+
+    const restored = await this.complaintModel.findByIdAndUpdate(
+      id,
+      { $unset: { deletedAt: 1, deletedBy: 1 } },
+      { new: true }
+    );
+
+    if (!restored) {
+      throw new EntityNotFoundException("Complaint", id);
+    }
+
+    const populated = await this.populateComplaint(id);
+    if (!populated) {
+      throw new EntityNotFoundException("Complaint", id);
+    }
+
+    // Log the action
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.RESTORE,
+      entity: "Complaint",
+      entityId: id,
+      changes: { complaintCode: complaint.complaintCode },
+    });
+
+    return populated;
+  }
+
+  async findDeleted(
+    filterDto: FilterComplaintsDto
+  ): Promise<PaginatedResult<ComplaintDocument>> {
+    const { skip, limit } = getSkipAndLimit(filterDto);
+    const sortOptions = getSortOptions(filterDto);
+
+    const filter: FilterQuery<ComplaintDocument> = {
+      deletedAt: { $ne: null },
+    };
+
+    if (filterDto.status) {
+      filter.status = filterDto.status;
+    }
+
+    if (filterDto.assignedEngineerId) {
+      filter.assignedEngineerId = filterDto.assignedEngineerId;
+    }
+
+    if (filterDto.search) {
+      filter.$or = [
+        { complaintCode: { $regex: filterDto.search, $options: "i" } },
+        { reporterNameAr: { $regex: filterDto.search, $options: "i" } },
+        { reporterNameEn: { $regex: filterDto.search, $options: "i" } },
+        { locationAr: { $regex: filterDto.search, $options: "i" } },
+        { locationEn: { $regex: filterDto.search, $options: "i" } },
+        { descriptionAr: { $regex: filterDto.search, $options: "i" } },
+        { descriptionEn: { $regex: filterDto.search, $options: "i" } },
+      ];
+    }
+
+    const [complaints, total] = await Promise.all([
+      this.complaintModel
+        .find(filter)
+        .populate("assignedEngineerId", "name email role")
+        .populate("maintenanceRequestId", "requestCode status maintenanceType")
+        .populate("deletedBy", "name email")
+        .sort({ deletedAt: -1, ...sortOptions })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.complaintModel.countDocuments(filter),
+    ]);
+
+    return {
+      data: complaints,
+      meta: createPaginationMeta(total, filterDto.page || 1, limit),
+    };
   }
 }
 

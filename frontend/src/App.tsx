@@ -24,6 +24,7 @@ import Home from "@/pages/Home";
 import NewComplaint from "@/pages/complaints/NewComplaint";
 import ComplaintsList from "@/pages/complaints/ComplaintsList";
 import ComplaintDetails from "@/pages/complaints/ComplaintDetails";
+import Trash from "@/pages/admin/Trash";
 import { Role } from "@/types";
 
 function App() {
@@ -158,9 +159,17 @@ function App() {
             }
           />
           <Route
-            path="admin/scheduled-tasks"
+            path="admin/trash"
             element={
               <ProtectedRoute allowedRoles={[Role.ADMIN]}>
+                <Trash />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin/scheduled-tasks"
+            element={
+              <ProtectedRoute allowedRoles={[Role.ADMIN, Role.CONSULTANT]}>
                 <ScheduledTasksManagement />
               </ProtectedRoute>
             }
@@ -168,7 +177,7 @@ function App() {
           <Route
             path="admin/scheduled-tasks/new"
             element={
-              <ProtectedRoute allowedRoles={[Role.ADMIN]}>
+              <ProtectedRoute allowedRoles={[Role.ADMIN, Role.CONSULTANT]}>
                 <ScheduledTaskForm />
               </ProtectedRoute>
             }
@@ -176,7 +185,7 @@ function App() {
           <Route
             path="admin/scheduled-tasks/:id/edit"
             element={
-              <ProtectedRoute allowedRoles={[Role.ADMIN]}>
+              <ProtectedRoute allowedRoles={[Role.ADMIN, Role.CONSULTANT]}>
                 <ScheduledTaskForm />
               </ProtectedRoute>
             }

@@ -11,7 +11,11 @@ export function LocationsPage() {
     <ReferenceDataManagement
       title="إدارة المواقع"
       description="إضافة وتعديل مواقع العمل"
-      service={locationsService as never}
+      service={{
+        ...locationsService,
+        softDelete: locationsService.softDelete,
+        hardDelete: locationsService.hardDelete,
+      } as never}
       queryKey="locations"
       fields={[
         { name: "name", label: "اسم الموقع", type: "text", required: true },
@@ -30,7 +34,11 @@ export function DepartmentsPage() {
     <ReferenceDataManagement
       title="إدارة الأقسام"
       description="إضافة وتعديل أقسام العمل"
-      service={departmentsService as never}
+      service={{
+        ...departmentsService,
+        softDelete: departmentsService.softDelete,
+        hardDelete: departmentsService.hardDelete,
+      } as never}
       queryKey="departments"
       fields={[
         { name: "name", label: "اسم القسم", type: "text", required: true },
@@ -64,7 +72,11 @@ export function MachinesPage() {
     <ReferenceDataManagement
       title="إدارة الآلات"
       description="إضافة وتعديل الآلات والمعدات"
-      service={machinesService as never}
+      service={{
+        ...machinesService,
+        softDelete: machinesService.softDelete,
+        hardDelete: machinesService.hardDelete,
+      } as never}
       queryKey="machines"
       fields={[
         { name: "name", label: "اسم الآلة", type: "text", required: true },

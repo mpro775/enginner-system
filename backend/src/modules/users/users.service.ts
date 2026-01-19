@@ -69,7 +69,9 @@ export class UsersService {
     const { skip, limit } = getSkipAndLimit(filterDto);
     const sortOptions = getSortOptions(filterDto);
 
-    const filter: FilterQuery<UserDocument> = {};
+    const filter: FilterQuery<UserDocument> = {
+      deletedAt: null, // استبعاد المحذوفين ناعماً
+    };
 
     if (filterDto.search) {
       filter.$or = [
@@ -95,6 +97,7 @@ export class UsersService {
         .find(filter)
         .select('-password -refreshToken')
         .populate('departmentId', 'name')
+        .populate('deletedBy', 'name email')
         .sort(sortOptions)
         .skip(skip)
         .limit(limit)
@@ -216,24 +219,26 @@ export class UsersService {
     return updatedUser!;
   }
 
-  async remove(
+  async softDelete(
     id: string,
     currentUser: { userId: string; name: string },
   ): Promise<void> {
     const user = await this.userModel.findById(id);
 
-    if (!user) {
+    if (!user || user.deletedAt) {
       throw new EntityNotFoundException('User', id);
     }
 
-    // Soft delete - just deactivate
-    await this.userModel.findByIdAndUpdate(id, { isActive: false });
+    await this.userModel.findByIdAndUpdate(id, {
+      deletedAt: new Date(),
+      deletedBy: currentUser.userId,
+    });
 
     // Log the action
     await this.auditLogsService.create({
       userId: currentUser.userId,
       userName: currentUser.name,
-      action: AuditAction.DELETE,
+      action: AuditAction.SOFT_DELETE,
       entity: 'User',
       entityId: id,
       previousValues: {
@@ -244,9 +249,125 @@ export class UsersService {
     });
   }
 
+  async hardDelete(
+    id: string,
+    currentUser: { userId: string; name: string },
+  ): Promise<void> {
+    const user = await this.userModel.findById(id);
+
+    if (!user) {
+      throw new EntityNotFoundException('User', id);
+    }
+
+    await this.userModel.findByIdAndDelete(id);
+
+    // Log the action
+    await this.auditLogsService.create({
+      userId: currentUser.userId,
+      userName: currentUser.name,
+      action: AuditAction.HARD_DELETE,
+      entity: 'User',
+      entityId: id,
+      previousValues: {
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  }
+
+  async restore(
+    id: string,
+    currentUser: { userId: string; name: string },
+  ): Promise<UserDocument> {
+    const user = await this.userModel.findById(id);
+
+    if (!user || !user.deletedAt) {
+      throw new EntityNotFoundException('User', id);
+    }
+
+    const restored = await this.userModel
+      .findByIdAndUpdate(
+        id,
+        { $unset: { deletedAt: 1, deletedBy: 1 } },
+        { new: true }
+      )
+      .select('-password -refreshToken')
+      .populate('departmentId', 'name');
+
+    if (!restored) {
+      throw new EntityNotFoundException('User', id);
+    }
+
+    // Log the action
+    await this.auditLogsService.create({
+      userId: currentUser.userId,
+      userName: currentUser.name,
+      action: AuditAction.RESTORE,
+      entity: 'User',
+      entityId: id,
+      changes: {
+        name: restored.name,
+        email: restored.email,
+      },
+    });
+
+    return restored;
+  }
+
+  async findDeleted(filterDto: FilterUsersDto): Promise<PaginatedResult<UserDocument>> {
+    const { skip, limit } = getSkipAndLimit(filterDto);
+    const sortOptions = getSortOptions(filterDto);
+
+    const filter: FilterQuery<UserDocument> = {
+      deletedAt: { $ne: null },
+    };
+
+    if (filterDto.search) {
+      filter.$or = [
+        { name: { $regex: filterDto.search, $options: 'i' } },
+        { email: { $regex: filterDto.search, $options: 'i' } },
+      ];
+    }
+
+    if (filterDto.role) {
+      filter.role = filterDto.role;
+    }
+
+    if (filterDto.departmentId) {
+      filter.departmentId = filterDto.departmentId;
+    }
+
+    const [users, total] = await Promise.all([
+      this.userModel
+        .find(filter)
+        .select('-password -refreshToken')
+        .populate('departmentId', 'name')
+        .populate('deletedBy', 'name email')
+        .sort({ deletedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.userModel.countDocuments(filter),
+    ]);
+
+    return {
+      data: users,
+      meta: createPaginationMeta(total, filterDto.page || 1, limit),
+    };
+  }
+
+  // Keep for backward compatibility
+  async remove(
+    id: string,
+    currentUser: { userId: string; name: string },
+  ): Promise<void> {
+    return this.softDelete(id, currentUser);
+  }
+
   async getEngineers(): Promise<UserDocument[]> {
     return this.userModel
-      .find({ role: 'engineer', isActive: true })
+      .find({ role: 'engineer', isActive: true, deletedAt: null })
       .select('name email departmentId')
       .populate('departmentId', 'name')
       .sort({ name: 1 });
@@ -254,7 +375,7 @@ export class UsersService {
 
   async getConsultants(): Promise<UserDocument[]> {
     return this.userModel
-      .find({ role: 'consultant', isActive: true })
+      .find({ role: 'consultant', isActive: true, deletedAt: null })
       .select('name email')
       .sort({ name: 1 });
   }

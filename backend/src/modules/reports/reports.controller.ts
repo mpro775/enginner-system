@@ -6,10 +6,15 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { Role } from "../../common/enums";
+import {
+  CurrentUser,
+  CurrentUserData,
+} from "../../common/decorators/current-user.decorator";
+import { ForbiddenAccessException } from "../../common/exceptions";
 
 @Controller("reports")
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER)
+@Roles(Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER, Role.ENGINEER)
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
@@ -17,9 +22,26 @@ export class ReportsController {
   async getSingleRequestReport(
     @Param("id") id: string,
     @Res() res: Response,
-    @Query("format") format?: string
+    @Query("format") format?: string,
+    @CurrentUser() user?: CurrentUserData
   ) {
     try {
+      // التحقق من أن المهندس يمكنه فقط الوصول إلى طلباته الخاصة
+      if (user?.role === Role.ENGINEER) {
+        const request = await this.reportsService.getSingleRequestDetails(id);
+        // التحقق من أن الطلب مخصص لهذا المهندس
+        // engineerId يكون populated object بعد populate
+        const engineerId =
+          (request.engineerId as any)?._id?.toString() ||
+          (request.engineerId as any)?.id?.toString() ||
+          request.engineerId?.toString();
+        if (engineerId !== user.userId) {
+          throw new ForbiddenAccessException(
+            "ليس لديك صلاحية للوصول إلى هذا التقرير"
+          );
+        }
+      }
+
       const reportFormat = format || "pdf";
 
       if (reportFormat === "pdf") {
@@ -50,7 +72,11 @@ export class ReportsController {
     } catch (error) {
       console.error("Single Request Report Error:", error);
       if (!res.headersSent) {
-        res.status(500).json({ message: "Failed to generate report" });
+        if (error instanceof ForbiddenAccessException) {
+          res.status(403).json({ message: error.message });
+        } else {
+          res.status(500).json({ message: "Failed to generate report" });
+        }
       }
     }
   }

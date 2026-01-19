@@ -152,6 +152,7 @@ export class ScheduledTasksService {
         .populate("machineId", "name")
         .populate("createdBy", "name email")
         .populate("completedRequestId", "requestCode")
+        .populate("deletedBy", "name email")
         .exec(),
       this.taskModel.countDocuments(filter),
     ]);
@@ -170,7 +171,7 @@ export class ScheduledTasksService {
     // Update overdue tasks first
     await this.updateOverdueTasks();
 
-    const tasks = await this.taskModel
+      const tasks = await this.taskModel
       .find({
         $or: [
           { engineerId: engineerId }, // Match string
@@ -183,6 +184,7 @@ export class ScheduledTasksService {
           { engineerId: null }, // Unassigned tasks
         ],
         status: { $in: [TaskStatus.PENDING, TaskStatus.OVERDUE] },
+        deletedAt: null, // استبعاد المحذوفين ناعماً
       })
       .sort({ scheduledYear: 1, scheduledMonth: 1 })
       .populate("engineerId", "name email")
@@ -210,6 +212,7 @@ export class ScheduledTasksService {
             : null,
         }, // Match ObjectId
       ],
+      deletedAt: null, // استبعاد المحذوفين ناعماً
     };
 
     if (filterDto.status) {
@@ -347,13 +350,55 @@ export class ScheduledTasksService {
     return populated;
   }
 
-  async delete(
+  async softDelete(
     id: string,
-    user: { userId: string; name: string }
+    user: { userId: string; name: string; role: string }
+  ): Promise<void> {
+    const task = await this.taskModel.findById(id);
+    if (!task || task.deletedAt) {
+      throw new EntityNotFoundException("Scheduled Task", id);
+    }
+
+    // Check if consultant is trying to delete a task they didn't create
+    if (
+      user.role === Role.CONSULTANT &&
+      task.createdBy.toString() !== user.userId
+    ) {
+      throw new ForbiddenAccessException(
+        "You can only delete tasks that you created"
+      );
+    }
+
+    await this.taskModel.findByIdAndUpdate(id, {
+      deletedAt: new Date(),
+      deletedBy: user.userId,
+    });
+
+    // Log the action
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.SOFT_DELETE,
+      entity: "ScheduledTask",
+      entityId: id,
+      changes: { taskCode: task.taskCode, title: task.title },
+    });
+  }
+
+  async hardDelete(
+    id: string,
+    user: { userId: string; name: string; role: string }
   ): Promise<void> {
     const task = await this.taskModel.findById(id);
     if (!task) {
       throw new EntityNotFoundException("Scheduled Task", id);
+    }
+
+    // Only ADMIN can hard delete
+    if (user.role !== Role.ADMIN) {
+      throw new ForbiddenAccessException(
+        "Only admins can permanently delete tasks"
+      );
     }
 
     await this.taskModel.findByIdAndDelete(id);
@@ -362,11 +407,124 @@ export class ScheduledTasksService {
     await this.auditLogsService.create({
       userId: user.userId,
       userName: user.name,
-      action: AuditAction.DELETE,
+      action: AuditAction.HARD_DELETE,
       entity: "ScheduledTask",
       entityId: id,
       changes: { taskCode: task.taskCode, title: task.title },
     });
+  }
+
+  async restore(
+    id: string,
+    user: { userId: string; name: string }
+  ): Promise<ScheduledTaskDocument> {
+    const task = await this.taskModel.findById(id);
+    if (!task || !task.deletedAt) {
+      throw new EntityNotFoundException("Scheduled Task", id);
+    }
+
+    const restored = await this.taskModel.findByIdAndUpdate(
+      id,
+      { $unset: { deletedAt: 1, deletedBy: 1 } },
+      { new: true }
+    );
+
+    if (!restored) {
+      throw new EntityNotFoundException("Scheduled Task", id);
+    }
+
+    const populated = await this.populateTask(id);
+    if (!populated) {
+      throw new EntityNotFoundException("Scheduled Task", id);
+    }
+
+    // Log the action
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.RESTORE,
+      entity: "ScheduledTask",
+      entityId: id,
+      changes: { taskCode: task.taskCode, title: task.title },
+    });
+
+    return populated;
+  }
+
+  async findDeleted(
+    filterDto: FilterScheduledTasksDto
+  ): Promise<PaginatedResult<ScheduledTaskDocument>> {
+    const filter: FilterQuery<ScheduledTaskDocument> = {
+      deletedAt: { $ne: null },
+    };
+
+    if (filterDto.status) {
+      filter.status = filterDto.status;
+    }
+
+    if (filterDto.engineerId) {
+      filter.engineerId = Types.ObjectId.isValid(filterDto.engineerId)
+        ? new Types.ObjectId(filterDto.engineerId)
+        : filterDto.engineerId;
+    }
+
+    if (filterDto.locationId) {
+      filter.locationId = Types.ObjectId.isValid(filterDto.locationId)
+        ? new Types.ObjectId(filterDto.locationId)
+        : filterDto.locationId;
+    }
+
+    if (filterDto.departmentId) {
+      filter.departmentId = Types.ObjectId.isValid(filterDto.departmentId)
+        ? new Types.ObjectId(filterDto.departmentId)
+        : filterDto.departmentId;
+    }
+
+    if (filterDto.systemId) {
+      filter.systemId = Types.ObjectId.isValid(filterDto.systemId)
+        ? new Types.ObjectId(filterDto.systemId)
+        : filterDto.systemId;
+    }
+
+    if (filterDto.machineId) {
+      filter.machineId = Types.ObjectId.isValid(filterDto.machineId)
+        ? new Types.ObjectId(filterDto.machineId)
+        : filterDto.machineId;
+    }
+
+    const { skip, limit } = getSkipAndLimit(filterDto);
+    const sortOptions = getSortOptions(filterDto);
+
+    const [tasks, total] = await Promise.all([
+      this.taskModel
+        .find(filter)
+        .sort({ deletedAt: -1, ...sortOptions })
+        .skip(skip)
+        .limit(limit)
+        .populate("engineerId", "name email")
+        .populate("locationId", "name")
+        .populate("departmentId", "name")
+        .populate("systemId", "name")
+        .populate("machineId", "name")
+        .populate("createdBy", "name email")
+        .populate("deletedBy", "name email")
+        .populate("completedRequestId", "requestCode")
+        .exec(),
+      this.taskModel.countDocuments(filter),
+    ]);
+
+    return {
+      data: tasks,
+      meta: createPaginationMeta(total, filterDto.page || 1, limit),
+    };
+  }
+
+  // Keep for backward compatibility
+  async delete(
+    id: string,
+    user: { userId: string; name: string; role: string }
+  ): Promise<void> {
+    return this.softDelete(id, user);
   }
 
   async markAsCompleted(
@@ -484,7 +642,9 @@ export class ScheduledTasksService {
     filterDto: FilterScheduledTasksDto,
     user: { userId: string; role: string }
   ): FilterQuery<ScheduledTaskDocument> {
-    const filter: FilterQuery<ScheduledTaskDocument> = {};
+    const filter: FilterQuery<ScheduledTaskDocument> = {
+      deletedAt: null, // استبعاد المحذوفين ناعماً
+    };
 
     if (filterDto.status) {
       filter.status = filterDto.status;
@@ -542,6 +702,7 @@ export class ScheduledTasksService {
       .populate("systemId", "name")
       .populate("machineId", "name")
       .populate("createdBy", "name email")
+      .populate("deletedBy", "name email")
       .populate("completedRequestId", "requestCode")
       .populate("parentTaskId", "taskCode title")
       .exec();
@@ -558,6 +719,7 @@ export class ScheduledTasksService {
           { engineerId: null },
         ],
         status: { $in: [TaskStatus.PENDING, TaskStatus.OVERDUE] },
+        deletedAt: null, // استبعاد المحذوفين ناعماً
       })
       .sort({ scheduledYear: 1, scheduledMonth: 1, scheduledDay: 1 })
       .populate("locationId", "name")
@@ -619,6 +781,7 @@ export class ScheduledTasksService {
     const tasksNeedingFirstGen = await this.taskModel.find({
       repetitionInterval: { $exists: true, $ne: null },
       parentTaskId: { $exists: false }, // Only original tasks, not generated ones
+      deletedAt: null, // استبعاد المحذوفين ناعماً
       $or: [
         { lastGeneratedAt: { $exists: false } },
         { lastGeneratedAt: null },

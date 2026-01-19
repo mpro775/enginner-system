@@ -46,6 +46,26 @@ export const usersService = {
     await api.delete(`/users/${id}`);
   },
 
+  async softDelete(id: string): Promise<void> {
+    await api.delete(`/users/${id}`);
+  },
+
+  async hardDelete(id: string): Promise<void> {
+    await api.delete(`/users/${id}/hard`);
+  },
+
+  async restore(id: string): Promise<User> {
+    const response = await api.post<ApiResponse<User>>(`/users/${id}/restore`);
+    return response.data.data;
+  },
+
+  async getDeleted(filters?: UserFilters): Promise<UsersResponse> {
+    const response = await api.get<ApiResponse<User[]> & { meta: PaginationMeta }>('/users/trash', {
+      params: filters,
+    });
+    return { data: response.data.data, meta: response.data.meta! };
+  },
+
   async getEngineers(): Promise<User[]> {
     const response = await api.get<ApiResponse<User[]>>('/users/engineers');
     return response.data.data;

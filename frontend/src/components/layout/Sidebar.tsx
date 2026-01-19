@@ -16,6 +16,7 @@ import {
   Calendar,
   ClipboardList,
   AlertCircle,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth";
@@ -99,12 +100,18 @@ const navItems: NavItem[] = [
     icon: Calendar,
     label: "الصيانة الوقائية",
     href: "/app/admin/scheduled-tasks",
-    roles: [Role.ADMIN],
+    roles: [Role.ADMIN, Role.CONSULTANT],
   },
   {
     icon: History,
     label: "سجل العمليات",
     href: "/app/admin/audit-logs",
+    roles: [Role.ADMIN],
+  },
+  {
+    icon: Trash2,
+    label: "سلة المهملات",
+    href: "/app/admin/trash",
     roles: [Role.ADMIN],
   },
   {

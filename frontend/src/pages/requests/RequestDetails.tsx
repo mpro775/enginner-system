@@ -21,6 +21,7 @@ import {
   RefreshCw,
   AlertCircle,
   Printer,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,7 @@ import {
 import { useAuthStore } from "@/store/auth";
 import { formatDateTime } from "@/lib/utils";
 import { RequestStatus, Role, MaintenanceType } from "@/types";
+import { useToast } from "@/hooks/use-toast";
 
 const updateRequestSchema = z.object({
   maintenanceType: z.nativeEnum(MaintenanceType, {
@@ -80,12 +82,15 @@ export default function RequestDetails() {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
+  const { toast } = useToast();
 
   const [showStopDialog, setShowStopDialog] = useState(false);
   const [showNoteDialog, setShowNoteDialog] = useState(false);
   const [showHealthSafetyNoteDialog, setShowHealthSafetyNoteDialog] =
     useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [softDeleteDialog, setSoftDeleteDialog] = useState(false);
+  const [hardDeleteDialog, setHardDeleteDialog] = useState(false);
   const [stopReason, setStopReason] = useState("");
   const [consultantNotes, setConsultantNotes] = useState("");
   const [healthSafetyNotes, setHealthSafetyNotes] = useState("");
@@ -193,6 +198,56 @@ export default function RequestDetails() {
       queryClient.invalidateQueries({ queryKey: ["request", id] });
       queryClient.invalidateQueries({ queryKey: ["requests"] });
       setShowEditDialog(false);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: requestsService.softDelete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["requests"] });
+      setSoftDeleteDialog(false);
+      toast({
+        title: "تم بنجاح",
+        description: "تم نقل الطلب إلى سلة المهملات بنجاح",
+        variant: "default",
+      });
+      navigate("/app/requests");
+    },
+    onError: (error: any) => {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "فشل نقل الطلب إلى سلة المهملات. يرجى المحاولة مرة أخرى.";
+      toast({
+        title: "خطأ",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const hardDeleteMutation = useMutation({
+    mutationFn: requestsService.hardDelete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["requests"] });
+      setHardDeleteDialog(false);
+      toast({
+        title: "تم بنجاح",
+        description: "تم حذف الطلب نهائياً",
+        variant: "destructive",
+      });
+      navigate("/app/requests");
+    },
+    onError: (error: any) => {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "فشل حذف الطلب. يرجى المحاولة مرة أخرى.";
+      toast({
+        title: "خطأ",
+        description: errorMessage,
+        variant: "destructive",
+      });
     },
   });
 
@@ -584,7 +639,8 @@ export default function RequestDetails() {
             canStop ||
             canComplete ||
             canAddNote ||
-            canAddHealthSafetyNote) && (
+            canAddHealthSafetyNote ||
+            isAdmin) && (
               <Card>
                 <CardHeader>
                   <CardTitle>الإجراءات المتاحة</CardTitle>
@@ -657,6 +713,33 @@ export default function RequestDetails() {
                       <RefreshCw className="ml-2 h-4 w-4" />
                       تحديث
                     </Button>
+
+                    {isAdmin && (
+                      <>
+                        <div className="w-full border-t border-border/50 pt-3 mt-2">
+                          <div className="flex flex-wrap gap-3">
+                            <Button
+                              variant="outline"
+                              className="flex-1 text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950"
+                              onClick={() => setSoftDeleteDialog(true)}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <Trash2 className="ml-2 h-4 w-4" />
+                              نقل إلى سلة المهملات
+                            </Button>
+                            <Button
+                              variant="outline"
+                              className="flex-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => setHardDeleteDialog(true)}
+                              disabled={hardDeleteMutation.isPending}
+                            >
+                              <AlertTriangle className="ml-2 h-4 w-4" />
+                              حذف نهائي
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -1118,6 +1201,75 @@ export default function RequestDetails() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Soft Delete Dialog */}
+      <Dialog open={softDeleteDialog} onOpenChange={setSoftDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              تأكيد النقل إلى سلة المهملات
+            </DialogTitle>
+            <DialogDescription>
+              هل أنت متأكد من نقل طلب الصيانة "{request?.requestCode}" إلى سلة المهملات؟ يمكنك استعادته لاحقاً.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSoftDeleteDialog(false)}>
+              إلغاء
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                if (id) {
+                  deleteMutation.mutate(id);
+                }
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending && (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              )}
+              نقل إلى سلة المهملات
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hard Delete Dialog */}
+      <Dialog open={hardDeleteDialog} onOpenChange={setHardDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              تأكيد الحذف النهائي
+            </DialogTitle>
+            <DialogDescription>
+              هل أنت متأكد من الحذف النهائي لطلب الصيانة "{request?.requestCode}"؟ هذا الإجراء لا يمكن
+              التراجع عنه!
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHardDeleteDialog(false)}>
+              إلغاء
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (id) {
+                  hardDeleteMutation.mutate(id);
+                }
+              }}
+              disabled={hardDeleteMutation.isPending}
+            >
+              {hardDeleteMutation.isPending && (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              )}
+              حذف نهائي
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

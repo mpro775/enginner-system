@@ -51,6 +51,9 @@ export enum AuditAction {
   LOGIN = "login",
   LOGOUT = "logout",
   STATUS_CHANGE = "status_change",
+  SOFT_DELETE = "soft_delete",
+  HARD_DELETE = "hard_delete",
+  RESTORE = "restore",
 }
 
 // User types
@@ -62,6 +65,8 @@ export interface User {
   departmentId?: Department;
   isActive: boolean;
   lastLoginAt?: string;
+  deletedAt?: string;
+  deletedBy?: User;
   createdAt: string;
   updatedAt: string;
 }
@@ -72,12 +77,16 @@ export interface Location {
   name: string;
   description?: string;
   isActive: boolean;
+  deletedAt?: string;
+  deletedBy?: User;
 }
 
 export interface Department {
   id: string;
   name: string;
   isActive: boolean;
+  deletedAt?: string;
+  deletedBy?: User;
 }
 
 export interface System {
@@ -85,6 +94,8 @@ export interface System {
   name: string;
   description?: string;
   isActive: boolean;
+  deletedAt?: string;
+  deletedBy?: User;
 }
 
 export interface Machine {
@@ -94,6 +105,8 @@ export interface Machine {
   description?: string;
   components?: string[];
   isActive: boolean;
+  deletedAt?: string;
+  deletedBy?: User;
 }
 
 // Maintenance request types
@@ -121,6 +134,8 @@ export interface MaintenanceRequest {
   closedAt?: string;
   stoppedAt?: string;
   complaintId?: Complaint | string;
+  deletedAt?: string;
+  deletedBy?: User;
   createdAt: string;
   updatedAt: string;
 }
@@ -216,6 +231,8 @@ export interface ScheduledTask {
   repetitionInterval?: RepetitionInterval;
   lastGeneratedAt?: string;
   parentTaskId?: ScheduledTask | string;
+  deletedAt?: string;
+  deletedBy?: User;
   createdAt: string;
   updatedAt: string;
 }
@@ -296,6 +313,8 @@ export interface Complaint {
   maintenanceRequestId?: MaintenanceRequest | string;
   resolvedAt?: string;
   closedAt?: string;
+  deletedAt?: string;
+  deletedBy?: User;
   createdAt: string;
   updatedAt: string;
 }

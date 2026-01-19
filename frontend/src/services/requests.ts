@@ -79,6 +79,27 @@ export const requestsService = {
     const response = await api.patch<ApiResponse<MaintenanceRequest>>(`/requests/${id}/complete`);
     return response.data.data;
   },
+
+  async softDelete(id: string): Promise<void> {
+    await api.delete(`/requests/${id}`);
+  },
+
+  async hardDelete(id: string): Promise<void> {
+    await api.delete(`/requests/${id}/hard`);
+  },
+
+  async restore(id: string): Promise<MaintenanceRequest> {
+    const response = await api.post<ApiResponse<MaintenanceRequest>>(`/requests/${id}/restore`);
+    return response.data.data;
+  },
+
+  async getDeleted(filters?: RequestFilters): Promise<RequestsResponse> {
+    const response = await api.get<ApiResponse<MaintenanceRequest[]> & { meta: PaginationMeta }>(
+      '/requests/trash',
+      { params: filters }
+    );
+    return { data: response.data.data, meta: response.data.meta! };
+  },
 };
 
 

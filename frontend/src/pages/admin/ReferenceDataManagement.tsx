@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, Loader2, UserCheck, UserX } from "lucide-react";
+import { Plus, Edit, Trash2, Loader2, UserCheck, UserX, MoreVertical, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,10 +19,20 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { TagsInput } from "@/components/ui/tags-input";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
+import { useAuthStore } from "@/store/auth";
+import { Role } from "@/types";
 
 interface ReferenceDataProps {
   title: string;
@@ -33,6 +43,8 @@ interface ReferenceDataProps {
     update: (id: string, data: Record<string, unknown>) => Promise<unknown>;
     delete: (id: string) => Promise<void>;
     toggleStatus?: (id: string, currentStatus: boolean) => Promise<unknown>;
+    softDelete?: (id: string) => Promise<void>;
+    hardDelete?: (id: string) => Promise<void>;
   };
   queryKey: string;
   fields: {
@@ -60,6 +72,7 @@ export default function ReferenceDataManagement({
   relatedService,
 }: ReferenceDataProps) {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
   const [showDialog, setShowDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<Record<
     string,
@@ -68,6 +81,9 @@ export default function ReferenceDataManagement({
   const [formData, setFormData] = useState<
     Record<string, string | boolean | string[]>
   >({});
+  const [softDeleteDialog, setSoftDeleteDialog] = useState<{ id: string; name: string } | null>(null);
+  
+  const isAdmin = user?.role === Role.ADMIN;
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: [queryKey],
@@ -100,12 +116,32 @@ export default function ReferenceDataManagement({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: service.delete,
+    mutationFn: (id: string) => {
+      if (service.softDelete) {
+        return service.softDelete(id);
+      }
+      return service.delete(id);
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: [queryKey] });
       await refetch();
     },
   });
+
+  const hardDeleteMutation = useMutation({
+    mutationFn: (id: string) => {
+      if (service.hardDelete) {
+        return service.hardDelete(id);
+      }
+      return service.delete(id);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: [queryKey] });
+      await refetch();
+    },
+  });
+
+  const [hardDeleteDialog, setHardDeleteDialog] = useState<{ id: string; name: string } | null>(null);
 
   const toggleStatusMutation = useMutation({
     mutationFn: async ({
@@ -274,17 +310,45 @@ export default function ReferenceDataManagement({
                             )}
                           </Button>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            if (confirm("هل أنت متأكد من الحذف؟")) {
-                              deleteMutation.mutate(item.id as string);
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        {isAdmin && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() =>
+                                setSoftDeleteDialog({
+                                  id: item.id as string,
+                                  name: (item.name as string) || "",
+                                })
+                              }
+                            >
+                              <Trash2 className="h-4 w-4 ml-2" />
+                              نقل إلى سلة المهملات
+                            </DropdownMenuItem>
+                              {service.hardDelete && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() =>
+                                      setHardDeleteDialog({
+                                        id: item.id as string,
+                                        name: (item.name as string) || "",
+                                      })
+                                    }
+                                  >
+                                    <AlertTriangle className="h-4 w-4 ml-2" />
+                                    حذف نهائي
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -409,6 +473,77 @@ export default function ReferenceDataManagement({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Soft Delete Dialog */}
+      <Dialog open={!!softDeleteDialog} onOpenChange={() => setSoftDeleteDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              تأكيد النقل إلى سلة المهملات
+            </DialogTitle>
+            <DialogDescription>
+              هل أنت متأكد من نقل "{softDeleteDialog?.name}" إلى سلة المهملات؟ يمكنك استعادته لاحقاً.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSoftDeleteDialog(null)}>
+              إلغاء
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                if (softDeleteDialog) {
+                  deleteMutation.mutate(softDeleteDialog.id);
+                  setSoftDeleteDialog(null);
+                }
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending && (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              )}
+              نقل إلى سلة المهملات
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hard Delete Dialog */}
+      <Dialog open={!!hardDeleteDialog} onOpenChange={() => setHardDeleteDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              تأكيد الحذف النهائي
+            </DialogTitle>
+            <DialogDescription>
+              هل أنت متأكد من الحذف النهائي لـ "{hardDeleteDialog?.name}"؟ هذا الإجراء لا يمكن
+              التراجع عنه!
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHardDeleteDialog(null)}>
+              إلغاء
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (hardDeleteDialog && service.hardDelete) {
+                  hardDeleteMutation.mutate(hardDeleteDialog.id);
+                  setHardDeleteDialog(null);
+                }
+              }}
+              disabled={hardDeleteMutation.isPending}
+            >
+              {hardDeleteMutation.isPending && (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              )}
+              حذف نهائي
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

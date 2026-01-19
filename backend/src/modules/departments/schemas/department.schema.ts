@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export type DepartmentDocument = Department & Document;
 
@@ -19,6 +19,12 @@ export class Department {
 
   @Prop({ default: true })
   isActive: boolean;
+
+  @Prop({ type: Date, default: null })
+  deletedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  deletedBy?: Types.ObjectId;
 }
 
 export const DepartmentSchema = SchemaFactory.createForClass(Department);
@@ -26,6 +32,7 @@ export const DepartmentSchema = SchemaFactory.createForClass(Department);
 // Indexes
 DepartmentSchema.index({ name: 1 }, { unique: true });
 DepartmentSchema.index({ isActive: 1 });
+DepartmentSchema.index({ deletedAt: 1 });
 
 
 

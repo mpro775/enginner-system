@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,10 +28,19 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
 import { scheduledTasksService } from "@/services/scheduled-tasks";
-import { ScheduledTask, TaskStatus } from "@/types";
+import { ScheduledTask, TaskStatus, Role } from "@/types";
+import { useAuthStore } from "@/store/auth";
 
 const getMonthName = (month: number): string => {
   const months = [
@@ -96,8 +106,17 @@ const getStatusBadge = (status: TaskStatus) => {
 export default function ScheduledTasksManagement() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<ScheduledTask | null>(null);
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Record<string, boolean>>({});
+
+  const toggleDescription = (taskId: string) => {
+    setExpandedDescriptions(prev => ({
+      ...prev,
+      [taskId]: !prev[taskId]
+    }));
+  };
 
   const [filters, setFilters] = useState({
     page: 1,
@@ -115,8 +134,10 @@ export default function ScheduledTasksManagement() {
       }),
   });
 
+  const [deleteType, setDeleteType] = useState<"soft" | "hard">("soft");
+
   const deleteMutation = useMutation({
-    mutationFn: scheduledTasksService.delete,
+    mutationFn: scheduledTasksService.softDelete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["scheduled-tasks"] });
       setShowDeleteDialog(false);
@@ -124,14 +145,28 @@ export default function ScheduledTasksManagement() {
     },
   });
 
-  const handleDelete = (task: ScheduledTask) => {
+  const hardDeleteMutation = useMutation({
+    mutationFn: scheduledTasksService.hardDelete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["scheduled-tasks"] });
+      setShowDeleteDialog(false);
+      setTaskToDelete(null);
+    },
+  });
+
+  const handleDelete = (task: ScheduledTask, type: "soft" | "hard" = "soft") => {
     setTaskToDelete(task);
+    setDeleteType(type);
     setShowDeleteDialog(true);
   };
 
   const confirmDelete = () => {
     if (taskToDelete) {
-      deleteMutation.mutate(taskToDelete.id);
+      if (deleteType === "hard") {
+        hardDeleteMutation.mutate(taskToDelete.id);
+      } else {
+        deleteMutation.mutate(taskToDelete.id);
+      }
     }
   };
 
@@ -239,58 +274,172 @@ export default function ScheduledTasksManagement() {
           tasks.map((task) => (
             <Card key={task.id}>
               <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-lg font-semibold">{task.title}</h3>
-                      {getStatusBadge(task.status)}
-                      <span className="text-sm text-muted-foreground">
-                        {task.taskCode}
-                      </span>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 space-y-4">
+                    {/* العنوان والحالة */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <h3 className="text-xl font-bold text-foreground">
+                          {task.title}
+                        </h3>
+                        {getStatusBadge(task.status)}
+                        <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
+                          {task.taskCode}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="grid gap-2 md:grid-cols-2 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <span>المهندس:</span>
-                        <span className="font-medium">
+                    {/* التفاصيل الرئيسية */}
+                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                      <div className="flex items-start gap-2">
+                        <span className="text-sm text-muted-foreground min-w-[80px]">المهندس:</span>
+                        <span className="text-sm font-medium text-foreground">
                           {task.engineerId?.name || "متاحة لجميع المهندسين"}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4" />
-                        <span>{formatScheduledDate(task)}</span>
+                      <div className="flex items-start gap-2">
+                        <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                        <div>
+                          <span className="text-sm text-muted-foreground block mb-1">التاريخ المحدد:</span>
+                          <span className="text-sm font-medium text-foreground">
+                            {formatScheduledDate(task)}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span>القسم:</span>
-                        <span className="font-medium">
+                      <div className="flex items-start gap-2">
+                        <span className="text-sm text-muted-foreground min-w-[80px]">منشئ المهمة:</span>
+                        <span className="text-sm font-medium text-foreground">
+                          {task.createdBy?.name || "-"}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-sm text-muted-foreground min-w-[80px]">الموقع:</span>
+                        <span className="text-sm font-medium text-foreground">
+                          {task.locationId?.name || "-"}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-sm text-muted-foreground min-w-[80px]">القسم:</span>
+                        <span className="text-sm font-medium text-foreground">
                           {task.departmentId.name}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span>الآلة:</span>
-                        <span className="font-medium">
+                      <div className="flex items-start gap-2">
+                        <span className="text-sm text-muted-foreground min-w-[80px]">النظام:</span>
+                        <span className="text-sm font-medium text-foreground">
+                          {task.systemId?.name || "-"}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-sm text-muted-foreground min-w-[80px]">الآلة:</span>
+                        <span className="text-sm font-medium text-foreground">
                           {task.machineId.name}
                         </span>
                       </div>
                     </div>
 
-                    {task.description && (
-                      <p className="text-sm text-muted-foreground">
-                        {task.description}
-                      </p>
+                    {/* المكونات */}
+                    {task.machineId?.components && task.machineId.components.length > 0 && (
+                      <div className="space-y-2">
+                        <span className="text-sm font-medium text-muted-foreground block">
+                          المكونات:
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          {task.maintainAllComponents ? (
+                            <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+                              جميع المكونات ({task.machineId.components.length})
+                            </span>
+                          ) : task.selectedComponents && task.selectedComponents.length > 0 ? (
+                            task.selectedComponents.map((component, idx) => (
+                              <span
+                                key={idx}
+                                className="text-sm bg-gray-100 text-gray-800 px-3 py-1 rounded-full"
+                              >
+                                {component}
+                              </span>
+                            ))
+                          ) : null}
+                        </div>
+                      </div>
                     )}
 
-                    {task.status === TaskStatus.COMPLETED &&
-                      task.completedRequestId && (
-                        <div className="text-sm">
-                          <span className="text-muted-foreground">
-                            الطلب المكتمل: {task.completedRequestId.requestCode}
+                    {/* الوصف */}
+                    {task.description && (
+                      <div className="space-y-2 pt-2 border-t">
+                        <span className="text-sm font-medium text-muted-foreground block">
+                          الوصف:
+                        </span>
+                        <div className="text-sm text-foreground leading-relaxed">
+                          {task.description.length > 100 ? (
+                            <>
+                              <p className="whitespace-pre-wrap">
+                                {expandedDescriptions[task.id] 
+                                  ? task.description 
+                                  : task.description.slice(0, 100) + "..."}
+                              </p>
+                              <button
+                                onClick={() => toggleDescription(task.id)}
+                                className="text-primary hover:underline text-sm mt-1 font-medium"
+                              >
+                                {expandedDescriptions[task.id] ? "عرض أقل" : "قراءة المزيد"}
+                              </button>
+                            </>
+                          ) : (
+                            <p className="whitespace-pre-wrap">{task.description}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* معلومات إضافية */}
+                    <div className="space-y-2 pt-2 border-t">
+                      {task.repetitionInterval && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-muted-foreground">معدل التكرار:</span>
+                          <span className="font-medium text-foreground">
+                            {task.repetitionInterval === "weekly" && "أسبوعي"}
+                            {task.repetitionInterval === "monthly" && "شهري"}
+                            {task.repetitionInterval === "quarterly" && "كل 3 أشهر"}
+                            {task.repetitionInterval === "semi_annually" && "كل 6 أشهر"}
                           </span>
                         </div>
                       )}
+
+                      <div className="flex items-start gap-2 text-sm">
+                        <span className="text-muted-foreground min-w-[80px]">تاريخ الإنشاء:</span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-medium text-foreground">
+                            {new Date(task.createdAt).toLocaleDateString('en-GB', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(task.createdAt).toLocaleDateString('ar-SA-u-ca-islamic', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric'
+                            })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {task.status === TaskStatus.COMPLETED && task.completedRequestId && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-muted-foreground">الطلب المكتمل:</span>
+                          <span className="font-medium text-foreground">
+                            {task.completedRequestId.requestCode}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex gap-2 ml-4">
+                  {/* أزرار الإجراءات */}
+                  <div className="flex flex-col gap-2 flex-shrink-0">
                     <Button
                       variant="outline"
                       size="sm"
@@ -298,15 +447,34 @@ export default function ScheduledTasksManagement() {
                         navigate(`/app/admin/scheduled-tasks/${task.id}/edit`)
                       }
                     >
-                      <Edit className="h-4 w-4" />
+                      <Edit className="h-4 w-4 ml-2" />
+                      تعديل
                     </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleDelete(task)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {/* فقط الأدمن يمكنه حذف المهام */}
+                    {user?.role === Role.ADMIN && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="destructive" size="sm">
+                            <Trash2 className="h-4 w-4 ml-2" />
+                            حذف
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleDelete(task, "soft")}>
+                            <Trash2 className="h-4 w-4 ml-2" />
+                            نقل إلى سلة المهملات
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => handleDelete(task, "hard")}
+                          >
+                            <AlertTriangle className="h-4 w-4 ml-2" />
+                            حذف نهائي
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -344,11 +512,21 @@ export default function ScheduledTasksManagement() {
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>تأكيد الحذف</DialogTitle>
+            <DialogTitle className={deleteType === "hard" ? "flex items-center gap-2 text-destructive" : ""}>
+              {deleteType === "hard" && <AlertTriangle className="h-5 w-5" />}
+              {deleteType === "hard" ? "تأكيد الحذف النهائي" : "تأكيد النقل إلى سلة المهملات"}
+            </DialogTitle>
+            <DialogDescription>
+              {deleteType === "hard" ? (
+                <>
+                  هل أنت متأكد من الحذف النهائي للصيانة الوقائية "{taskToDelete?.title}"؟ هذا الإجراء لا يمكن
+                  التراجع عنه!
+                </>
+              ) : (
+                <>هل أنت متأكد من نقل الصيانة الوقائية "{taskToDelete?.title}" إلى سلة المهملات؟</>
+              )}
+            </DialogDescription>
           </DialogHeader>
-          <div>
-            هل أنت متأكد من حذف الصيانة الوقائية "{taskToDelete?.title}"؟
-          </div>
           <DialogFooter>
             <Button
               variant="outline"
@@ -359,9 +537,11 @@ export default function ScheduledTasksManagement() {
             <Button
               variant="destructive"
               onClick={confirmDelete}
-              disabled={deleteMutation.isPending}
+              disabled={deleteMutation.isPending || hardDeleteMutation.isPending}
             >
-              {deleteMutation.isPending ? "جاري الحذف..." : "حذف"}
+              {(deleteMutation.isPending || hardDeleteMutation.isPending) 
+                ? (deleteType === "hard" ? "جاري الحذف..." : "جاري النقل...")
+                : (deleteType === "hard" ? "حذف نهائي" : "نقل إلى سلة المهملات")}
             </Button>
           </DialogFooter>
         </DialogContent>

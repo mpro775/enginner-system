@@ -87,6 +87,12 @@ export class MaintenanceRequest {
 
   @Prop({ type: Types.ObjectId, ref: "Complaint" })
   complaintId?: Types.ObjectId;
+
+  @Prop({ type: Date, default: null })
+  deletedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: "User" })
+  deletedBy?: Types.ObjectId;
 }
 
 export const MaintenanceRequestSchema =
@@ -102,3 +108,4 @@ MaintenanceRequestSchema.index({ maintenanceType: 1 });
 MaintenanceRequestSchema.index({ status: 1 });
 MaintenanceRequestSchema.index({ createdAt: -1 });
 MaintenanceRequestSchema.index({ openedAt: -1 });
+MaintenanceRequestSchema.index({ deletedAt: 1 });

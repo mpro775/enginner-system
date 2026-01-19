@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, ArrowRight } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Card,
   CardContent,
@@ -84,6 +91,8 @@ export default function NewRequest() {
   const watchMaintainAllComponents = watch("maintainAllComponents");
 
   const [selectedTask, setSelectedTask] = useState<ScheduledTask | null>(null);
+  const [showAllTasksDialog, setShowAllTasksDialog] = useState(false);
+  const [pendingMachineId, setPendingMachineId] = useState<string | null>(null);
 
   const { data: locations } = useQuery({
     queryKey: ["locations"],
@@ -153,11 +162,25 @@ export default function NewRequest() {
     setValue("locationId", task.locationId.id);
     setValue("departmentId", task.departmentId.id);
     setValue("systemId", task.systemId.id);
-    setValue("machineId", task.machineId.id);
+    // Store machineId to set it after machines are loaded
+    setPendingMachineId(task.machineId.id);
     setValue("maintainAllComponents", task.maintainAllComponents);
     setValue("selectedComponents", task.selectedComponents || []);
     setValue("reasonText", task.description || task.title);
+    // Close dialog if open
+    setShowAllTasksDialog(false);
   };
+
+  // Set machineId after machines are loaded
+  useEffect(() => {
+    if (pendingMachineId && machines && machines.length > 0) {
+      const machineExists = machines.find(m => m.id === pendingMachineId);
+      if (machineExists) {
+        setValue("machineId", pendingMachineId);
+        setPendingMachineId(null);
+      }
+    }
+  }, [machines, pendingMachineId, setValue]);
 
   const handleClearTask = () => {
     setSelectedTask(null);
@@ -227,7 +250,7 @@ export default function NewRequest() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {pendingTasks.map((task) => {
+              {pendingTasks.slice(0, 3).map((task) => {
                 const daysRemaining = getDaysRemaining(task);
                 const isOverdue = daysRemaining < 0;
                 return (
@@ -264,10 +287,71 @@ export default function NewRequest() {
                   </div>
                 );
               })}
+              {pendingTasks.length > 3 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setShowAllTasksDialog(true)}
+                >
+                  عرض الكل ({pendingTasks.length} مهمة)
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Dialog for All Tasks */}
+      <Dialog open={showAllTasksDialog} onOpenChange={setShowAllTasksDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>جميع الصيانة الوقائية المعلقة</DialogTitle>
+            <DialogDescription>
+              اختر صيانة وقائية لملء البيانات تلقائياً ({pendingTasks?.length || 0} مهمة)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="overflow-y-auto space-y-3 pr-2">
+            {pendingTasks?.map((task) => {
+              const daysRemaining = getDaysRemaining(task);
+              const isOverdue = daysRemaining < 0;
+              return (
+                <div
+                  key={task.id}
+                  className={`p-4 border rounded-lg cursor-pointer transition-colors ${isOverdue
+                    ? "border-destructive bg-destructive/5 hover:bg-destructive/10"
+                    : "border-border hover:bg-accent"
+                    }`}
+                  onClick={() => handleTaskSelect(task)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h4 className="font-semibold">{task.title}</h4>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {task.departmentId.name} - {task.machineId.name}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatScheduledDate(task)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      {isOverdue ? (
+                        <span className="text-destructive font-semibold text-sm">
+                          متأخرة {Math.abs(daysRemaining)} يوم
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">
+                          متبقي {daysRemaining} يوم
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {selectedTask && (
         <Card className="border-primary">
@@ -308,6 +392,7 @@ export default function NewRequest() {
               <div className="space-y-2">
                 <Label>نوع الصيانة *</Label>
                 <Select
+                  value={watch("maintenanceType")}
                   onValueChange={(value) =>
                     setValue("maintenanceType", value as MaintenanceType)
                   }
@@ -339,6 +424,7 @@ export default function NewRequest() {
               <div className="space-y-2">
                 <Label>الموقع *</Label>
                 <Select
+                  value={watch("locationId")}
                   onValueChange={(value) => setValue("locationId", value)}
                 >
                   <SelectTrigger
@@ -365,6 +451,7 @@ export default function NewRequest() {
               <div className="space-y-2">
                 <Label>القسم *</Label>
                 <Select
+                  value={watch("departmentId")}
                   onValueChange={(value) => setValue("departmentId", value)}
                 >
                   <SelectTrigger
@@ -390,7 +477,10 @@ export default function NewRequest() {
               {/* System */}
               <div className="space-y-2">
                 <Label>النظام *</Label>
-                <Select onValueChange={handleSystemChange}>
+                <Select 
+                  value={watch("systemId")}
+                  onValueChange={handleSystemChange}
+                >
                   <SelectTrigger
                     className={errors.systemId ? "border-destructive" : ""}
                   >
@@ -582,7 +672,10 @@ export default function NewRequest() {
                 placeholder="وصف تفصيلي للمشكلة أو سبب طلب الصيانة"
                 rows={4}
                 className={errors.reasonText ? "border-destructive" : ""}
-                {...register("reasonText")}
+                value={watch("reasonText") || ""}
+                onChange={(e) => {
+                  setValue("reasonText", e.target.value, { shouldValidate: true });
+                }}
               />
               {errors.reasonText && (
                 <p className="text-xs text-destructive">

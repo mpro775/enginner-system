@@ -28,6 +28,12 @@ export class Machine {
 
   @Prop({ default: true })
   isActive: boolean;
+
+  @Prop({ type: Date, default: null })
+  deletedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  deletedBy?: Types.ObjectId;
 }
 
 export const MachineSchema = SchemaFactory.createForClass(Machine);
@@ -36,3 +42,4 @@ export const MachineSchema = SchemaFactory.createForClass(Machine);
 MachineSchema.index({ systemId: 1 });
 MachineSchema.index({ name: 1, systemId: 1 }, { unique: true });
 MachineSchema.index({ isActive: 1 });
+MachineSchema.index({ deletedAt: 1 });
