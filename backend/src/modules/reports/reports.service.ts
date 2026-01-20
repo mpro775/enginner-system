@@ -842,15 +842,36 @@ export class ReportsService {
     }
 
     if (filter.locationId) {
-      matchStage.locationId = filter.locationId;
+      // Support both String and ObjectId formats
+      const Types = require('mongoose').Types;
+      matchStage.locationId = { 
+        $in: [
+          filter.locationId,
+          Types.ObjectId.isValid(filter.locationId) ? new Types.ObjectId(filter.locationId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filter.departmentId) {
-      matchStage.departmentId = filter.departmentId;
+      // Support both String and ObjectId formats
+      const Types = require('mongoose').Types;
+      matchStage.departmentId = { 
+        $in: [
+          filter.departmentId,
+          Types.ObjectId.isValid(filter.departmentId) ? new Types.ObjectId(filter.departmentId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filter.systemId) {
-      matchStage.systemId = filter.systemId;
+      // Support both String and ObjectId formats
+      const Types = require('mongoose').Types;
+      matchStage.systemId = { 
+        $in: [
+          filter.systemId,
+          Types.ObjectId.isValid(filter.systemId) ? new Types.ObjectId(filter.systemId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filter.maintenanceType) {

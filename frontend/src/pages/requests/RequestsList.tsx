@@ -86,14 +86,38 @@ export default function RequestsList() {
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["requests", filters],
-    queryFn: () =>
-      requestsService.getAll({
-        ...filters,
-        status: filters.status || undefined,
-        maintenanceType: filters.maintenanceType || undefined,
-        locationId: filters.locationId || undefined,
-        departmentId: filters.departmentId || undefined,
-      }),
+    queryFn: () => {
+      // Clean filters: remove empty strings and only include defined values
+      const cleanFilters: {
+        page: number;
+        limit: number;
+        status?: string;
+        maintenanceType?: string;
+        locationId?: string;
+        departmentId?: string;
+      } = {
+        page: filters.page,
+        limit: filters.limit,
+      };
+
+      if (filters.status && filters.status.trim() !== "") {
+        cleanFilters.status = filters.status;
+      }
+
+      if (filters.maintenanceType && filters.maintenanceType.trim() !== "") {
+        cleanFilters.maintenanceType = filters.maintenanceType;
+      }
+
+      if (filters.locationId && filters.locationId.trim() !== "") {
+        cleanFilters.locationId = filters.locationId;
+      }
+
+      if (filters.departmentId && filters.departmentId.trim() !== "") {
+        cleanFilters.departmentId = filters.departmentId;
+      }
+
+      return requestsService.getAll(cleanFilters);
+    },
   });
 
   const { data: locations } = useQuery({

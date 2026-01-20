@@ -6,7 +6,6 @@ import {
   Plus,
   Filter,
   Calendar,
-  Building2,
   AlertCircle,
   CheckCircle2,
   Clock,
@@ -126,6 +125,14 @@ export default function MyScheduledTasks() {
   const [selectedTaskForExecution, setSelectedTaskForExecution] = useState<ScheduledTask | null>(null);
   const [executionNotes, setExecutionNotes] = useState("");
   const [availableTasks, setAvailableTasks] = useState<ScheduledTask[]>([]);
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Record<string, boolean>>({});
+
+  const toggleDescription = (taskId: string) => {
+    setExpandedDescriptions(prev => ({
+      ...prev,
+      [taskId]: !prev[taskId]
+    }));
+  };
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["my-scheduled-tasks", filters],
@@ -290,62 +297,153 @@ export default function MyScheduledTasks() {
 
                 return (
                   <Card key={task.id} className="bg-card">
-                    <CardContent className="p-3 sm:p-4">
-                      <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between gap-3 sm:gap-4">
-                        <div className="flex-1 space-y-2 w-full">
-                          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                            <h4 className="font-semibold text-sm sm:text-base">{task.title}</h4>
-                            {getStatusBadge(task.status)}
-                          </div>
-                          <div className="grid gap-2 sm:grid-cols-2 text-xs sm:text-sm text-muted-foreground">
-                            <div className="flex items-center gap-2">
-                              <Building2 className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                              <span className="break-words">
-                                {task.departmentId.name} - {task.machineId.name}
+                    <CardContent className="p-4 sm:p-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 space-y-4">
+                          {/* العنوان والحالة */}
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <h4 className="text-lg sm:text-xl font-bold text-foreground">
+                                {task.title}
+                              </h4>
+                              {getStatusBadge(task.status)}
+                              <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
+                                {task.taskCode}
                               </span>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                              <span>{formatScheduledDate(task)}</span>
+                          </div>
+
+                          {/* التفاصيل الرئيسية */}
+                          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            <div className="flex items-start gap-2">
+                              <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                              <div>
+                                <span className="text-sm text-muted-foreground block mb-1">التاريخ المحدد:</span>
+                                <span className="text-sm font-medium text-foreground">
+                                  {formatScheduledDate(task)}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="text-sm text-muted-foreground min-w-[80px]">الموقع:</span>
+                              <span className="text-sm font-medium text-foreground">
+                                {task.locationId?.name || "-"}
+                              </span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="text-sm text-muted-foreground min-w-[80px]">القسم:</span>
+                              <span className="text-sm font-medium text-foreground">
+                                {task.departmentId.name}
+                              </span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="text-sm text-muted-foreground min-w-[80px]">النظام:</span>
+                              <span className="text-sm font-medium text-foreground">
+                                {task.systemId?.name || "-"}
+                              </span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="text-sm text-muted-foreground min-w-[80px]">الآلة:</span>
+                              <span className="text-sm font-medium text-foreground">
+                                {task.machineId.name}
+                              </span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className={`text-sm font-medium ${isOverdue ? "text-destructive" : "text-foreground"}`}>
+                                {isOverdue 
+                                  ? `متأخرة ${Math.abs(daysRemaining)} يوم`
+                                  : `متبقي ${daysRemaining} يوم`}
+                              </span>
                             </div>
                           </div>
+
+                          {/* المكونات */}
+                          {task.machineId?.components && task.machineId.components.length > 0 && (
+                            <div className="space-y-2">
+                              <span className="text-sm font-medium text-muted-foreground block">
+                                المكونات:
+                              </span>
+                              <div className="flex flex-wrap gap-2">
+                                {task.maintainAllComponents ? (
+                                  <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+                                    جميع المكونات ({task.machineId.components.length})
+                                  </span>
+                                ) : task.selectedComponents && task.selectedComponents.length > 0 ? (
+                                  task.selectedComponents.map((component, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="text-sm bg-gray-100 text-gray-800 px-3 py-1 rounded-full"
+                                    >
+                                      {component}
+                                    </span>
+                                  ))
+                                ) : null}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* الوصف */}
                           {task.description && (
-                            <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
-                              {task.description}
-                            </p>
+                            <div className="space-y-2 pt-2 border-t">
+                              <span className="text-sm font-medium text-muted-foreground block">
+                                الوصف:
+                              </span>
+                              <div className="text-sm text-foreground leading-relaxed">
+                                {task.description.length > 100 ? (
+                                  <>
+                                    <p className="whitespace-pre-wrap">
+                                      {expandedDescriptions[task.id] 
+                                        ? task.description 
+                                        : task.description.slice(0, 100) + "..."}
+                                    </p>
+                                    <button
+                                      onClick={() => toggleDescription(task.id)}
+                                      className="text-primary hover:underline text-sm mt-1 font-medium"
+                                    >
+                                      {expandedDescriptions[task.id] ? "عرض أقل" : "قراءة المزيد"}
+                                    </button>
+                                  </>
+                                ) : (
+                                  <p className="whitespace-pre-wrap">{task.description}</p>
+                                )}
+                              </div>
+                            </div>
                           )}
-                          <div>
-                            {isOverdue ? (
-                              <span className="text-destructive font-semibold text-xs sm:text-sm">
-                                متأخرة {Math.abs(daysRemaining)} يوم
+
+                          {/* معلومات إضافية */}
+                          {task.repetitionInterval && (
+                            <div className="flex items-center gap-2 text-sm pt-2 border-t">
+                              <span className="text-muted-foreground">معدل التكرار:</span>
+                              <span className="font-medium text-foreground">
+                                {task.repetitionInterval === "weekly" && "أسبوعي"}
+                                {task.repetitionInterval === "monthly" && "شهري"}
+                                {task.repetitionInterval === "quarterly" && "كل 3 أشهر"}
+                                {task.repetitionInterval === "semi_annually" && "كل 6 أشهر"}
                               </span>
-                            ) : (
-                              <span className="text-muted-foreground text-xs sm:text-sm">
-                                متبقي {daysRemaining} يوم
-                              </span>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
-                        <Button
-                          onClick={() => handleAcceptTask(task)}
-                          disabled={acceptTaskMutation.isPending}
-                          className="w-full sm:w-auto sm:ml-4"
-                          size="sm"
-                        >
-                          {acceptTaskMutation.isPending ? (
-                            <>
-                              <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                              <span className="hidden sm:inline">جاري القبول...</span>
-                              <span className="sm:hidden">جاري...</span>
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle2 className="ml-2 h-4 w-4" />
-                              <span className="hidden sm:inline">قبول المهمة</span>
-                              <span className="sm:hidden">قبول</span>
-                            </>
-                          )}
-                        </Button>
+
+                        {/* زر قبول المهمة */}
+                        <div className="flex-shrink-0">
+                          <Button
+                            onClick={() => handleAcceptTask(task)}
+                            disabled={acceptTaskMutation.isPending}
+                            size="sm"
+                          >
+                            {acceptTaskMutation.isPending ? (
+                              <>
+                                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                                جاري القبول...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="ml-2 h-4 w-4" />
+                                قبول المهمة
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -406,98 +504,175 @@ export default function MyScheduledTasks() {
             return (
               <Card key={task.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4 sm:p-6">
-                  <div className="flex flex-col gap-4">
-                    <div className="flex-1 space-y-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                        <h3 className="text-base sm:text-lg font-semibold break-words">{task.title}</h3>
-                        <div className="flex-shrink-0">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 space-y-4">
+                      {/* العنوان والحالة */}
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <h3 className="text-lg sm:text-xl font-bold text-foreground">
+                            {task.title}
+                          </h3>
                           {getStatusBadge(task.status)}
-                        </div>
-                      </div>
-
-                      <div className="grid gap-2 sm:grid-cols-2 text-xs sm:text-sm text-muted-foreground">
-                        <div className="flex items-start sm:items-center gap-2">
-                          <Building2 className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 mt-0.5 sm:mt-0" />
-                          <span className="break-words">
-                            {task.departmentId.name} - {task.machineId.name}
+                          <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
+                            {task.taskCode}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                          <span>{formatScheduledDate(task)}</span>
-                        </div>
-                        {task.engineerId && (
-                          <div className="flex items-center gap-2 sm:col-span-2">
-                            <span>المهندس:</span>
-                            <span className="font-medium">{task.engineerId.name}</span>
-                          </div>
-                        )}
                       </div>
 
-                      {task.description && (
-                        <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2 sm:line-clamp-none">
-                          {task.description}
-                        </p>
+                      {/* التفاصيل الرئيسية */}
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="flex items-start gap-2">
+                          <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                          <div>
+                            <span className="text-sm text-muted-foreground block mb-1">التاريخ المحدد:</span>
+                            <span className="text-sm font-medium text-foreground">
+                              {formatScheduledDate(task)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-sm text-muted-foreground min-w-[80px]">الموقع:</span>
+                          <span className="text-sm font-medium text-foreground">
+                            {task.locationId?.name || "-"}
+                          </span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-sm text-muted-foreground min-w-[80px]">القسم:</span>
+                          <span className="text-sm font-medium text-foreground">
+                            {task.departmentId.name}
+                          </span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-sm text-muted-foreground min-w-[80px]">النظام:</span>
+                          <span className="text-sm font-medium text-foreground">
+                            {task.systemId?.name || "-"}
+                          </span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-sm text-muted-foreground min-w-[80px]">الآلة:</span>
+                          <span className="text-sm font-medium text-foreground">
+                            {task.machineId.name}
+                          </span>
+                        </div>
+                        {task.status !== TaskStatus.COMPLETED &&
+                          task.status !== TaskStatus.CANCELLED && (
+                            <div className="flex items-start gap-2">
+                              <span className="text-sm text-muted-foreground min-w-[80px]">الوقت المتبقي:</span>
+                              <span className={`text-sm font-medium ${isOverdue ? "text-destructive" : "text-foreground"}`}>
+                                {isOverdue 
+                                  ? `متأخرة ${Math.abs(daysRemaining)} يوم`
+                                  : `متبقي ${daysRemaining} يوم`}
+                              </span>
+                            </div>
+                          )}
+                      </div>
+
+                      {/* المكونات */}
+                      {task.machineId?.components && task.machineId.components.length > 0 && (
+                        <div className="space-y-2">
+                          <span className="text-sm font-medium text-muted-foreground block">
+                            المكونات:
+                          </span>
+                          <div className="flex flex-wrap gap-2">
+                            {task.maintainAllComponents ? (
+                              <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+                                جميع المكونات ({task.machineId.components.length})
+                              </span>
+                            ) : task.selectedComponents && task.selectedComponents.length > 0 ? (
+                              task.selectedComponents.map((component, idx) => (
+                                <span
+                                  key={idx}
+                                  className="text-sm bg-gray-100 text-gray-800 px-3 py-1 rounded-full"
+                                >
+                                  {component}
+                                </span>
+                              ))
+                            ) : null}
+                          </div>
+                        </div>
                       )}
 
-                      {task.status === TaskStatus.COMPLETED &&
-                        task.completedRequestId && (
-                          <div className="text-xs sm:text-sm">
-                            <span className="text-muted-foreground">
-                              الطلب المكتمل:{" "}
-                            </span>
-                            <Button
-                              variant="link"
-                              className="p-0 h-auto text-xs sm:text-sm"
-                              onClick={() =>
-                                navigate(
-                                  `/requests/${task.completedRequestId?.id}`
-                                )
-                              }
-                            >
-                              {task.completedRequestId.requestCode}
-                            </Button>
-                          </div>
-                        )}
-
-                      {task.status !== TaskStatus.COMPLETED &&
-                        task.status !== TaskStatus.CANCELLED && (
-                          <div className="pt-1">
-                            {isOverdue ? (
-                              <span className="text-destructive font-semibold text-xs sm:text-sm">
-                                متأخرة {Math.abs(daysRemaining)} يوم
-                              </span>
+                      {/* الوصف */}
+                      {task.description && (
+                        <div className="space-y-2 pt-2 border-t">
+                          <span className="text-sm font-medium text-muted-foreground block">
+                            الوصف:
+                          </span>
+                          <div className="text-sm text-foreground leading-relaxed">
+                            {task.description.length > 100 ? (
+                              <>
+                                <p className="whitespace-pre-wrap">
+                                  {expandedDescriptions[task.id] 
+                                    ? task.description 
+                                    : task.description.slice(0, 100) + "..."}
+                                </p>
+                                <button
+                                  onClick={() => toggleDescription(task.id)}
+                                  className="text-primary hover:underline text-sm mt-1 font-medium"
+                                >
+                                  {expandedDescriptions[task.id] ? "عرض أقل" : "قراءة المزيد"}
+                                </button>
+                              </>
                             ) : (
-                              <span className="text-muted-foreground text-xs sm:text-sm">
-                                متبقي {daysRemaining} يوم
-                              </span>
+                              <p className="whitespace-pre-wrap">{task.description}</p>
                             )}
                           </div>
+                        </div>
+                      )}
+
+                      {/* معلومات إضافية */}
+                      <div className="space-y-2 pt-2 border-t">
+                        {task.repetitionInterval && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-muted-foreground">معدل التكرار:</span>
+                            <span className="font-medium text-foreground">
+                              {task.repetitionInterval === "weekly" && "أسبوعي"}
+                              {task.repetitionInterval === "monthly" && "شهري"}
+                              {task.repetitionInterval === "quarterly" && "كل 3 أشهر"}
+                              {task.repetitionInterval === "semi_annually" && "كل 6 أشهر"}
+                            </span>
+                          </div>
                         )}
+
+                        {task.status === TaskStatus.COMPLETED &&
+                          task.completedRequestId && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-muted-foreground">الطلب المكتمل:</span>
+                              <Button
+                                variant="link"
+                                className="p-0 h-auto text-sm font-medium"
+                                onClick={() =>
+                                  navigate(
+                                    `/requests/${task.completedRequestId?.id}`
+                                  )
+                                }
+                              >
+                                {task.completedRequestId.requestCode}
+                              </Button>
+                            </div>
+                          )}
+                      </div>
                     </div>
 
+                    {/* أزرار الإجراءات */}
                     {(task.status === TaskStatus.PENDING ||
                       task.status === TaskStatus.OVERDUE) && (
-                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 pt-2 border-t sm:border-t-0 sm:pt-0">
+                      <div className="flex flex-col gap-2 flex-shrink-0">
                         <Button
                           onClick={() => handleQuickExecute(task)}
                           variant="default"
-                          className="w-full sm:w-auto"
                           size="sm"
                         >
-                          <CheckCircle2 className="ml-2 h-4 w-4" />
-                          <span className="hidden sm:inline">تنفيذ المهمة</span>
-                          <span className="sm:hidden">تنفيذ</span>
+                          <CheckCircle2 className="h-4 w-4 ml-2" />
+                          تنفيذ المهمة
                         </Button>
                         <Button
                           onClick={() => handleCreateRequest(task)}
                           variant="outline"
-                          className="w-full sm:w-auto"
                           size="sm"
                         >
-                          <Plus className="ml-2 h-4 w-4" />
-                          <span className="hidden sm:inline">طلب مخصص</span>
-                          <span className="sm:hidden">مخصص</span>
+                          <Plus className="h-4 w-4 ml-2" />
+                          طلب مخصص
                         </Button>
                       </div>
                     )}

@@ -484,7 +484,8 @@ export class MaintenanceRequestsService {
       deletedAt: null, // استبعاد المحذوفين ناعماً
     };
 
-    // Engineers can only see their own requests
+    // Engineers can only see their own requests (always apply engineerId filter)
+    // Admins and Consultants can see all requests
     if (user.role === Role.ENGINEER) {
       // Convert to ObjectId for consistent matching with stored values
       // Mongoose will match ObjectId with both ObjectId and string formats in queries
@@ -499,6 +500,7 @@ export class MaintenanceRequestsService {
       filter.status = filterDto.status;
     }
 
+    // Allow Admins and Consultants to filter by specific engineer
     if (filterDto.engineerId && user.role !== Role.ENGINEER) {
       filter.engineerId = Types.ObjectId.isValid(filterDto.engineerId)
         ? new Types.ObjectId(filterDto.engineerId)
@@ -512,27 +514,43 @@ export class MaintenanceRequestsService {
     }
 
     if (filterDto.locationId) {
-      filter.locationId = Types.ObjectId.isValid(filterDto.locationId)
-        ? new Types.ObjectId(filterDto.locationId)
-        : filterDto.locationId;
+      // Support both String and ObjectId formats
+      filter.locationId = { 
+        $in: [
+          filterDto.locationId,
+          Types.ObjectId.isValid(filterDto.locationId) ? new Types.ObjectId(filterDto.locationId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filterDto.departmentId) {
-      filter.departmentId = Types.ObjectId.isValid(filterDto.departmentId)
-        ? new Types.ObjectId(filterDto.departmentId)
-        : filterDto.departmentId;
+      // Support both String and ObjectId formats
+      filter.departmentId = { 
+        $in: [
+          filterDto.departmentId,
+          Types.ObjectId.isValid(filterDto.departmentId) ? new Types.ObjectId(filterDto.departmentId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filterDto.systemId) {
-      filter.systemId = Types.ObjectId.isValid(filterDto.systemId)
-        ? new Types.ObjectId(filterDto.systemId)
-        : filterDto.systemId;
+      // Support both String and ObjectId formats
+      filter.systemId = { 
+        $in: [
+          filterDto.systemId,
+          Types.ObjectId.isValid(filterDto.systemId) ? new Types.ObjectId(filterDto.systemId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filterDto.machineId) {
-      filter.machineId = Types.ObjectId.isValid(filterDto.machineId)
-        ? new Types.ObjectId(filterDto.machineId)
-        : filterDto.machineId;
+      // Support both String and ObjectId formats
+      filter.machineId = { 
+        $in: [
+          filterDto.machineId,
+          Types.ObjectId.isValid(filterDto.machineId) ? new Types.ObjectId(filterDto.machineId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filterDto.maintenanceType) {
@@ -705,27 +723,43 @@ export class MaintenanceRequestsService {
     }
 
     if (filterDto.locationId) {
-      filter.locationId = Types.ObjectId.isValid(filterDto.locationId)
-        ? new Types.ObjectId(filterDto.locationId)
-        : filterDto.locationId;
+      // Support both String and ObjectId formats
+      filter.locationId = { 
+        $in: [
+          filterDto.locationId,
+          Types.ObjectId.isValid(filterDto.locationId) ? new Types.ObjectId(filterDto.locationId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filterDto.departmentId) {
-      filter.departmentId = Types.ObjectId.isValid(filterDto.departmentId)
-        ? new Types.ObjectId(filterDto.departmentId)
-        : filterDto.departmentId;
+      // Support both String and ObjectId formats
+      filter.departmentId = { 
+        $in: [
+          filterDto.departmentId,
+          Types.ObjectId.isValid(filterDto.departmentId) ? new Types.ObjectId(filterDto.departmentId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filterDto.systemId) {
-      filter.systemId = Types.ObjectId.isValid(filterDto.systemId)
-        ? new Types.ObjectId(filterDto.systemId)
-        : filterDto.systemId;
+      // Support both String and ObjectId formats
+      filter.systemId = { 
+        $in: [
+          filterDto.systemId,
+          Types.ObjectId.isValid(filterDto.systemId) ? new Types.ObjectId(filterDto.systemId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filterDto.machineId) {
-      filter.machineId = Types.ObjectId.isValid(filterDto.machineId)
-        ? new Types.ObjectId(filterDto.machineId)
-        : filterDto.machineId;
+      // Support both String and ObjectId formats
+      filter.machineId = { 
+        $in: [
+          filterDto.machineId,
+          Types.ObjectId.isValid(filterDto.machineId) ? new Types.ObjectId(filterDto.machineId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filterDto.maintenanceType) {
