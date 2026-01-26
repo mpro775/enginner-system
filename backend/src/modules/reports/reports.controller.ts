@@ -18,6 +18,30 @@ import { ForbiddenAccessException } from "../../common/exceptions";
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
+  @Get("requests/template")
+  @Roles(Role.ADMIN)
+  async getEmptyRequestTemplate(@Res() res: Response) {
+    try {
+      const buffer = await this.reportsService.generateEmptyRequestTemplatePdfBuffer();
+
+      res.set({
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename=maintenance-request-template-${Date.now()}.pdf`,
+        "Content-Length": buffer.length.toString(),
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      });
+
+      res.end(buffer);
+    } catch (error) {
+      console.error("Empty Request Template Error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Failed to generate template" });
+      }
+    }
+  }
+
   @Get("requests/:id")
   async getSingleRequestReport(
     @Param("id") id: string,
@@ -149,29 +173,5 @@ export class ReportsController {
       data: report,
       message: "Summary report generated successfully",
     };
-  }
-
-  @Get("requests/template")
-  @Roles(Role.ADMIN)
-  async getEmptyRequestTemplate(@Res() res: Response) {
-    try {
-      const buffer = await this.reportsService.generateEmptyRequestTemplatePdfBuffer();
-
-      res.set({
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename=maintenance-request-template-${Date.now()}.pdf`,
-        "Content-Length": buffer.length.toString(),
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        Pragma: "no-cache",
-        Expires: "0",
-      });
-
-      res.end(buffer);
-    } catch (error) {
-      console.error("Empty Request Template Error:", error);
-      if (!res.headersSent) {
-        res.status(500).json({ message: "Failed to generate template" });
-      }
-    }
   }
 }

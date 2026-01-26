@@ -87,6 +87,10 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#39;");
 }
 
+// CSS for multi-line text (وصف الطلب، ملاحظات، إلخ) - preserves newlines/tabs as in dashboard
+const MULTI_LINE_STYLE =
+  "white-space: pre-wrap; word-wrap: break-word; line-height: 1.5; text-align: right; direction: rtl; vertical-align: top;";
+
 // Generate HTML content for the report (summary + table)
 function generateReportContent(data: RequestReportData[], stats: any): string {
   let html = "";
@@ -184,7 +188,7 @@ function generateReportContent(data: RequestReportData[], stats: any): string {
         <td>${escapeHtml(typeText)}</td>
         <td>${escapeHtml(row.engineerName || "N/A")}</td>
         <td>${escapeHtml(row.requestCode || "N/A")}</td>
-        <td>${escapeHtml(row.reasonText || "-")}</td>
+        <td style="${MULTI_LINE_STYLE}">${escapeHtml(row.reasonText || "-")}</td>
       </tr>
     `;
   });
@@ -291,7 +295,7 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
 
       <div style="margin-bottom: 20px;">
         <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">وصف الطلب</h3>
-        <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; min-height: 40px;">
+        <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; min-height: 40px; ${MULTI_LINE_STYLE}">
           ${escapeHtml(request.reasonText || "-")}
         </div>
       </div>
@@ -306,19 +310,19 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
           ${request.requestNeeds ? `
           <tr>
             <td style="font-weight: bold; background-color: #f8f9fa;">احتياجات الطلب</td>
-            <td>${escapeHtml(request.requestNeeds)}</td>
+            <td style="${MULTI_LINE_STYLE}">${escapeHtml(request.requestNeeds)}</td>
           </tr>
           ` : ""}
           ${request.implementedWork ? `
           <tr>
             <td style="font-weight: bold; background-color: #f8f9fa;">ما تم تنفيذه</td>
-            <td>${escapeHtml(request.implementedWork)}</td>
+            <td style="${MULTI_LINE_STYLE}">${escapeHtml(request.implementedWork)}</td>
           </tr>
           ` : ""}
           ${request.engineerNotes ? `
           <tr>
             <td style="font-weight: bold; background-color: #f8f9fa;">معلومات الإجراء المتخذ</td>
-            <td>${escapeHtml(request.engineerNotes)}</td>
+            <td style="${MULTI_LINE_STYLE}">${escapeHtml(request.engineerNotes)}</td>
           </tr>
           ` : ""}
         </table>
@@ -330,7 +334,7 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
         ${request.engineerNotes ? `
         <div style="margin-bottom: 10px;">
           <strong>ملاحظات المهندس:</strong>
-          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px;">
+          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; ${MULTI_LINE_STYLE}">
             ${escapeHtml(request.engineerNotes)}
           </div>
         </div>
@@ -338,7 +342,7 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
         ${request.consultantNotes ? `
         <div style="margin-bottom: 10px;">
           <strong>ملاحظات المستشار:</strong>
-          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px;">
+          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; ${MULTI_LINE_STYLE}">
             ${escapeHtml(request.consultantNotes)}
           </div>
         </div>
@@ -346,7 +350,7 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
         ${request.healthSafetyNotes ? `
         <div style="margin-bottom: 10px;">
           <strong>ملاحظات الصحة والسلامة:</strong>
-          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px;">
+          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; ${MULTI_LINE_STYLE}">
             ${escapeHtml(request.healthSafetyNotes)}
           </div>
         </div>
@@ -357,7 +361,7 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
       ${request.stopReason ? `
       <div style="margin-bottom: 20px;">
         <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">سبب التوقف</h3>
-        <div style="padding: 10px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
+        <div style="padding: 10px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; ${MULTI_LINE_STYLE}">
           ${escapeHtml(request.stopReason)}
         </div>
       </div>
@@ -374,7 +378,7 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
           ${request.consultantNotes ? `
           <tr>
             <td style="font-weight: bold; background-color: #f8f9fa;">ملاحظة الاستشاري</td>
-            <td>${escapeHtml(request.consultantNotes)}</td>
+            <td style="${MULTI_LINE_STYLE}">${escapeHtml(request.consultantNotes)}</td>
           </tr>
           ` : ""}
           <tr>
