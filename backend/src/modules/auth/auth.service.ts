@@ -25,6 +25,7 @@ export interface AuthResponse extends TokensResponse {
     name: string;
     email: string;
     role: string;
+    departmentId?: { id: string; name?: string };
   };
 }
 
@@ -46,9 +47,10 @@ export class AuthService {
     ipAddress?: string,
     userAgent?: string
   ): Promise<AuthResponse> {
-    const user = await this.userModel.findOne({
-      email: loginDto.email.toLowerCase(),
-    });
+    const user = await this.userModel
+      .findOne({ email: loginDto.email.toLowerCase() })
+      .populate("departmentId", "name")
+      .exec();
 
     if (!user) {
       throw new UnauthorizedException("Invalid email or password");
@@ -91,6 +93,7 @@ export class AuthService {
       this.notifyPendingTasks(user._id.toString());
     }
 
+    const departmentId = user.departmentId as { _id?: unknown; name?: string } | null | undefined;
     return {
       ...tokens,
       user: {
@@ -98,6 +101,12 @@ export class AuthService {
         name: user.name,
         email: user.email,
         role: user.role,
+        departmentId: departmentId
+          ? {
+              id: String(departmentId._id ?? departmentId),
+              name: departmentId.name,
+            }
+          : undefined,
       },
     };
   }

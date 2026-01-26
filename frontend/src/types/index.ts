@@ -183,6 +183,7 @@ export interface AuthResponse {
     name: string;
     email: string;
     role: Role;
+    departmentId?: { id: string; name?: string };
   };
 }
 

@@ -479,10 +479,11 @@ export default function UsersManagement() {
               </Select>
             </div>
 
-            {watchRole === Role.ENGINEER && (
+            {(watchRole === Role.ENGINEER || watchRole === Role.CONSULTANT) && (
               <div className="space-y-2">
                 <Label>القسم</Label>
                 <Select
+                  value={watch("departmentId") ?? ""}
                   onValueChange={(value) => setValue("departmentId", value)}
                 >
                   <SelectTrigger>

@@ -7,6 +7,7 @@ import {
   MaintenanceRequestSchema,
 } from "./schemas/maintenance-request.schema";
 import { Machine, MachineSchema } from "../machines/schemas/machine.schema";
+import { User, UserSchema } from "../users/schemas/user.schema";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { AuditLogsModule } from "../audit-logs/audit-logs.module";
 import { ScheduledTasksModule } from "../scheduled-tasks/scheduled-tasks.module";
@@ -16,6 +17,7 @@ import { ScheduledTasksModule } from "../scheduled-tasks/scheduled-tasks.module"
     MongooseModule.forFeature([
       { name: MaintenanceRequest.name, schema: MaintenanceRequestSchema },
       { name: Machine.name, schema: MachineSchema },
+      { name: User.name, schema: UserSchema },
     ]),
     forwardRef(() => NotificationsModule),
     forwardRef(() => AuditLogsModule),

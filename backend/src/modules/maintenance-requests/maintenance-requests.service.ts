@@ -37,6 +37,7 @@ import {
 import { NotificationsGateway } from "../notifications/notifications.gateway";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
 import { ScheduledTasksService } from "../scheduled-tasks/scheduled-tasks.service";
+import { User, UserDocument } from "../users/schemas/user.schema";
 
 @Injectable()
 export class MaintenanceRequestsService {
@@ -45,6 +46,8 @@ export class MaintenanceRequestsService {
     private requestModel: Model<MaintenanceRequestDocument>,
     @InjectModel(Machine.name)
     private machineModel: Model<MachineDocument>,
+    @InjectModel(User.name)
+    private userModel: Model<UserDocument>,
     @Inject(forwardRef(() => NotificationsGateway))
     private notificationsGateway: NotificationsGateway,
     @Inject(forwardRef(() => AuditLogsService))
@@ -528,6 +531,26 @@ export class MaintenanceRequestsService {
       throw new ForbiddenAccessException(
         "Only consultants and admins can approve requests"
       );
+    }
+
+    // Consultants: must have department and can only approve same-department requests
+    if (user.role === Role.CONSULTANT) {
+      const consultant = await this.userModel
+        .findById(user.userId)
+        .select("departmentId")
+        .lean();
+      if (!consultant?.departmentId) {
+        throw new ForbiddenAccessException(
+          "يجب تعيين الاستشاري إلى قسم قبل الاعتماد"
+        );
+      }
+      const reqDeptId = request.departmentId?.toString?.() ?? String(request.departmentId);
+      const consultantDeptId = consultant.departmentId.toString();
+      if (reqDeptId !== consultantDeptId) {
+        throw new ForbiddenAccessException(
+          "لا يمكن اعتماد طلبات تقع خارج قسم الاستشاري"
+        );
+      }
     }
 
     const previousIsApproved = request.isApproved;

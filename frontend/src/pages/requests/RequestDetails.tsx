@@ -441,8 +441,11 @@ export default function RequestDetails() {
   const canStop = isOwner && request.status === RequestStatus.IN_PROGRESS;
   const canComplete = isOwner && request.status === RequestStatus.IN_PROGRESS;
   const canApprove =
-    (isConsultant || isAdmin) &&
-    request.status === RequestStatus.COMPLETED;
+    request.status === RequestStatus.COMPLETED &&
+    (isAdmin ||
+      (isConsultant &&
+        !!user?.departmentId?.id &&
+        request.departmentId?.id === user.departmentId?.id));
   const canAddNote =
     (isConsultant || isMaintenanceManager || isAdmin) &&
     request.status !== RequestStatus.STOPPED;

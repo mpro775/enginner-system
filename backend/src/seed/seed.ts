@@ -224,6 +224,7 @@ async function seed() {
       email: "consultant1@maintenance.com",
       password: hashedPassword,
       role: Role.CONSULTANT,
+      departmentId: departments[0]._id, // ميكانيك
       isActive: true,
     },
     {
@@ -231,6 +232,7 @@ async function seed() {
       email: "consultant2@maintenance.com",
       password: hashedPassword,
       role: Role.CONSULTANT,
+      departmentId: departments[1]._id, // كهرباء
       isActive: true,
     },
     // Engineers - Mechanical
