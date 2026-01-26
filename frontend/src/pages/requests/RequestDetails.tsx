@@ -72,6 +72,8 @@ const updateRequestSchema = z.object({
   reasonText: z.string().min(10, "سبب الطلب يجب أن يكون 10 أحرف على الأقل"),
   machineNumber: z.string().optional(),
   engineerNotes: z.string().optional(),
+  requestNeeds: z.string().optional(),
+  implementedWork: z.string().optional(),
 });
 
 type UpdateRequestFormData = z.infer<typeof updateRequestSchema>;
@@ -88,13 +90,61 @@ export default function RequestDetails() {
   const [showNoteDialog, setShowNoteDialog] = useState(false);
   const [showHealthSafetyNoteDialog, setShowHealthSafetyNoteDialog] =
     useState(false);
+  const [showProjectManagerNoteDialog, setShowProjectManagerNoteDialog] =
+    useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [softDeleteDialog, setSoftDeleteDialog] = useState(false);
   const [hardDeleteDialog, setHardDeleteDialog] = useState(false);
   const [stopReason, setStopReason] = useState("");
   const [consultantNotes, setConsultantNotes] = useState("");
   const [healthSafetyNotes, setHealthSafetyNotes] = useState("");
+  const [projectManagerNotes, setProjectManagerNotes] = useState("");
+  const [implementedWork, setImplementedWork] = useState("");
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [expandedDescriptions, setExpandedDescriptions] = useState<
+    Record<string, boolean>
+  >({});
+
+  const toggleDescription = (key: string) => {
+    setExpandedDescriptions((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const renderFormattedText = (
+    text: string,
+    key: string,
+    maxLength = 100
+  ) => {
+    if (!text?.trim()) return null;
+    const isLong = text.length > maxLength;
+    return (
+      <div className="space-y-2">
+        <div className="text-sm text-foreground leading-relaxed">
+          {isLong ? (
+            <>
+              <p className="whitespace-pre-wrap">
+                {expandedDescriptions[key]
+                  ? text
+                  : text.slice(0, maxLength) + "..."}
+              </p>
+              <button
+                type="button"
+                onClick={() => toggleDescription(key)}
+                className="text-primary hover:underline text-sm mt-1 font-medium"
+              >
+                {expandedDescriptions[key] ? "عرض أقل" : "قراءة المزيد"}
+              </button>
+            </>
+          ) : (
+            <p className="whitespace-pre-wrap">{text}</p>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   const {
     register,
@@ -108,6 +158,7 @@ export default function RequestDetails() {
   });
 
   const watchSystemId = watch("systemId");
+  const watchDepartmentId = watch("departmentId");
 
   // Helper function to parse note with author name
   const parseNoteWithAuthor = (note: string) => {
@@ -150,6 +201,24 @@ export default function RequestDetails() {
     enabled: !!watchSystemId,
   });
 
+  // Filter systems based on selected department
+  const filteredSystems = systems?.filter((system) => {
+    if (!watchDepartmentId) {
+      // If no department selected, show all systems
+      return true;
+    }
+    // Show systems that are either:
+    // 1. Linked to the selected department
+    // 2. Not linked to any department (departmentId is null/undefined)
+    if (!system.departmentId) {
+      return true;
+    }
+    if (typeof system.departmentId === "object") {
+      return system.departmentId.id === watchDepartmentId;
+    }
+    return system.departmentId === watchDepartmentId;
+  });
+
   const stopMutation = useMutation({
     mutationFn: (reason: string) =>
       requestsService.stop(id!, { stopReason: reason }),
@@ -183,11 +252,79 @@ export default function RequestDetails() {
     },
   });
 
-  const completeMutation = useMutation({
-    mutationFn: () => requestsService.complete(id!),
+  const addProjectManagerNoteMutation = useMutation({
+    mutationFn: (notes: string) =>
+      requestsService.addProjectManagerNote(id!, { projectManagerNotes: notes }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["request", id] });
       queryClient.invalidateQueries({ queryKey: ["requests"] });
+      setShowProjectManagerNoteDialog(false);
+      setProjectManagerNotes("");
+      toast({
+        title: "تم بنجاح",
+        description: "تم إضافة ملاحظة مدير المشروع بنجاح",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء إضافة الملاحظة",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: (data: { implementedWork?: string }) =>
+      requestsService.complete(id!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["request", id] });
+      queryClient.invalidateQueries({ queryKey: ["requests"] });
+      setShowCompleteDialog(false);
+      setImplementedWork("");
+      toast({
+        title: "تم بنجاح",
+        description: "تم إكمال الطلب بنجاح",
+        variant: "default",
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "فشل إكمال الطلب. يرجى المحاولة مرة أخرى.";
+      toast({
+        title: "خطأ",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (isApproved: boolean) =>
+      requestsService.approve(id!, isApproved),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["request", id] });
+      queryClient.invalidateQueries({ queryKey: ["requests"] });
+      toast({
+        title: "تم بنجاح",
+        description: request?.isApproved
+          ? "تم إلغاء اعتماد الطلب"
+          : "تم اعتماد الطلب بنجاح",
+        variant: "default",
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "فشل تحديث حالة الاعتماد. يرجى المحاولة مرة أخرى.";
+      toast({
+        title: "خطأ",
+        description: errorMessage,
+        variant: "destructive",
+      });
     },
   });
 
@@ -257,6 +394,7 @@ export default function RequestDetails() {
   const isMaintenanceManager = user?.role === Role.MAINTENANCE_MANAGER;
   const isMaintenanceSafetyMonitor =
     user?.role === Role.MAINTENANCE_SAFETY_MONITOR;
+  const isProjectManager = user?.role === Role.PROJECT_MANAGER;
   const isAdmin = user?.role === Role.ADMIN;
 
   // Open edit dialog if edit=true in URL - moved here to ensure consistent hook order
@@ -302,11 +440,17 @@ export default function RequestDetails() {
   const canEdit = isOwner && request.status === RequestStatus.IN_PROGRESS;
   const canStop = isOwner && request.status === RequestStatus.IN_PROGRESS;
   const canComplete = isOwner && request.status === RequestStatus.IN_PROGRESS;
+  const canApprove =
+    (isConsultant || isAdmin) &&
+    request.status === RequestStatus.COMPLETED;
   const canAddNote =
     (isConsultant || isMaintenanceManager || isAdmin) &&
     request.status !== RequestStatus.STOPPED;
   const canAddHealthSafetyNote =
     (isMaintenanceSafetyMonitor || isAdmin) &&
+    request.status !== RequestStatus.STOPPED;
+  const canAddProjectManagerNote =
+    (isProjectManager || isAdmin) &&
     request.status !== RequestStatus.STOPPED;
 
   const handleStop = () => {
@@ -327,6 +471,35 @@ export default function RequestDetails() {
     const { text } = parseNoteWithAuthor(notes);
     setHealthSafetyNotes(text);
     setShowHealthSafetyNoteDialog(true);
+  };
+
+  const handleAddProjectManagerNote = () => {
+    const notes = request.projectManagerNotes || "";
+    // Remove author name from the end if present
+    const { text } = parseNoteWithAuthor(notes);
+    setProjectManagerNotes(text);
+    setShowProjectManagerNoteDialog(true);
+  };
+
+  const submitProjectManagerNote = () => {
+    if (projectManagerNotes.trim()) {
+      addProjectManagerNoteMutation.mutate(projectManagerNotes);
+    }
+  };
+
+  const handleComplete = () => {
+    setShowCompleteDialog(true);
+  };
+
+  const submitComplete = () => {
+    const work = implementedWork?.trim();
+    completeMutation.mutate({
+      implementedWork: work && work.length > 0 ? work : undefined,
+    });
+  };
+
+  const handleApprove = () => {
+    approveMutation.mutate(!request.isApproved);
   };
 
   const handleRefresh = () => {
@@ -358,6 +531,8 @@ export default function RequestDetails() {
         reasonText: request.reasonText,
         machineNumber: request.machineNumber || "",
         engineerNotes: request.engineerNotes || "",
+        requestNeeds: request.requestNeeds || "",
+        implementedWork: request.implementedWork || "",
       });
       setShowEditDialog(true);
     }
@@ -367,6 +542,19 @@ export default function RequestDetails() {
     setValue("systemId", value);
     setValue("machineId", "");
   };
+
+  // Reset system when department changes if current system is not available for new department
+  useEffect(() => {
+    if (watchDepartmentId && watchSystemId && filteredSystems) {
+      const currentSystemAvailable = filteredSystems.some(
+        (sys) => sys.id === watchSystemId
+      );
+      if (!currentSystemAvailable) {
+        setValue("systemId", "");
+        setValue("machineId", "");
+      }
+    }
+  }, [watchDepartmentId, watchSystemId, filteredSystems, setValue]);
 
   const onSubmitEdit = (data: UpdateRequestFormData) => {
     updateMutation.mutate(data);
@@ -493,67 +681,84 @@ export default function RequestDetails() {
               </div>
 
               {request.machineId?.description && (
-                <div className="border-t pt-4">
-                  <p className="text-sm text-muted-foreground mb-2">
+                <div className="space-y-2 pt-4 border-t">
+                  <span className="text-sm font-medium text-muted-foreground block">
                     وصف الآلة
-                  </p>
-                  <p className="font-medium">{request.machineId.description}</p>
+                  </span>
+                  {renderFormattedText(
+                    request.machineId.description,
+                    "machine-description"
+                  )}
                 </div>
               )}
 
-              <div className="border-t pt-4">
-                <p className="text-sm text-muted-foreground mb-2">
+              <div className="space-y-2 pt-4 border-t">
+                <span className="text-sm font-medium text-muted-foreground block">
                   المكونات المختارة
-                </p>
+                </span>
                 {request.maintainAllComponents ? (
-                  <p className="font-medium">جميع المكونات</p>
-                ) : (
-                  <div>
-                    {request.selectedComponents &&
-                      request.selectedComponents.length > 0 ? (
-                      <ul className="list-disc list-inside space-y-1">
-                        {request.selectedComponents.map((component, index) => (
-                          <li key={index} className="font-medium">
-                            {component}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-muted-foreground">
-                        لا توجد مكونات محددة
-                      </p>
-                    )}
+                  <p className="font-medium text-foreground">جميع المكونات</p>
+                ) : request.selectedComponents &&
+                  request.selectedComponents.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {request.selectedComponents.map((component, index) => (
+                      <span
+                        key={index}
+                        className="text-sm bg-muted text-foreground px-3 py-1 rounded-full font-medium"
+                      >
+                        {component}
+                      </span>
+                    ))}
                   </div>
+                ) : (
+                  <p className="text-muted-foreground">لا توجد مكونات محددة</p>
                 )}
               </div>
 
-              <div className="border-t pt-4">
-                <p className="text-sm text-muted-foreground mb-2">
+              <div className="space-y-2 pt-4 border-t">
+                <span className="text-sm font-medium text-muted-foreground block">
                   سبب طلب الصيانة
-                </p>
-                <p className="font-medium">{request.reasonText}</p>
+                </span>
+                {renderFormattedText(request.reasonText, "reason-text")}
               </div>
 
               {request.engineerNotes && (
-                <div className="border-t pt-4">
-                  <p className="text-sm text-muted-foreground mb-2">
+                <div className="space-y-2 pt-4 border-t">
+                  <span className="text-sm font-medium text-muted-foreground block">
                     ملاحظات المهندس
-                  </p>
-                  <p>{request.engineerNotes}</p>
+                  </span>
+                  {renderFormattedText(
+                    request.engineerNotes,
+                    "engineer-notes"
+                  )}
+                </div>
+              )}
+
+              {request.requestNeeds && (
+                <div className="space-y-2 pt-4 border-t">
+                  <span className="text-sm font-medium text-muted-foreground block">
+                    احتياجات الطلب
+                  </span>
+                  {renderFormattedText(
+                    request.requestNeeds,
+                    "request-needs"
+                  )}
                 </div>
               )}
 
               {request.consultantNotes && (() => {
-                const { text, author } = parseNoteWithAuthor(request.consultantNotes);
+                const { text, author } = parseNoteWithAuthor(
+                  request.consultantNotes
+                );
                 return (
-                  <div className="border-t pt-4">
-                    <p className="text-sm text-muted-foreground mb-2">
+                  <div className="space-y-2 pt-4 border-t">
+                    <span className="text-sm font-medium text-muted-foreground block">
                       ملاحظات المكتب الاستشاري
-                    </p>
-                    <p className="mb-1">{text}</p>
+                    </span>
+                    {renderFormattedText(text, "consultant-notes")}
                     {author && (
-                      <p className="text-xs text-muted-foreground text-left">
-                        - {author}
+                      <p className="text-xs text-muted-foreground text-left pt-1">
+                        — {author}
                       </p>
                     )}
                   </div>
@@ -561,16 +766,37 @@ export default function RequestDetails() {
               })()}
 
               {request.healthSafetyNotes && (() => {
-                const { text, author } = parseNoteWithAuthor(request.healthSafetyNotes);
+                const { text, author } = parseNoteWithAuthor(
+                  request.healthSafetyNotes
+                );
                 return (
-                  <div className="border-t pt-4">
-                    <p className="text-sm text-muted-foreground mb-2">
+                  <div className="space-y-2 pt-4 border-t">
+                    <span className="text-sm font-medium text-muted-foreground block">
                       ملاحظات مراقب الصيانة والسلامة
-                    </p>
-                    <p className="mb-1">{text}</p>
+                    </span>
+                    {renderFormattedText(text, "health-safety-notes")}
                     {author && (
-                      <p className="text-xs text-muted-foreground text-left">
-                        - {author}
+                      <p className="text-xs text-muted-foreground text-left pt-1">
+                        — {author}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {request.projectManagerNotes && (() => {
+                const { text, author } = parseNoteWithAuthor(
+                  request.projectManagerNotes
+                );
+                return (
+                  <div className="space-y-2 pt-4 border-t">
+                    <span className="text-sm font-medium text-muted-foreground block">
+                      ملاحظات مدير المشروع
+                    </span>
+                    {renderFormattedText(text, "project-manager-notes")}
+                    {author && (
+                      <p className="text-xs text-muted-foreground text-left pt-1">
+                        — {author}
                       </p>
                     )}
                   </div>
@@ -579,18 +805,68 @@ export default function RequestDetails() {
 
               {request.status === RequestStatus.STOPPED &&
                 request.stopReason && (
-                  <div className="border-t pt-4">
-                    <div className="flex items-center gap-2 mb-2">
+                  <div className="space-y-2 pt-4 border-t">
+                    <div className="flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4 text-orange-500" />
-                      <p className="text-sm text-orange-600 font-medium">
+                      <span className="text-sm font-medium text-orange-600">
                         سبب الإيقاف
-                      </p>
+                      </span>
                     </div>
-                    <p className="text-orange-700 bg-orange-50 p-3 rounded-lg">
-                      {request.stopReason}
-                    </p>
+                    <div className="text-foreground bg-orange-50 dark:bg-orange-950/30 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
+                      {renderFormattedText(
+                        request.stopReason,
+                        "stop-reason",
+                        120
+                      )}
+                    </div>
                   </div>
                 )}
+
+              {request.status === RequestStatus.COMPLETED &&
+                request.implementedWork && (
+                  <div className="space-y-2 pt-4 border-t">
+                    <span className="text-sm font-medium text-muted-foreground block">
+                      ما تم تنفيذه
+                    </span>
+                    {renderFormattedText(
+                      request.implementedWork,
+                      "implemented-work",
+                      120
+                    )}
+                  </div>
+                )}
+
+              {request.status === RequestStatus.COMPLETED && (
+                <div className="border-t pt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-muted-foreground">حالة الاعتماد</p>
+                    {request.isApproved ? (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        <span className="text-sm font-medium text-green-600">
+                          معتمد
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-orange-500" />
+                        <span className="text-sm font-medium text-orange-600">
+                          غير معتمد
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {request.isApproved && request.approvedBy && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      <p>
+                        تم الاعتماد بواسطة: {request.approvedBy.name}
+                        {request.approvedAt &&
+                          ` في ${formatDateTime(request.approvedAt)}`}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -638,8 +914,10 @@ export default function RequestDetails() {
           {(canEdit ||
             canStop ||
             canComplete ||
+            canApprove ||
             canAddNote ||
             canAddHealthSafetyNote ||
+            canAddProjectManagerNote ||
             isAdmin) && (
               <Card>
                 <CardHeader>
@@ -659,16 +937,34 @@ export default function RequestDetails() {
                     )}
                     {canComplete && (
                       <Button
-                        onClick={() => completeMutation.mutate()}
+                        onClick={handleComplete}
                         disabled={completeMutation.isPending}
                         className="flex-1"
                       >
-                        {completeMutation.isPending ? (
-                          <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <CheckCircle2 className="ml-2 h-4 w-4" />
-                        )}
+                        <CheckCircle2 className="ml-2 h-4 w-4" />
                         إكمال الطلب
+                      </Button>
+                    )}
+                    {canApprove && (
+                      <Button
+                        variant={request.isApproved ? "outline" : "default"}
+                        onClick={handleApprove}
+                        disabled={approveMutation.isPending}
+                        className="flex-1"
+                      >
+                        {approveMutation.isPending ? (
+                          <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                        ) : request.isApproved ? (
+                          <>
+                            <AlertCircle className="ml-2 h-4 w-4" />
+                            إلغاء الاعتماد
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="ml-2 h-4 w-4" />
+                            اعتماد الطلب
+                          </>
+                        )}
                       </Button>
                     )}
                     {canStop && (
@@ -703,6 +999,18 @@ export default function RequestDetails() {
                         {request.healthSafetyNotes
                           ? "تعديل ملاحظة الصحة والسلامة"
                           : "إضافة ملاحظة الصحة والسلامة"}
+                      </Button>
+                    )}
+                    {canAddProjectManagerNote && (
+                      <Button
+                        variant="outline"
+                        onClick={handleAddProjectManagerNote}
+                        className="flex-1"
+                      >
+                        <MessageSquarePlus className="ml-2 h-4 w-4" />
+                        {request.projectManagerNotes
+                          ? "تعديل ملاحظة مدير المشروع"
+                          : "إضافة ملاحظة مدير المشروع"}
                       </Button>
                     )}
                     <Button
@@ -970,6 +1278,98 @@ export default function RequestDetails() {
         </DialogContent>
       </Dialog>
 
+      {/* Add Project Manager Note Dialog */}
+      <Dialog
+        open={showProjectManagerNoteDialog}
+        onOpenChange={setShowProjectManagerNoteDialog}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>إضافة ملاحظة مدير المشروع</DialogTitle>
+            <DialogDescription>
+              أضف ملاحظاتك المتعلقة بالمشروع على هذا الطلب
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">
+                ملاحظات مدير المشروع *
+              </label>
+              <Textarea
+                placeholder="أدخل ملاحظاتك المتعلقة بالمشروع هنا..."
+                value={projectManagerNotes}
+                onChange={(e) => setProjectManagerNotes(e.target.value)}
+                rows={4}
+                className="mt-2"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowProjectManagerNoteDialog(false)}
+            >
+              إلغاء
+            </Button>
+            <Button
+              onClick={submitProjectManagerNote}
+              disabled={
+                addProjectManagerNoteMutation.isPending ||
+                !projectManagerNotes.trim()
+              }
+            >
+              {addProjectManagerNoteMutation.isPending ? (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              ) : (
+                "حفظ الملاحظة"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Complete Request Dialog */}
+      <Dialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>إكمال الطلب</DialogTitle>
+            <DialogDescription>
+              يرجى إدخال ما تم تنفيذه في هذا الطلب (اختياري)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>ما تم تنفيذه</Label>
+              <Textarea
+                placeholder="أدخل تفاصيل ما تم تنفيذه في هذا الطلب..."
+                value={implementedWork}
+                onChange={(e) => setImplementedWork(e.target.value)}
+                rows={6}
+                className="mt-2"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowCompleteDialog(false)}
+            >
+              إلغاء
+            </Button>
+            <Button
+              onClick={submitComplete}
+              disabled={completeMutation.isPending}
+            >
+              {completeMutation.isPending ? (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              ) : (
+                "إكمال الطلب"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Edit Request Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -1084,11 +1484,17 @@ export default function RequestDetails() {
                     <SelectValue placeholder="اختر النظام" />
                   </SelectTrigger>
                   <SelectContent>
-                    {systems?.map((system) => (
-                      <SelectItem key={system.id} value={system.id}>
-                        {system.name}
+                    {filteredSystems && filteredSystems.length > 0 ? (
+                      filteredSystems.map((system) => (
+                        <SelectItem key={system.id} value={system.id}>
+                          {system.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="" disabled>
+                        لا توجد أنظمة متاحة
                       </SelectItem>
-                    ))}
+                    )}
                   </SelectContent>
                 </Select>
                 {errors.systemId && (
@@ -1178,6 +1584,26 @@ export default function RequestDetails() {
                 placeholder="أي ملاحظات إضافية..."
                 rows={3}
                 {...register("engineerNotes")}
+              />
+            </div>
+
+            {/* Request Needs */}
+            <div className="space-y-2">
+              <Label>احتياجات الطلب</Label>
+              <Textarea
+                placeholder="احتياجات الطلب (اختياري)"
+                rows={3}
+                {...register("requestNeeds")}
+              />
+            </div>
+
+            {/* Implemented Work */}
+            <div className="space-y-2">
+              <Label>معلومات الإجراء المتخذ</Label>
+              <Textarea
+                placeholder="ما تم تنفيذه (اختياري)"
+                rows={3}
+                {...register("implementedWork")}
               />
             </div>
 

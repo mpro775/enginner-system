@@ -27,6 +27,9 @@ export class MaintenanceRequest {
   @Prop({ type: Types.ObjectId, ref: "User" })
   healthSafetySupervisorId?: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: "User" })
+  projectManagerId?: Types.ObjectId;
+
   @Prop({ required: true, enum: MaintenanceType })
   maintenanceType: MaintenanceType;
 
@@ -48,6 +51,9 @@ export class MaintenanceRequest {
   @Prop({ trim: true })
   machineNumber?: string;
 
+  @Prop({ trim: true })
+  requestNeeds?: string;
+
   @Prop({
     required: true,
     enum: RequestStatus,
@@ -65,7 +71,22 @@ export class MaintenanceRequest {
   healthSafetyNotes?: string;
 
   @Prop({ trim: true })
+  projectManagerNotes?: string;
+
+  @Prop({ trim: true })
   stopReason?: string;
+
+  @Prop({ trim: true })
+  implementedWork?: string;
+
+  @Prop({ default: false })
+  isApproved?: boolean;
+
+  @Prop()
+  approvedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: "User" })
+  approvedBy?: Types.ObjectId;
 
   @Prop({ default: true })
   maintainAllComponents: boolean;

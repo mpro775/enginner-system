@@ -12,7 +12,10 @@ import {
   StopRequestDto,
   AddNoteDto,
   AddHealthSafetyNoteDto,
+  AddProjectManagerNoteDto,
   FilterRequestsDto,
+  CompleteRequestDto,
+  ApproveRequestDto,
 } from "./dto";
 import {
   EntityNotFoundException,
@@ -221,11 +224,17 @@ export class MaintenanceRequestsService {
       );
     }
 
-    const previousValues = {
+    const previousValues: Record<string, unknown> = {
       maintenanceType: request.maintenanceType,
       reasonText: request.reasonText,
       engineerNotes: request.engineerNotes,
     };
+    if (updateDto.requestNeeds !== undefined) {
+      previousValues.requestNeeds = request.requestNeeds;
+    }
+    if (updateDto.implementedWork !== undefined) {
+      previousValues.implementedWork = request.implementedWork;
+    }
 
     await this.requestModel.findByIdAndUpdate(id, updateDto);
 
@@ -398,8 +407,54 @@ export class MaintenanceRequestsService {
     return updated;
   }
 
+  async addProjectManagerNote(
+    id: string,
+    noteDto: AddProjectManagerNoteDto,
+    user: { userId: string; name: string }
+  ): Promise<MaintenanceRequestDocument> {
+    const request = await this.requestModel.findById(id);
+
+    if (!request) {
+      throw new EntityNotFoundException("Maintenance Request", id);
+    }
+
+    const previousNotes = request.projectManagerNotes;
+    const formattedNote = this.formatNoteWithAuthor(
+      noteDto.projectManagerNotes,
+      user.name
+    );
+
+    await this.requestModel.findByIdAndUpdate(id, {
+      projectManagerId: user.userId,
+      projectManagerNotes: formattedNote,
+    });
+
+    // Log the action
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.UPDATE,
+      entity: "MaintenanceRequest",
+      entityId: id,
+      changes: {
+        projectManagerNotes: formattedNote,
+      },
+      previousValues: {
+        projectManagerNotes: previousNotes,
+      },
+    });
+
+    const updated = await this.populateRequest(id);
+
+    // Notify about note addition
+    this.notificationsGateway.notifyRequestUpdated(updated);
+
+    return updated;
+  }
+
   async complete(
     id: string,
+    completeDto: CompleteRequestDto,
     user: { userId: string; name: string }
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findById(id);
@@ -421,10 +476,15 @@ export class MaintenanceRequestsService {
     }
 
     const previousStatus = request.status;
+    const previousImplementedWork = request.implementedWork;
+    const implementedWorkValue = (completeDto.implementedWork ?? "").trim();
+    const implementedWorkToStore =
+      implementedWorkValue === "" ? undefined : implementedWorkValue;
 
     await this.requestModel.findByIdAndUpdate(id, {
       status: RequestStatus.COMPLETED,
       closedAt: new Date(),
+      implementedWork: implementedWorkToStore,
     });
 
     // Log the action
@@ -434,14 +494,81 @@ export class MaintenanceRequestsService {
       action: AuditAction.STATUS_CHANGE,
       entity: "MaintenanceRequest",
       entityId: id,
-      changes: { status: RequestStatus.COMPLETED },
-      previousValues: { status: previousStatus },
+      changes: {
+        status: RequestStatus.COMPLETED,
+        implementedWork: implementedWorkToStore,
+      },
+      previousValues: {
+        status: previousStatus,
+        implementedWork: previousImplementedWork,
+      },
     });
 
     const updated = await this.populateRequest(id);
 
     // Notify about completion
     this.notificationsGateway.notifyRequestCompleted(updated);
+
+    return updated;
+  }
+
+  async approve(
+    id: string,
+    approveDto: ApproveRequestDto,
+    user: { userId: string; name: string; role: string }
+  ): Promise<MaintenanceRequestDocument> {
+    const request = await this.requestModel.findById(id);
+
+    if (!request) {
+      throw new EntityNotFoundException("Maintenance Request", id);
+    }
+
+    // Only consultants and admins can approve
+    if (user.role !== Role.CONSULTANT && user.role !== Role.ADMIN) {
+      throw new ForbiddenAccessException(
+        "Only consultants and admins can approve requests"
+      );
+    }
+
+    const previousIsApproved = request.isApproved;
+    const previousApprovedBy = request.approvedBy;
+
+    const updateData: any = {
+      isApproved: approveDto.isApproved,
+    };
+
+    if (approveDto.isApproved) {
+      updateData.approvedAt = new Date();
+      updateData.approvedBy = user.userId;
+    } else {
+      updateData.approvedAt = null;
+      updateData.approvedBy = null;
+    }
+
+    await this.requestModel.findByIdAndUpdate(id, updateData);
+
+    // Log the action
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.UPDATE,
+      entity: "MaintenanceRequest",
+      entityId: id,
+      changes: {
+        isApproved: approveDto.isApproved,
+        approvedAt: updateData.approvedAt,
+        approvedBy: updateData.approvedBy,
+      },
+      previousValues: {
+        isApproved: previousIsApproved,
+        approvedBy: previousApprovedBy,
+      },
+    });
+
+    const updated = await this.populateRequest(id);
+
+    // Notify about approval change
+    this.notificationsGateway.notifyRequestUpdated(updated);
 
     return updated;
   }
@@ -487,13 +614,13 @@ export class MaintenanceRequestsService {
     // Engineers can only see their own requests (always apply engineerId filter)
     // Admins and Consultants can see all requests
     if (user.role === Role.ENGINEER) {
-      // Convert to ObjectId for consistent matching with stored values
-      // Mongoose will match ObjectId with both ObjectId and string formats in queries
-      if (Types.ObjectId.isValid(user.userId)) {
-        filter.engineerId = new Types.ObjectId(user.userId);
-      } else {
-        filter.engineerId = user.userId;
-      }
+      // Support both String and ObjectId formats
+      filter.engineerId = { 
+        $in: [
+          user.userId,
+          Types.ObjectId.isValid(user.userId) ? new Types.ObjectId(user.userId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filterDto.status) {
@@ -502,15 +629,23 @@ export class MaintenanceRequestsService {
 
     // Allow Admins and Consultants to filter by specific engineer
     if (filterDto.engineerId && user.role !== Role.ENGINEER) {
-      filter.engineerId = Types.ObjectId.isValid(filterDto.engineerId)
-        ? new Types.ObjectId(filterDto.engineerId)
-        : filterDto.engineerId;
+      // Support both String and ObjectId formats
+      filter.engineerId = { 
+        $in: [
+          filterDto.engineerId,
+          Types.ObjectId.isValid(filterDto.engineerId) ? new Types.ObjectId(filterDto.engineerId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filterDto.consultantId) {
-      filter.consultantId = Types.ObjectId.isValid(filterDto.consultantId)
-        ? new Types.ObjectId(filterDto.consultantId)
-        : filterDto.consultantId;
+      // Support both String and ObjectId formats
+      filter.consultantId = { 
+        $in: [
+          filterDto.consultantId,
+          Types.ObjectId.isValid(filterDto.consultantId) ? new Types.ObjectId(filterDto.consultantId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filterDto.locationId) {
@@ -589,6 +724,7 @@ export class MaintenanceRequestsService {
       .populate("systemId", "name")
       .populate("machineId", "name components description")
       .populate("deletedBy", "name email")
+      .populate("approvedBy", "name email")
       .exec() as Promise<MaintenanceRequestDocument>;
   }
 
@@ -711,15 +847,23 @@ export class MaintenanceRequestsService {
     }
 
     if (filterDto.engineerId) {
-      filter.engineerId = Types.ObjectId.isValid(filterDto.engineerId)
-        ? new Types.ObjectId(filterDto.engineerId)
-        : filterDto.engineerId;
+      // Support both String and ObjectId formats
+      filter.engineerId = { 
+        $in: [
+          filterDto.engineerId,
+          Types.ObjectId.isValid(filterDto.engineerId) ? new Types.ObjectId(filterDto.engineerId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filterDto.consultantId) {
-      filter.consultantId = Types.ObjectId.isValid(filterDto.consultantId)
-        ? new Types.ObjectId(filterDto.consultantId)
-        : filterDto.consultantId;
+      // Support both String and ObjectId formats
+      filter.consultantId = { 
+        $in: [
+          filterDto.consultantId,
+          Types.ObjectId.isValid(filterDto.consultantId) ? new Types.ObjectId(filterDto.consultantId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filterDto.locationId) {

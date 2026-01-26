@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsMongoId } from 'class-validator';
 
 export class CreateSystemDto {
   @IsString()
@@ -8,6 +8,10 @@ export class CreateSystemDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsMongoId({ message: 'Invalid department ID' })
+  departmentId?: string;
 }
 
 

@@ -39,7 +39,7 @@ export class SystemsService {
     await this.cacheManager.del(CACHE_KEY);
     await this.cacheManager.del(`${CACHE_KEY}:all`);
 
-    return saved;
+    return saved.populate('departmentId', 'name');
   }
 
   async findAll(activeOnly: boolean = true): Promise<SystemDocument[]> {
@@ -54,7 +54,10 @@ export class SystemsService {
     if (activeOnly) {
       filter.isActive = true;
     }
-    const systems = await this.systemModel.find(filter).sort({ createdAt: -1 });
+    const systems = await this.systemModel
+      .find(filter)
+      .populate('departmentId', 'name')
+      .sort({ createdAt: -1 });
 
     await this.cacheManager.set(cacheKey, systems, CACHE_TTL);
 
@@ -62,7 +65,9 @@ export class SystemsService {
   }
 
   async findOne(id: string): Promise<SystemDocument> {
-    const system = await this.systemModel.findById(id);
+    const system = await this.systemModel
+      .findById(id)
+      .populate('departmentId', 'name');
 
     if (!system) {
       throw new EntityNotFoundException('System', id);
@@ -93,7 +98,7 @@ export class SystemsService {
       id,
       updateSystemDto,
       { new: true },
-    );
+    ).populate('departmentId', 'name');
 
     await this.cacheManager.del(CACHE_KEY);
     await this.cacheManager.del(`${CACHE_KEY}:all`);
@@ -156,7 +161,7 @@ export class SystemsService {
       id,
       { $unset: { deletedAt: 1, deletedBy: 1 } },
       { new: true }
-    );
+    ).populate('departmentId', 'name');
 
     if (!restored) {
       throw new EntityNotFoundException('System', id);
@@ -183,6 +188,22 @@ export class SystemsService {
       .populate('deletedBy', 'name email')
       .sort({ deletedAt: -1 });
     return systems;
+  }
+
+  async findByDepartment(departmentId: string): Promise<SystemDocument[]> {
+    const filter: any = {
+      deletedAt: null,
+      $or: [
+        { departmentId: new Types.ObjectId(departmentId) },
+        { departmentId: null },
+        { departmentId: { $exists: false } },
+      ],
+    };
+
+    return this.systemModel
+      .find(filter)
+      .populate('departmentId', 'name')
+      .sort({ createdAt: -1 });
   }
 
   // Keep for backward compatibility

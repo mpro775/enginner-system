@@ -472,6 +472,9 @@ export default function UsersManagement() {
                   <SelectItem value={Role.MAINTENANCE_SAFETY_MONITOR}>
                     مراقب الصيانة والسلامة
                   </SelectItem>
+                  <SelectItem value={Role.PROJECT_MANAGER}>
+                    مدير المشروع
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

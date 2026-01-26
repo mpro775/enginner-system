@@ -99,6 +99,7 @@ export function getRoleLabel(role: string): string {
     maintenance_manager: "مدير الصيانة",
     engineer: "مهندس",
     maintenance_safety_monitor: "مراقب الصيانة والسلامة",
+    project_manager: "مدير المشروع",
   };
   return labels[role] || role;
 }

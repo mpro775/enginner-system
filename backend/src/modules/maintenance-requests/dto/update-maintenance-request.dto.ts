@@ -33,9 +33,15 @@ export class UpdateMaintenanceRequestDto {
   @IsOptional()
   @IsString()
   engineerNotes?: string;
+
+  @IsOptional()
+  @IsString()
+  requestNeeds?: string;
+
+  @IsOptional()
+  @IsString()
+  implementedWork?: string;
 }
-
-
 
 
 

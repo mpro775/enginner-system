@@ -178,4 +178,39 @@ export const reportsService = {
       throw error;
     }
   },
+
+  async downloadEmptyRequestTemplate(): Promise<void> {
+    try {
+      const response = await api.get(`/reports/requests/template`, {
+        responseType: "blob",
+      });
+
+      // Check if response is actually a blob (not an error JSON)
+      if (response.data instanceof Blob) {
+        const blob = response.data;
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+
+        const filename = `maintenance-request-template-${new Date().toISOString().split("T")[0]}.pdf`;
+        link.setAttribute("download", filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      } else {
+        // If response is not a blob, it might be an error JSON
+        const text = await response.data.text();
+        try {
+          const errorData = JSON.parse(text);
+          throw new Error(errorData.message || "Failed to download template");
+        } catch (e) {
+          throw new Error("Failed to download template: Invalid response format");
+        }
+      }
+    } catch (error: any) {
+      console.error("Error downloading empty request template:", error);
+      throw error;
+    }
+  },
 };

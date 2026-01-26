@@ -5,6 +5,7 @@ export enum Role {
   MAINTENANCE_MANAGER = "maintenance_manager",
   ENGINEER = "engineer",
   MAINTENANCE_SAFETY_MONITOR = "maintenance_safety_monitor",
+  PROJECT_MANAGER = "project_manager",
 }
 
 export enum MaintenanceType {
@@ -96,6 +97,7 @@ export interface System {
   isActive: boolean;
   deletedAt?: string;
   deletedBy?: User;
+  departmentId?: Department;
 }
 
 export interface Machine {
@@ -116,6 +118,7 @@ export interface MaintenanceRequest {
   engineerId: User;
   consultantId?: User;
   healthSafetySupervisorId?: User;
+  projectManagerId?: User;
   maintenanceType: MaintenanceType;
   locationId: Location;
   departmentId: Department;
@@ -123,13 +126,19 @@ export interface MaintenanceRequest {
   machineId: Machine;
   reasonText: string;
   machineNumber?: string;
+  requestNeeds?: string;
   maintainAllComponents: boolean;
   selectedComponents?: string[];
   status: RequestStatus;
   engineerNotes?: string;
   consultantNotes?: string;
   healthSafetyNotes?: string;
+  projectManagerNotes?: string;
   stopReason?: string;
+  implementedWork?: string;
+  isApproved?: boolean;
+  approvedAt?: string;
+  approvedBy?: User;
   openedAt: string;
   closedAt?: string;
   stoppedAt?: string;
@@ -247,9 +256,23 @@ export interface CreateRequestForm {
   reasonText: string;
   machineNumber?: string;
   engineerNotes?: string;
+  requestNeeds?: string;
   maintainAllComponents?: boolean;
   selectedComponents?: string[];
   scheduledTaskId?: string;
+}
+
+export interface UpdateRequestForm {
+  maintenanceType?: MaintenanceType;
+  locationId?: string;
+  departmentId?: string;
+  systemId?: string;
+  machineId?: string;
+  reasonText?: string;
+  machineNumber?: string;
+  engineerNotes?: string;
+  requestNeeds?: string;
+  implementedWork?: string;
 }
 
 export interface StopRequestForm {
@@ -262,6 +285,10 @@ export interface AddNoteForm {
 
 export interface AddHealthSafetyNoteForm {
   healthSafetyNotes: string;
+}
+
+export interface AddProjectManagerNoteForm {
+  projectManagerNotes: string;
 }
 
 export interface CreateUserForm {

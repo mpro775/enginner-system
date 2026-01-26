@@ -52,6 +52,7 @@ const requestSchema = z
     reasonText: z.string().min(10, "سبب الطلب يجب أن يكون 10 أحرف على الأقل"),
     machineNumber: z.string().optional(),
     engineerNotes: z.string().optional(),
+    requestNeeds: z.string().optional(),
     maintainAllComponents: z.boolean().optional(),
     selectedComponents: z.array(z.string()).optional(),
     scheduledTaskId: z.string().optional(),
@@ -88,6 +89,7 @@ export default function NewRequest() {
   });
 
   const watchSystemId = watch("systemId");
+  const watchDepartmentId = watch("departmentId");
   const watchMaintainAllComponents = watch("maintainAllComponents");
 
   const [selectedTask, setSelectedTask] = useState<ScheduledTask | null>(null);
@@ -128,6 +130,24 @@ export default function NewRequest() {
   const hasComponents =
     selectedMachine?.components && selectedMachine.components.length > 0;
 
+  // Filter systems based on selected department
+  const filteredSystems = systems?.filter((system) => {
+    if (!watchDepartmentId) {
+      // If no department selected, show all systems
+      return true;
+    }
+    // Show systems that are either:
+    // 1. Linked to the selected department
+    // 2. Not linked to any department (departmentId is null/undefined)
+    if (!system.departmentId) {
+      return true;
+    }
+    if (typeof system.departmentId === "object") {
+      return system.departmentId.id === watchDepartmentId;
+    }
+    return system.departmentId === watchDepartmentId;
+  });
+
   const createMutation = useMutation({
     mutationFn: requestsService.create,
     onSuccess: (newRequest) => {
@@ -148,6 +168,19 @@ export default function NewRequest() {
     setValue("selectedComponents", []);
   };
 
+  // Reset system when department changes if current system is not available for new department
+  useEffect(() => {
+    if (watchDepartmentId && watchSystemId && filteredSystems) {
+      const currentSystemAvailable = filteredSystems.some(
+        (sys) => sys.id === watchSystemId
+      );
+      if (!currentSystemAvailable) {
+        setValue("systemId", "");
+        setValue("machineId", "");
+      }
+    }
+  }, [watchDepartmentId, watchSystemId, filteredSystems, setValue]);
+
   const handleMachineChange = (value: string) => {
     setValue("machineId", value);
     // Reset component selection when machine changes
@@ -167,6 +200,8 @@ export default function NewRequest() {
     setValue("maintainAllComponents", task.maintainAllComponents);
     setValue("selectedComponents", task.selectedComponents || []);
     setValue("reasonText", task.description || task.title);
+    // نسخ رقم الآلة واحتياجات الطلب مع إمكانية التعديل؛ حذف ملاحظة المهندس فقط
+    setValue("engineerNotes", "");
     // Close dialog if open
     setShowAllTasksDialog(false);
   };
@@ -487,11 +522,17 @@ export default function NewRequest() {
                     <SelectValue placeholder="اختر النظام" />
                   </SelectTrigger>
                   <SelectContent>
-                    {systems?.map((system) => (
-                      <SelectItem key={system.id} value={system.id}>
-                        {system.name}
+                    {filteredSystems && filteredSystems.length > 0 ? (
+                      filteredSystems.map((system) => (
+                        <SelectItem key={system.id} value={system.id}>
+                          {system.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="" disabled>
+                        لا توجد أنظمة متاحة
                       </SelectItem>
-                    ))}
+                    )}
                   </SelectContent>
                 </Select>
                 {errors.systemId && (
@@ -682,6 +723,16 @@ export default function NewRequest() {
                   {errors.reasonText.message}
                 </p>
               )}
+            </div>
+
+            {/* Request Needs */}
+            <div className="space-y-2">
+              <Label>احتياجات الطلب</Label>
+              <Textarea
+                placeholder="احتياجات الطلب (اختياري)"
+                rows={3}
+                {...register("requestNeeds")}
+              />
             </div>
 
             {/* Engineer Notes */}

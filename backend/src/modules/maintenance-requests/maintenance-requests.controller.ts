@@ -18,7 +18,10 @@ import {
   StopRequestDto,
   AddNoteDto,
   AddHealthSafetyNoteDto,
+  AddProjectManagerNoteDto,
   FilterRequestsDto,
+  CompleteRequestDto,
+  ApproveRequestDto,
 } from "./dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -179,20 +182,72 @@ export class MaintenanceRequestsController {
     };
   }
 
+  @Patch(":id/project-manager-note")
+  @UseGuards(RolesGuard)
+  @Roles(Role.PROJECT_MANAGER, Role.ADMIN)
+  async addProjectManagerNote(
+    @Param("id") id: string,
+    @Body() noteDto: AddProjectManagerNoteDto,
+    @CurrentUser() user: CurrentUserData
+  ) {
+    const request = await this.maintenanceRequestsService.addProjectManagerNote(
+      id,
+      noteDto,
+      {
+        userId: user.userId,
+        name: user.name,
+      }
+    );
+    return {
+      data: request,
+      message: "Project manager note added successfully",
+    };
+  }
+
   @Patch(":id/complete")
   @UseGuards(RolesGuard)
   @Roles(Role.ENGINEER)
   async complete(
     @Param("id") id: string,
+    @Body() completeDto: CompleteRequestDto,
     @CurrentUser() user: CurrentUserData
   ) {
-    const request = await this.maintenanceRequestsService.complete(id, {
-      userId: user.userId,
-      name: user.name,
-    });
+    const request = await this.maintenanceRequestsService.complete(
+      id,
+      completeDto,
+      {
+        userId: user.userId,
+        name: user.name,
+      }
+    );
     return {
       data: request,
       message: "Maintenance request completed successfully",
+    };
+  }
+
+  @Patch(":id/approve")
+  @UseGuards(RolesGuard)
+  @Roles(Role.CONSULTANT, Role.ADMIN)
+  async approve(
+    @Param("id") id: string,
+    @Body() approveDto: ApproveRequestDto,
+    @CurrentUser() user: CurrentUserData
+  ) {
+    const request = await this.maintenanceRequestsService.approve(
+      id,
+      approveDto,
+      {
+        userId: user.userId,
+        name: user.name,
+        role: user.role,
+      }
+    );
+    return {
+      data: request,
+      message: approveDto.isApproved
+        ? "Request approved successfully"
+        : "Request approval removed successfully",
     };
   }
 

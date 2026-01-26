@@ -45,6 +45,10 @@ export class CreateMaintenanceRequestDto {
   engineerNotes?: string;
 
   @IsOptional()
+  @IsString()
+  requestNeeds?: string;
+
+  @IsOptional()
   @IsBoolean()
   maintainAllComponents?: boolean;
 

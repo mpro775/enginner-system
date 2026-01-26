@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileSpreadsheet, FileText, Filter, Search, Calendar, Loader2 } from 'lucide-react';
+import { FileSpreadsheet, FileText, FilePlus, Filter, Search, Calendar, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -28,6 +28,9 @@ export default function Reports() {
   const [filters, setFilters] = useState<ReportFilter>({});
   const [downloadingExcel, setDownloadingExcel] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const fromDateInputRef = useRef<HTMLInputElement | null>(null);
+  const toDateInputRef = useRef<HTMLInputElement | null>(null);
 
   const { data: reportData, isLoading, isError, refetch } = useQuery({
     queryKey: ['reports', filters],
@@ -93,6 +96,23 @@ export default function Reports() {
     }
   };
 
+  const handleDownloadTemplate = async () => {
+    // منع الضغط المتكرر
+    if (downloadingTemplate || downloadingExcel || downloadingPdf) {
+      return;
+    }
+
+    try {
+      setDownloadingTemplate(true);
+      await reportsService.downloadEmptyRequestTemplate();
+    } catch (error) {
+      console.error('Error downloading template:', error);
+      alert('حدث خطأ أثناء تحميل القالب');
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
+
   const handleFilterChange = (key: keyof ReportFilter, value: string | undefined) => {
     setFilters((prev) => {
       const newFilters = { ...prev };
@@ -128,11 +148,25 @@ export default function Reports() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <div>
               <label className="text-sm font-medium mb-2 block">من تاريخ</label>
-              <div className="relative">
+              <div 
+                className="relative cursor-pointer"
+                onClick={() => {
+                  const input = fromDateInputRef.current;
+                  if (input) {
+                    input.focus();
+                    if ('showPicker' in input) {
+                      (input as HTMLInputElement & { showPicker: () => void }).showPicker();
+                    } else {
+                      (input as HTMLInputElement).click();
+                    }
+                  }
+                }}
+              >
                 <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
+                  ref={fromDateInputRef}
                   type="date"
-                  className="pr-10 text-right"
+                  className="pr-10 text-right cursor-pointer"
                   value={filters.fromDate || ''}
                   onChange={(e) => handleFilterChange('fromDate', e.target.value || undefined)}
                   aria-label="تاريخ البداية"
@@ -142,11 +176,25 @@ export default function Reports() {
             </div>
             <div>
               <label className="text-sm font-medium mb-2 block">إلى تاريخ</label>
-              <div className="relative">
+              <div 
+                className="relative cursor-pointer"
+                onClick={() => {
+                  const input = toDateInputRef.current;
+                  if (input) {
+                    input.focus();
+                    if ('showPicker' in input) {
+                      (input as HTMLInputElement & { showPicker: () => void }).showPicker();
+                    } else {
+                      (input as HTMLInputElement).click();
+                    }
+                  }
+                }}
+              >
                 <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
+                  ref={toDateInputRef}
                   type="date"
-                  className="pr-10 text-right"
+                  className="pr-10 text-right cursor-pointer"
                   value={filters.toDate || ''}
                   onChange={(e) => handleFilterChange('toDate', e.target.value || undefined)}
                   aria-label="تاريخ النهاية"
@@ -291,7 +339,7 @@ export default function Reports() {
             <Button 
               variant="outline" 
               onClick={() => handleDownload('excel')}
-              disabled={downloadingExcel || downloadingPdf}
+              disabled={downloadingExcel || downloadingPdf || downloadingTemplate}
             >
               {downloadingExcel ? (
                 <>
@@ -308,7 +356,7 @@ export default function Reports() {
             <Button 
               variant="outline" 
               onClick={() => handleDownload('pdf')}
-              disabled={downloadingExcel || downloadingPdf}
+              disabled={downloadingExcel || downloadingPdf || downloadingTemplate}
             >
               {downloadingPdf ? (
                 <>
@@ -322,6 +370,25 @@ export default function Reports() {
                 </>
               )}
             </Button>
+            {isAdmin && (
+              <Button 
+                variant="outline" 
+                onClick={handleDownloadTemplate}
+                disabled={downloadingExcel || downloadingPdf || downloadingTemplate}
+              >
+                {downloadingTemplate ? (
+                  <>
+                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                    جاري التحميل...
+                  </>
+                ) : (
+                  <>
+                    <FilePlus className="ml-2 h-4 w-4" />
+                    تحميل قالب فارغ
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

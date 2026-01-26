@@ -219,7 +219,7 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
 
   // Maintenance type translation map
   const typeMap: Record<string, string> = {
-    emergency: "طوارئ",
+    emergency: "طارئية",
     preventive: "وقائية",
   };
 
@@ -236,7 +236,7 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
 
   html += `
     <div class="content-section">
-      <h2 class="section-title">تفاصيل طلب الصيانة</h2>
+      <h2 class="section-title">بيانات الطلب</h2>
       
       <div style="margin-bottom: 20px;">
         <table class="data-table" style="width: 100%;">
@@ -249,19 +249,9 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
             <td>${escapeHtml(typeText)}</td>
           </tr>
           <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">الحالة</td>
-            <td>${escapeHtml(statusText)}</td>
-          </tr>
-          <tr>
             <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ الفتح</td>
             <td>${request.openedAt ? formatDateEnglish(new Date(request.openedAt)) : "-"}</td>
           </tr>
-          ${request.closedAt ? `
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ الإغلاق</td>
-            <td>${formatDateEnglish(new Date(request.closedAt))}</td>
-          </tr>
-          ` : ""}
           ${request.stoppedAt ? `
           <tr>
             <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ التوقف</td>
@@ -272,29 +262,7 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
       </div>
 
       <div style="margin-bottom: 20px;">
-        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">معلومات المهندسين</h3>
-        <table class="data-table" style="width: 100%;">
-          <tr>
-            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">المهندس</td>
-            <td>${escapeHtml(engineer?.name || "-")}</td>
-          </tr>
-          ${consultant ? `
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">المستشار</td>
-            <td>${escapeHtml(consultant.name || "-")}</td>
-          </tr>
-          ` : ""}
-          ${healthSafety ? `
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">مشرف الصحة والسلامة</td>
-            <td>${escapeHtml(healthSafety.name || "-")}</td>
-          </tr>
-          ` : ""}
-        </table>
-      </div>
-
-      <div style="margin-bottom: 20px;">
-        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">معلومات الموقع والآلة</h3>
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">تفاصيل الطلب</h3>
         <table class="data-table" style="width: 100%;">
           <tr>
             <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">الموقع</td>
@@ -305,16 +273,16 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
             <td>${escapeHtml(department?.name || "-")}</td>
           </tr>
           <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">النظام</td>
+            <td style="font-weight: bold; background-color: #f8f9fa;">الفرع</td>
             <td>${escapeHtml(system?.name || "-")}</td>
           </tr>
           <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">الآلة</td>
+            <td style="font-weight: bold; background-color: #f8f9fa;">البند</td>
             <td>${escapeHtml(machine?.name || "-")}</td>
           </tr>
           ${request.machineNumber ? `
           <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">رقم الآلة</td>
+            <td style="font-weight: bold; background-color: #f8f9fa;">رقم/توصيف البند</td>
             <td>${escapeHtml(request.machineNumber)}</td>
           </tr>
           ` : ""}
@@ -322,29 +290,39 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
       </div>
 
       <div style="margin-bottom: 20px;">
-        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">سبب طلب الصيانة</h3>
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">وصف الطلب</h3>
         <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; min-height: 40px;">
           ${escapeHtml(request.reasonText || "-")}
         </div>
       </div>
 
-      ${request.maintainAllComponents !== undefined || request.selectedComponents?.length ? `
       <div style="margin-bottom: 20px;">
-        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">معلومات المكونات</h3>
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">معلومات مباشرة العمل</h3>
         <table class="data-table" style="width: 100%;">
           <tr>
-            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">صيانة جميع المكونات</td>
-            <td>${request.maintainAllComponents ? "نعم" : "لا"}</td>
+            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">المهندس المباشر للطلب</td>
+            <td>${escapeHtml(engineer?.name || "-")}</td>
           </tr>
-          ${request.selectedComponents?.length ? `
+          ${request.requestNeeds ? `
           <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">المكونات المحددة</td>
-            <td>${escapeHtml(request.selectedComponents.join(", "))}</td>
+            <td style="font-weight: bold; background-color: #f8f9fa;">احتياجات الطلب</td>
+            <td>${escapeHtml(request.requestNeeds)}</td>
+          </tr>
+          ` : ""}
+          ${request.implementedWork ? `
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">ما تم تنفيذه</td>
+            <td>${escapeHtml(request.implementedWork)}</td>
+          </tr>
+          ` : ""}
+          ${request.engineerNotes ? `
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">معلومات الإجراء المتخذ</td>
+            <td>${escapeHtml(request.engineerNotes)}</td>
           </tr>
           ` : ""}
         </table>
       </div>
-      ` : ""}
 
       ${request.engineerNotes || request.consultantNotes || request.healthSafetyNotes ? `
       <div style="margin-bottom: 20px;">
@@ -384,6 +362,180 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
         </div>
       </div>
       ` : ""}
+
+      ${consultant ? `
+      <div style="margin-bottom: 20px;">
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">إعتماد الاستشاري</h3>
+        <table class="data-table" style="width: 100%;">
+          <tr>
+            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">المهندس الاستشاري</td>
+            <td>${escapeHtml(consultant.name || "-")}</td>
+          </tr>
+          ${request.consultantNotes ? `
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">ملاحظة الاستشاري</td>
+            <td>${escapeHtml(request.consultantNotes)}</td>
+          </tr>
+          ` : ""}
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">إعتماد الاستشاري</td>
+            <td>${request.isApproved ? "مكتمل" : "غير مكتمل"}</td>
+          </tr>
+          ${request.approvedAt ? `
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ الاعتماد</td>
+            <td>${formatDateEnglish(new Date(request.approvedAt))}</td>
+          </tr>
+          ` : ""}
+        </table>
+      </div>
+      ` : ""}
+    </div>
+  `;
+
+  return html;
+}
+
+// Generate HTML content for empty request template
+function generateEmptyRequestTemplateContent(): string {
+  let html = "";
+
+  html += `
+    <div class="content-section">
+      <h2 class="section-title">بيانات الطلب</h2>
+      
+      <div style="margin-bottom: 20px;">
+        <table class="data-table" style="width: 100%;">
+          <tr>
+            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">كود الطلب</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">النوع</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ الفتح</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ التوقف</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">تفاصيل الطلب</h3>
+        <table class="data-table" style="width: 100%;">
+          <tr>
+            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">الموقع</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">القسم</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">الفرع</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">البند</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">رقم/توصيف البند</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">وصف الطلب</h3>
+        <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; min-height: 80px; border-bottom: 1px dashed #ccc;">
+          &nbsp;
+        </div>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">معلومات مباشرة العمل</h3>
+        <table class="data-table" style="width: 100%;">
+          <tr>
+            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">المهندس المباشر للطلب</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">احتياجات الطلب</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">ما تم تنفيذه</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">معلومات الإجراء المتخذ</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">الملاحظات</h3>
+        <div style="margin-bottom: 10px;">
+          <strong>ملاحظات المهندس:</strong>
+          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; min-height: 60px; border-bottom: 1px dashed #ccc;">
+            &nbsp;
+          </div>
+        </div>
+        <div style="margin-bottom: 10px;">
+          <strong>ملاحظات المستشار:</strong>
+          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; min-height: 60px; border-bottom: 1px dashed #ccc;">
+            &nbsp;
+          </div>
+        </div>
+        <div style="margin-bottom: 10px;">
+          <strong>ملاحظات الصحة والسلامة:</strong>
+          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; min-height: 60px; border-bottom: 1px dashed #ccc;">
+            &nbsp;
+          </div>
+        </div>
+        <div style="margin-bottom: 10px;">
+          <strong>ملاحظات مدير المشروع:</strong>
+          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; min-height: 60px; border-bottom: 1px dashed #ccc;">
+            &nbsp;
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">سبب التوقف</h3>
+        <div style="padding: 10px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; min-height: 60px; border-bottom: 1px dashed #ccc;">
+          &nbsp;
+        </div>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">إعتماد الاستشاري</h3>
+        <table class="data-table" style="width: 100%;">
+          <tr>
+            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">المهندس الاستشاري</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">ملاحظة الاستشاري</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">إعتماد الاستشاري</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ الاعتماد</td>
+            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
+          </tr>
+        </table>
+      </div>
     </div>
   `;
 
@@ -404,6 +556,8 @@ export interface RequestReportData {
   reasonText: string;
   engineerNotes: string | null;
   consultantNotes: string | null;
+  requestNeeds: string | null;
+  implementedWork: string | null;
   openedAt: Date;
   closedAt: Date | null;
   createdAt: Date;
@@ -448,6 +602,8 @@ export class ReportsService {
       reasonText: req.reasonText,
       engineerNotes: req.engineerNotes || null,
       consultantNotes: req.consultantNotes || null,
+      requestNeeds: req.requestNeeds || null,
+      implementedWork: req.implementedWork || null,
       openedAt: req.openedAt,
       closedAt: req.closedAt || null,
       createdAt: (req as any).createdAt,
@@ -481,6 +637,8 @@ export class ReportsService {
       { header: "Reason", key: "reasonText", width: 30 },
       { header: "Engineer Notes", key: "engineerNotes", width: 25 },
       { header: "Consultant Notes", key: "consultantNotes", width: 25 },
+      { header: "Request Needs", key: "requestNeeds", width: 25 },
+      { header: "Implemented Work", key: "implementedWork", width: 25 },
       { header: "Opened At", key: "openedAt", width: 18 },
       { header: "Closed At", key: "closedAt", width: 18 },
     ];
@@ -505,13 +663,15 @@ export class ReportsService {
         machineNumber: row.machineNumber || "-",
         engineerNotes: row.engineerNotes || "-",
         consultantNotes: row.consultantNotes || "-",
+        requestNeeds: row.requestNeeds || "-",
+        implementedWork: row.implementedWork || "-",
       });
     });
 
     // Auto-filter
     sheet.autoFilter = {
       from: "A1",
-      to: `O${data.length + 1}`,
+      to: `Q${data.length + 1}`,
     };
 
     // Set response headers
@@ -832,18 +992,30 @@ export class ReportsService {
     filter: ReportFilterDto
   ): FilterQuery<MaintenanceRequestDocument> {
     const matchStage: FilterQuery<MaintenanceRequestDocument> = {};
+    const Types = require('mongoose').Types;
 
     if (filter.engineerId) {
-      matchStage.engineerId = filter.engineerId;
+      // Support both String and ObjectId formats
+      matchStage.engineerId = { 
+        $in: [
+          filter.engineerId,
+          Types.ObjectId.isValid(filter.engineerId) ? new Types.ObjectId(filter.engineerId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filter.consultantId) {
-      matchStage.consultantId = filter.consultantId;
+      // Support both String and ObjectId formats
+      matchStage.consultantId = { 
+        $in: [
+          filter.consultantId,
+          Types.ObjectId.isValid(filter.consultantId) ? new Types.ObjectId(filter.consultantId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filter.locationId) {
       // Support both String and ObjectId formats
-      const Types = require('mongoose').Types;
       matchStage.locationId = { 
         $in: [
           filter.locationId,
@@ -854,7 +1026,6 @@ export class ReportsService {
 
     if (filter.departmentId) {
       // Support both String and ObjectId formats
-      const Types = require('mongoose').Types;
       matchStage.departmentId = { 
         $in: [
           filter.departmentId,
@@ -865,7 +1036,6 @@ export class ReportsService {
 
     if (filter.systemId) {
       // Support both String and ObjectId formats
-      const Types = require('mongoose').Types;
       matchStage.systemId = { 
         $in: [
           filter.systemId,
@@ -926,6 +1096,149 @@ export class ReportsService {
     const reportNumber = `REQ-${request.requestCode}`;
     const reportDate = formatDateEnglish(new Date());
     const reportContent = generateSingleRequestContent(request);
+
+    // 2. تصميم الهيدر (HTML + CSS مدمج)
+    const headerTemplate = `
+    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: flex-start; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
+        
+        <div style="text-align: right; width: 30%;">
+            <p style="margin: 2px 0; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
+            <p style="margin: 2px 0; font-weight: bold; color: #0f5b7a;">جامعة الملك سعود</p>
+            <p style="margin: 2px 0;">إدارة التشغيل والصيانة</p>
+            <p style="margin: 2px 0;">بكليات الجامعة - فرع المزاحمية</p>
+        </div>
+
+        <div style="text-align: center; width: 30%;">
+            <p style="margin: 0 0 5px 0; font-size: 12px; color: #0f5b7a;">بسم الله الرحمن الرحيم</p>
+            <img src="${logoBase64}" style="width: 100px; height: auto;" />
+        </div>
+
+        <div style="text-align: left; width: 30%; padding-top: 15px; direction: rtl;">
+            <p style="margin: 2px 0;"><strong>رقم التقرير:</strong> ${reportNumber}</p>
+            <p style="margin: 2px 0;"><strong>التاريخ:</strong> ${reportDate}</p>
+        </div>
+    </div>`;
+
+    // 3. تصميم الفوتر (HTML + CSS مدمج)
+    const footerTemplate = `
+    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 8px; padding: 0 40px; border-top: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center; direction: rtl;">
+        
+        <div style="text-align: right;">
+            <p style="margin: 1px 0;">المملكة العربية السعودية</p>
+            <p style="margin: 1px 0;">ص.ب 2454 الرياض 11451</p>
+        </div>
+
+        <div style="text-align: center;">
+            <p style="margin: 1px 0;">العنوان الوطني</p>
+            <p style="margin: 1px 0;">RGSA8707</p>
+        </div>
+
+        <div style="text-align: center;">
+             <p style="margin: 1px 0;">هاتف +966 11 4686275</p>
+        </div>
+
+        <div style="text-align: left; direction: ltr;">
+            <p style="margin: 1px 0;">www.ksu.edu.sa</p>
+            <p style="margin: 1px 0;">hm@ksu.edu.sa</p>
+        </div>
+    </div>`;
+
+    // Read HTML template
+    const templatePath = path.join(
+      __dirname,
+      "templates",
+      "report-template.html"
+    );
+    if (!fs.existsSync(templatePath)) {
+      throw new Error(`Template file not found at: ${templatePath}`);
+    }
+    let htmlContent = fs.readFileSync(templatePath, "utf-8");
+    htmlContent = htmlContent.replace(/{{{report_content}}}/g, reportContent);
+
+    // إعدادات المتصفح المحسنة للدوكر
+    const browser = await puppeteer.launch({
+      headless: true,
+      executablePath:
+        process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
+      dumpio: false,
+      env: {
+        ...process.env,
+        DBUS_SESSION_BUS_ADDRESS: "autolaunch:",
+      },
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--font-render-hinting=none",
+        "--disable-web-security",
+        "--disable-software-rasterizer",
+        "--disable-gl-drawing-for-tests",
+        "--use-gl=swiftshader",
+        "--mute-audio",
+        "--no-first-run",
+        "--disable-extensions",
+      ],
+    });
+
+    try {
+      const page = await browser.newPage();
+
+      // ضبط المتصفح ليعرض محتوى الطباعة
+      await page.emulateMediaType("print");
+
+      await page.setContent(htmlContent, {
+        waitUntil: ["load", "networkidle0"],
+        timeout: 60000,
+      });
+
+      // التوليد مع الهيدر والفوتر
+      const pdfBuffer = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        displayHeaderFooter: true,
+        headerTemplate: headerTemplate,
+        footerTemplate: footerTemplate,
+        margin: {
+          top: "160px",
+          bottom: "80px",
+          right: "20px",
+          left: "20px",
+        },
+      });
+
+      // Verify PDF buffer is valid
+      if (!pdfBuffer || pdfBuffer.length === 0) {
+        throw new Error("Generated PDF buffer is empty or invalid");
+      }
+
+      // Check if buffer starts with PDF header
+      const pdfHeader = String.fromCharCode(
+        pdfBuffer[0],
+        pdfBuffer[1],
+        pdfBuffer[2],
+        pdfBuffer[3]
+      );
+      if (pdfHeader !== "%PDF") {
+        console.error("Invalid PDF format, header:", pdfHeader);
+        throw new Error("Generated PDF is not in valid PDF format");
+      }
+
+      return Buffer.from(pdfBuffer);
+    } catch (e) {
+      console.error("Puppeteer Error:", e);
+      throw e;
+    } finally {
+      if (browser) await browser.close();
+    }
+  }
+
+  async generateEmptyRequestTemplatePdfBuffer(): Promise<Buffer> {
+    // 1. تجهيز الصور والبيانات
+    const logoBase64 = convertLogoToBase64();
+    const reportNumber = `TEMPLATE-${Date.now().toString().slice(-6)}`;
+    const reportDate = formatDateEnglish(new Date());
+    const reportContent = generateEmptyRequestTemplateContent();
 
     // 2. تصميم الهيدر (HTML + CSS مدمج)
     const headerTemplate = `

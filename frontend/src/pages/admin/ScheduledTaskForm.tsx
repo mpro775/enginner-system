@@ -86,6 +86,7 @@ export default function ScheduledTaskForm() {
   });
 
   const watchSystemId = watch("systemId");
+  const watchDepartmentId = watch("departmentId");
   const watchMachineId = watch("machineId");
   const watchMaintainAllComponents = watch("maintainAllComponents");
 
@@ -143,6 +144,24 @@ export default function ScheduledTaskForm() {
   // Check if all reference data is loaded
   const isReferenceDataLoaded = !isLoadingLocations && !isLoadingDepartments && !isLoadingSystems && locations && departments && systems;
   const isEditDataReady = isEditing ? (task && !isLoadingTask && !isLoadingTaskMachines && taskMachines) : true;
+
+  // Filter systems based on selected department
+  const filteredSystems = systems?.filter((system) => {
+    if (!watchDepartmentId) {
+      // If no department selected, show all systems
+      return true;
+    }
+    // Show systems that are either:
+    // 1. Linked to the selected department
+    // 2. Not linked to any department (departmentId is null/undefined)
+    if (!system.departmentId) {
+      return true;
+    }
+    if (typeof system.departmentId === "object") {
+      return system.departmentId.id === watchDepartmentId;
+    }
+    return system.departmentId === watchDepartmentId;
+  });
 
   useEffect(() => {
     if (task && isEditing && isReferenceDataLoaded && isEditDataReady && !formInitialized) {
@@ -230,6 +249,19 @@ export default function ScheduledTaskForm() {
       createMutation.mutate(submitData);
     }
   };
+
+  // Reset system when department changes if current system is not available for new department
+  useEffect(() => {
+    if (watchDepartmentId && watchSystemId && filteredSystems && !isEditing) {
+      const currentSystemAvailable = filteredSystems.some(
+        (sys) => sys.id === watchSystemId
+      );
+      if (!currentSystemAvailable) {
+        setValue("systemId", "");
+        setValue("machineId", "");
+      }
+    }
+  }, [watchDepartmentId, watchSystemId, filteredSystems, setValue, isEditing]);
 
   const handleSystemChange = (value: string) => {
     setValue("systemId", value);
@@ -402,11 +434,17 @@ export default function ScheduledTaskForm() {
                     <SelectValue placeholder="اختر النظام" />
                   </SelectTrigger>
                   <SelectContent>
-                    {systems?.map((system) => (
-                      <SelectItem key={system.id} value={system.id}>
-                        {system.name}
+                    {filteredSystems && filteredSystems.length > 0 ? (
+                      filteredSystems.map((system) => (
+                        <SelectItem key={system.id} value={system.id}>
+                          {system.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="" disabled>
+                        لا توجد أنظمة متاحة
                       </SelectItem>
-                    ))}
+                    )}
                   </SelectContent>
                 </Select>
                 {errors.systemId && (

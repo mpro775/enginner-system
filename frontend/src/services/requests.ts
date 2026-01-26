@@ -3,9 +3,11 @@ import {
   ApiResponse,
   MaintenanceRequest,
   CreateRequestForm,
+  UpdateRequestForm,
   StopRequestForm,
   AddNoteForm,
   AddHealthSafetyNoteForm,
+  AddProjectManagerNoteForm,
   PaginationMeta,
 } from '@/types';
 
@@ -46,7 +48,7 @@ export const requestsService = {
     return response.data.data;
   },
 
-  async update(id: string, data: Partial<CreateRequestForm>): Promise<MaintenanceRequest> {
+  async update(id: string, data: UpdateRequestForm): Promise<MaintenanceRequest> {
     const response = await api.patch<ApiResponse<MaintenanceRequest>>(`/requests/${id}`, data);
     return response.data.data;
   },
@@ -75,8 +77,27 @@ export const requestsService = {
     return response.data.data;
   },
 
-  async complete(id: string): Promise<MaintenanceRequest> {
-    const response = await api.patch<ApiResponse<MaintenanceRequest>>(`/requests/${id}/complete`);
+  async addProjectManagerNote(id: string, data: AddProjectManagerNoteForm): Promise<MaintenanceRequest> {
+    const response = await api.patch<ApiResponse<MaintenanceRequest>>(
+      `/requests/${id}/project-manager-note`,
+      data
+    );
+    return response.data.data;
+  },
+
+  async complete(id: string, data: { implementedWork?: string }): Promise<MaintenanceRequest> {
+    const response = await api.patch<ApiResponse<MaintenanceRequest>>(
+      `/requests/${id}/complete`,
+      data
+    );
+    return response.data.data;
+  },
+
+  async approve(id: string, isApproved: boolean): Promise<MaintenanceRequest> {
+    const response = await api.patch<ApiResponse<MaintenanceRequest>>(
+      `/requests/${id}/approve`,
+      { isApproved }
+    );
     return response.data.data;
   },
 

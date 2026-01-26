@@ -48,6 +48,15 @@ export class SystemsController {
     };
   }
 
+  @Get('by-department/:departmentId')
+  async findByDepartment(@Param('departmentId') departmentId: string) {
+    const systems = await this.systemsService.findByDepartment(departmentId);
+    return {
+      data: systems,
+      message: 'Systems retrieved successfully',
+    };
+  }
+
   @Get('trash')
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)

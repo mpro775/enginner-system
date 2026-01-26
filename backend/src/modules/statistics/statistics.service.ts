@@ -558,21 +558,27 @@ export class StatisticsService {
 
     // Engineers can only see their own statistics
     if (userRole === Role.ENGINEER && userId) {
-      // Convert string userId to ObjectId for proper MongoDB aggregation matching
-      if (Types.ObjectId.isValid(userId)) {
-        matchStage.engineerId = new Types.ObjectId(userId);
-      } else {
-        matchStage.engineerId = userId;
-      }
+      // Support both String and ObjectId formats
+      matchStage.engineerId = { 
+        $in: [
+          userId,
+          Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filter.engineerId) {
-      matchStage.engineerId = filter.engineerId;
+      // Support both String and ObjectId formats
+      matchStage.engineerId = { 
+        $in: [
+          filter.engineerId,
+          Types.ObjectId.isValid(filter.engineerId) ? new Types.ObjectId(filter.engineerId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filter.locationId) {
       // Support both String and ObjectId formats
-      const Types = require('mongoose').Types;
       matchStage.locationId = { 
         $in: [
           filter.locationId,
@@ -583,7 +589,6 @@ export class StatisticsService {
 
     if (filter.departmentId) {
       // Support both String and ObjectId formats
-      const Types = require('mongoose').Types;
       matchStage.departmentId = { 
         $in: [
           filter.departmentId,
@@ -594,7 +599,6 @@ export class StatisticsService {
 
     if (filter.systemId) {
       // Support both String and ObjectId formats
-      const Types = require('mongoose').Types;
       matchStage.systemId = { 
         $in: [
           filter.systemId,

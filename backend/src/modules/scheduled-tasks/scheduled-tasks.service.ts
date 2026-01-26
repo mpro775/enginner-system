@@ -463,9 +463,13 @@ export class ScheduledTasksService {
     }
 
     if (filterDto.engineerId) {
-      filter.engineerId = Types.ObjectId.isValid(filterDto.engineerId)
-        ? new Types.ObjectId(filterDto.engineerId)
-        : filterDto.engineerId;
+      // Support both String and ObjectId formats
+      filter.engineerId = { 
+        $in: [
+          filterDto.engineerId,
+          Types.ObjectId.isValid(filterDto.engineerId) ? new Types.ObjectId(filterDto.engineerId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filterDto.locationId) {
@@ -667,9 +671,13 @@ export class ScheduledTasksService {
     }
 
     if (filterDto.engineerId) {
-      filter.engineerId = Types.ObjectId.isValid(filterDto.engineerId)
-        ? new Types.ObjectId(filterDto.engineerId)
-        : filterDto.engineerId;
+      // Support both String and ObjectId formats
+      filter.engineerId = { 
+        $in: [
+          filterDto.engineerId,
+          Types.ObjectId.isValid(filterDto.engineerId) ? new Types.ObjectId(filterDto.engineerId) : null
+        ].filter(Boolean)
+      } as any;
     }
 
     if (filterDto.locationId) {

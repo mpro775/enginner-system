@@ -25,7 +25,7 @@ export class CreateUserDto {
 
   @IsEnum(Role, {
     message:
-      "Role must be admin, consultant, maintenance_manager, engineer, or maintenance_safety_monitor",
+      "Role must be admin, consultant, maintenance_manager, engineer, maintenance_safety_monitor, or project_manager",
   })
   @IsNotEmpty({ message: "Role is required" })
   role: Role;

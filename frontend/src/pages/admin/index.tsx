@@ -58,11 +58,18 @@ export function SystemsPage() {
       fields={[
         { name: "name", label: "اسم النظام", type: "text", required: true },
         { name: "description", label: "الوصف", type: "textarea" },
+        { name: "departmentId", label: "القسم", type: "select" },
       ]}
       columns={[
         { key: "name", label: "الاسم" },
         { key: "description", label: "الوصف" },
+        { key: "departmentId", label: "القسم" },
       ]}
+      relatedService={{
+        getAll: departmentsService.getAll,
+        queryKey: "departments",
+        fieldName: "departmentId",
+      }}
     />
   );
 }
