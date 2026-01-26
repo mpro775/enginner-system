@@ -93,14 +93,6 @@ export const requestsService = {
     return response.data.data;
   },
 
-  async approve(id: string, isApproved: boolean): Promise<MaintenanceRequest> {
-    const response = await api.patch<ApiResponse<MaintenanceRequest>>(
-      `/requests/${id}/approve`,
-      { isApproved }
-    );
-    return response.data.data;
-  },
-
   async softDelete(id: string): Promise<void> {
     await api.delete(`/requests/${id}`);
   },

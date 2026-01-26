@@ -6,7 +6,6 @@ export * from './add-health-safety-note.dto';
 export * from './add-project-manager-note.dto';
 export * from './filter-requests.dto';
 export * from './complete-request.dto';
-export * from './approve-request.dto';
 
 
 

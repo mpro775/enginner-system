@@ -47,6 +47,7 @@ export class ReportsController {
     @Param("id") id: string,
     @Res() res: Response,
     @Query("format") format?: string,
+    @Query("preview") preview?: string,
     @CurrentUser() user?: CurrentUserData
   ) {
     try {
@@ -70,10 +71,13 @@ export class ReportsController {
 
       if (reportFormat === "pdf") {
         const buffer = await this.reportsService.generateSingleRequestPdfBuffer(id);
+        const isPreview = preview === "true";
 
         res.set({
           "Content-Type": "application/pdf",
-          "Content-Disposition": `attachment; filename=maintenance-request-${id}-${Date.now()}.pdf`,
+          "Content-Disposition": isPreview
+            ? `inline; filename=maintenance-request-${id}.pdf`
+            : `attachment; filename=maintenance-request-${id}-${Date.now()}.pdf`,
           "Content-Length": buffer.length.toString(),
           "Cache-Control": "no-cache, no-store, must-revalidate",
           Pragma: "no-cache",

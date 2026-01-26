@@ -79,15 +79,6 @@ export class MaintenanceRequest {
   @Prop({ trim: true })
   implementedWork?: string;
 
-  @Prop({ default: false })
-  isApproved?: boolean;
-
-  @Prop()
-  approvedAt?: Date;
-
-  @Prop({ type: Types.ObjectId, ref: "User" })
-  approvedBy?: Types.ObjectId;
-
   @Prop({ default: true })
   maintainAllComponents: boolean;
 

@@ -15,7 +15,6 @@ import {
   AddProjectManagerNoteDto,
   FilterRequestsDto,
   CompleteRequestDto,
-  ApproveRequestDto,
 } from "./dto";
 import {
   EntityNotFoundException,
@@ -515,87 +514,6 @@ export class MaintenanceRequestsService {
     return updated;
   }
 
-  async approve(
-    id: string,
-    approveDto: ApproveRequestDto,
-    user: { userId: string; name: string; role: string }
-  ): Promise<MaintenanceRequestDocument> {
-    const request = await this.requestModel.findById(id);
-
-    if (!request) {
-      throw new EntityNotFoundException("Maintenance Request", id);
-    }
-
-    // Only consultants and admins can approve
-    if (user.role !== Role.CONSULTANT && user.role !== Role.ADMIN) {
-      throw new ForbiddenAccessException(
-        "Only consultants and admins can approve requests"
-      );
-    }
-
-    // Consultants: must have department and can only approve same-department requests
-    if (user.role === Role.CONSULTANT) {
-      const consultant = await this.userModel
-        .findById(user.userId)
-        .select("departmentId")
-        .lean();
-      if (!consultant?.departmentId) {
-        throw new ForbiddenAccessException(
-          "يجب تعيين الاستشاري إلى قسم قبل الاعتماد"
-        );
-      }
-      const reqDeptId = request.departmentId?.toString?.() ?? String(request.departmentId);
-      const consultantDeptId = consultant.departmentId.toString();
-      if (reqDeptId !== consultantDeptId) {
-        throw new ForbiddenAccessException(
-          "لا يمكن اعتماد طلبات تقع خارج قسم الاستشاري"
-        );
-      }
-    }
-
-    const previousIsApproved = request.isApproved;
-    const previousApprovedBy = request.approvedBy;
-
-    const updateData: any = {
-      isApproved: approveDto.isApproved,
-    };
-
-    if (approveDto.isApproved) {
-      updateData.approvedAt = new Date();
-      updateData.approvedBy = user.userId;
-    } else {
-      updateData.approvedAt = null;
-      updateData.approvedBy = null;
-    }
-
-    await this.requestModel.findByIdAndUpdate(id, updateData);
-
-    // Log the action
-    await this.auditLogsService.create({
-      userId: user.userId,
-      userName: user.name,
-      action: AuditAction.UPDATE,
-      entity: "MaintenanceRequest",
-      entityId: id,
-      changes: {
-        isApproved: approveDto.isApproved,
-        approvedAt: updateData.approvedAt,
-        approvedBy: updateData.approvedBy,
-      },
-      previousValues: {
-        isApproved: previousIsApproved,
-        approvedBy: previousApprovedBy,
-      },
-    });
-
-    const updated = await this.populateRequest(id);
-
-    // Notify about approval change
-    this.notificationsGateway.notifyRequestUpdated(updated);
-
-    return updated;
-  }
-
   private async generateRequestCode(
     maintenanceType: MaintenanceType
   ): Promise<string> {
@@ -747,7 +665,6 @@ export class MaintenanceRequestsService {
       .populate("systemId", "name")
       .populate("machineId", "name components description")
       .populate("deletedBy", "name email")
-      .populate("approvedBy", "name email")
       .exec() as Promise<MaintenanceRequestDocument>;
   }
 

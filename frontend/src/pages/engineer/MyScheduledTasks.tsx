@@ -64,32 +64,33 @@ const formatScheduledDate = (task: ScheduledTask): string => {
 };
 
 const getStatusBadge = (status: TaskStatus) => {
+  const base = "inline-flex items-center gap-1 rounded-full text-[10px] sm:text-xs font-medium shrink-0";
   switch (status) {
     case TaskStatus.PENDING:
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-          <Clock className="w-3 h-3 mr-1" />
+        <span className={`${base} px-2 py-0.5 sm:px-2.5 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200`}>
+          <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
           معلقة
         </span>
       );
     case TaskStatus.COMPLETED:
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-          <CheckCircle2 className="w-3 h-3 mr-1" />
+        <span className={`${base} px-2 py-0.5 sm:px-2.5 bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200`}>
+          <CheckCircle2 className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
           مكتملة
         </span>
       );
     case TaskStatus.OVERDUE:
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-          <AlertCircle className="w-3 h-3 mr-1" />
+        <span className={`${base} px-2 py-0.5 sm:px-2.5 bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200`}>
+          <AlertCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
           متأخرة
         </span>
       );
     case TaskStatus.CANCELLED:
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-          <XCircle className="w-3 h-3 mr-1" />
+        <span className={`${base} px-2 py-0.5 sm:px-2.5 bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200`}>
+          <XCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
           ملغاة
         </span>
       );
@@ -247,8 +248,8 @@ export default function MyScheduledTasks() {
 
   if (isError) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="text-center text-destructive">
+      <div className="w-full max-w-full px-3 py-6 sm:px-6">
+        <div className="text-center text-destructive text-sm sm:text-base">
           حدث خطأ أثناء تحميل الصيانة الوقائية
         </div>
       </div>
@@ -259,17 +260,17 @@ export default function MyScheduledTasks() {
   const meta = data?.meta;
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">صيانتي الوقائية</h1>
-          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+    <div className="w-full max-w-full overflow-x-hidden px-3 py-4 sm:px-4 sm:py-5 md:px-6 md:py-6 space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight break-words">صيانتي الوقائية</h1>
+          <p className="text-muted-foreground mt-1 text-xs sm:text-sm md:text-base">
             عرض وإدارة الصيانة الوقائية المخصصة لك
           </p>
         </div>
         <Button 
           onClick={() => navigate("/requests/new")}
-          className="w-full sm:w-auto"
+          className="w-full sm:w-auto shrink-0"
           size="sm"
         >
           <Plus className="ml-2 h-4 w-4" />
@@ -279,77 +280,78 @@ export default function MyScheduledTasks() {
 
       {/* Available Tasks Section */}
       {availableTasks.length > 0 && (
-        <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/30">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <UserPlus className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400" />
+        <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/30 overflow-hidden">
+          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg md:text-xl">
+              <UserPlus className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400 shrink-0" />
               المهام المتاحة
             </CardTitle>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1 break-words">
               صيانة وقائية متاحة لجميع المهندسين - يمكنك قبول أي صيانة منها
             </p>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-3 sm:px-6 pb-4 sm:pb-6">
             <div className="grid gap-3 sm:gap-4">
               {availableTasks.map((task) => {
                 const daysRemaining = getDaysRemaining(task);
                 const isOverdue = daysRemaining < 0;
 
                 return (
-                  <Card key={task.id} className="bg-card">
-                    <CardContent className="p-4 sm:p-6">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 space-y-4">
+                  <Card key={task.id} className="bg-card overflow-hidden">
+                    <CardContent className="p-3 sm:p-4 md:p-6">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
                           {/* العنوان والحالة */}
                           <div className="space-y-2">
-                            <div className="flex items-center gap-3 flex-wrap">
-                              <h4 className="text-lg sm:text-xl font-bold text-foreground">
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                              <h4 className="text-base sm:text-lg md:text-xl font-bold text-foreground break-words w-full sm:w-auto">
                                 {task.title}
                               </h4>
                               {getStatusBadge(task.status)}
-                              <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
+                              <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 sm:py-1 rounded shrink-0">
                                 {task.taskCode}
                               </span>
                             </div>
                           </div>
 
                           {/* التفاصيل الرئيسية */}
-                          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                            <div className="flex items-start gap-2">
-                              <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
-                              <div>
-                                <span className="text-sm text-muted-foreground block mb-1">التاريخ المحدد:</span>
-                                <span className="text-sm font-medium text-foreground">
+                          <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2 min-w-0">
+                              <Calendar className="h-4 w-4 text-muted-foreground shrink-0 hidden sm:block mt-0.5" />
+                              <div className="min-w-0">
+                                <span className="text-xs sm:text-sm text-muted-foreground block mb-0.5">التاريخ المحدد:</span>
+                                <span className="text-xs sm:text-sm font-medium text-foreground break-words">
                                   {formatScheduledDate(task)}
                                 </span>
                               </div>
                             </div>
-                            <div className="flex items-start gap-2">
-                              <span className="text-sm text-muted-foreground min-w-[80px]">الموقع:</span>
-                              <span className="text-sm font-medium text-foreground">
+                            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2 min-w-0">
+                              <span className="text-xs sm:text-sm text-muted-foreground sm:min-w-[70px]">الموقع:</span>
+                              <span className="text-xs sm:text-sm font-medium text-foreground break-words">
                                 {task.locationId?.name || "-"}
                               </span>
                             </div>
-                            <div className="flex items-start gap-2">
-                              <span className="text-sm text-muted-foreground min-w-[80px]">القسم:</span>
-                              <span className="text-sm font-medium text-foreground">
+                            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2 min-w-0">
+                              <span className="text-xs sm:text-sm text-muted-foreground sm:min-w-[70px]">القسم:</span>
+                              <span className="text-xs sm:text-sm font-medium text-foreground break-words">
                                 {task.departmentId.name}
                               </span>
                             </div>
-                            <div className="flex items-start gap-2">
-                              <span className="text-sm text-muted-foreground min-w-[80px]">النظام:</span>
-                              <span className="text-sm font-medium text-foreground">
+                            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2 min-w-0">
+                              <span className="text-xs sm:text-sm text-muted-foreground sm:min-w-[70px]">النظام:</span>
+                              <span className="text-xs sm:text-sm font-medium text-foreground break-words">
                                 {task.systemId?.name || "-"}
                               </span>
                             </div>
-                            <div className="flex items-start gap-2">
-                              <span className="text-sm text-muted-foreground min-w-[80px]">الآلة:</span>
-                              <span className="text-sm font-medium text-foreground">
+                            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2 min-w-0">
+                              <span className="text-xs sm:text-sm text-muted-foreground sm:min-w-[70px]">الآلة:</span>
+                              <span className="text-xs sm:text-sm font-medium text-foreground break-words">
                                 {task.machineId.name}
                               </span>
                             </div>
-                            <div className="flex items-start gap-2">
-                              <span className={`text-sm font-medium ${isOverdue ? "text-destructive" : "text-foreground"}`}>
+                            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2 min-w-0">
+                              <span className="text-xs sm:text-sm text-muted-foreground sm:min-w-[70px] sm:hidden">الوقت:</span>
+                              <span className={`text-xs sm:text-sm font-medium break-words ${isOverdue ? "text-destructive" : "text-foreground"}`}>
                                 {isOverdue 
                                   ? `متأخرة ${Math.abs(daysRemaining)} يوم`
                                   : `متبقي ${daysRemaining} يوم`}
@@ -359,20 +361,20 @@ export default function MyScheduledTasks() {
 
                           {/* المكونات */}
                           {task.machineId?.components && task.machineId.components.length > 0 && (
-                            <div className="space-y-2">
-                              <span className="text-sm font-medium text-muted-foreground block">
+                            <div className="space-y-1.5 sm:space-y-2">
+                              <span className="text-xs sm:text-sm font-medium text-muted-foreground block">
                                 المكونات:
                               </span>
-                              <div className="flex flex-wrap gap-2">
+                              <div className="flex flex-wrap gap-1.5 sm:gap-2">
                                 {task.maintainAllComponents ? (
-                                  <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+                                  <span className="text-xs sm:text-sm bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full">
                                     جميع المكونات ({task.machineId.components.length})
                                   </span>
                                 ) : task.selectedComponents && task.selectedComponents.length > 0 ? (
                                   task.selectedComponents.map((component, idx) => (
                                     <span
                                       key={idx}
-                                      className="text-sm bg-gray-100 text-gray-800 px-3 py-1 rounded-full"
+                                      className="text-xs sm:text-sm bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full break-all"
                                     >
                                       {component}
                                     </span>
@@ -384,27 +386,27 @@ export default function MyScheduledTasks() {
 
                           {/* الوصف */}
                           {task.description && (
-                            <div className="space-y-2 pt-2 border-t">
-                              <span className="text-sm font-medium text-muted-foreground block">
+                            <div className="space-y-1.5 sm:space-y-2 pt-2 border-t">
+                              <span className="text-xs sm:text-sm font-medium text-muted-foreground block">
                                 الوصف:
                               </span>
-                              <div className="text-sm text-foreground leading-relaxed">
+                              <div className="text-xs sm:text-sm text-foreground leading-relaxed break-words">
                                 {task.description.length > 100 ? (
                                   <>
-                                    <p className="whitespace-pre-wrap">
+                                    <p className="whitespace-pre-wrap break-words">
                                       {expandedDescriptions[task.id] 
                                         ? task.description 
                                         : task.description.slice(0, 100) + "..."}
                                     </p>
                                     <button
                                       onClick={() => toggleDescription(task.id)}
-                                      className="text-primary hover:underline text-sm mt-1 font-medium"
+                                      className="text-primary hover:underline text-xs sm:text-sm mt-1 font-medium"
                                     >
                                       {expandedDescriptions[task.id] ? "عرض أقل" : "قراءة المزيد"}
                                     </button>
                                   </>
                                 ) : (
-                                  <p className="whitespace-pre-wrap">{task.description}</p>
+                                  <p className="whitespace-pre-wrap break-words">{task.description}</p>
                                 )}
                               </div>
                             </div>
@@ -412,7 +414,7 @@ export default function MyScheduledTasks() {
 
                           {/* معلومات إضافية */}
                           {task.repetitionInterval && (
-                            <div className="flex items-center gap-2 text-sm pt-2 border-t">
+                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs sm:text-sm pt-2 border-t">
                               <span className="text-muted-foreground">معدل التكرار:</span>
                               <span className="font-medium text-foreground">
                                 {task.repetitionInterval === "weekly" && "أسبوعي"}
@@ -425,21 +427,22 @@ export default function MyScheduledTasks() {
                         </div>
 
                         {/* زر قبول المهمة */}
-                        <div className="flex-shrink-0">
+                        <div className="w-full sm:w-auto shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 flex sm:block">
                           <Button
                             onClick={() => handleAcceptTask(task)}
                             disabled={acceptTaskMutation.isPending}
                             size="sm"
+                            className="w-full sm:w-auto"
                           >
                             {acceptTaskMutation.isPending ? (
                               <>
-                                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                                جاري القبول...
+                                <Loader2 className="ml-2 h-4 w-4 animate-spin shrink-0" />
+                                <span className="truncate">جاري القبول...</span>
                               </>
                             ) : (
                               <>
-                                <CheckCircle2 className="ml-2 h-4 w-4" />
-                                قبول المهمة
+                                <CheckCircle2 className="ml-2 h-4 w-4 shrink-0" />
+                                <span className="truncate">قبول المهمة</span>
                               </>
                             )}
                           </Button>
@@ -455,24 +458,24 @@ export default function MyScheduledTasks() {
       )}
 
       {/* Filters */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-            <Filter className="h-4 w-4 sm:h-5 sm:w-5" />
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg md:text-xl">
+            <Filter className="h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
             التصفية
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">الحالة</label>
+        <CardContent className="px-3 sm:px-6 pb-4 sm:pb-6">
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 max-w-md">
+            <div className="space-y-2 min-w-0">
+              <label className="text-xs sm:text-sm font-medium">الحالة</label>
               <Select
                 value={filters.status}
                 onValueChange={(value) =>
                   setFilters({ ...filters, status: value, page: 1 })
                 }
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full text-sm">
                   <SelectValue placeholder="جميع الحالات" />
                 </SelectTrigger>
                 <SelectContent>
@@ -491,9 +494,9 @@ export default function MyScheduledTasks() {
       {/* Tasks List */}
       <div className="grid gap-3 sm:gap-4">
         {tasks.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 sm:py-12 text-center">
-              <p className="text-sm sm:text-base text-muted-foreground">لا توجد صيانة وقائية</p>
+          <Card className="overflow-hidden">
+            <CardContent className="py-8 sm:py-12 px-4 text-center">
+              <p className="text-xs sm:text-sm md:text-base text-muted-foreground">لا توجد صيانة وقائية</p>
             </CardContent>
           </Card>
         ) : (
@@ -502,63 +505,63 @@ export default function MyScheduledTasks() {
             const isOverdue = daysRemaining < 0;
 
             return (
-              <Card key={task.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-4 sm:p-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 space-y-4">
+              <Card key={task.id} className="hover:shadow-md transition-shadow overflow-hidden">
+                <CardContent className="p-3 sm:p-4 md:p-6">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
                       {/* العنوان والحالة */}
                       <div className="space-y-2">
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <h3 className="text-lg sm:text-xl font-bold text-foreground">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                          <h3 className="text-base sm:text-lg md:text-xl font-bold text-foreground break-words w-full sm:w-auto">
                             {task.title}
                           </h3>
                           {getStatusBadge(task.status)}
-                          <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
+                          <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 sm:py-1 rounded shrink-0">
                             {task.taskCode}
                           </span>
                         </div>
                       </div>
 
                       {/* التفاصيل الرئيسية */}
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        <div className="flex items-start gap-2">
-                          <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
-                          <div>
-                            <span className="text-sm text-muted-foreground block mb-1">التاريخ المحدد:</span>
-                            <span className="text-sm font-medium text-foreground">
+                      <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2 min-w-0">
+                          <Calendar className="h-4 w-4 text-muted-foreground shrink-0 hidden sm:block mt-0.5" />
+                          <div className="min-w-0">
+                            <span className="text-xs sm:text-sm text-muted-foreground block mb-0.5">التاريخ المحدد:</span>
+                            <span className="text-xs sm:text-sm font-medium text-foreground break-words">
                               {formatScheduledDate(task)}
                             </span>
                           </div>
                         </div>
-                        <div className="flex items-start gap-2">
-                          <span className="text-sm text-muted-foreground min-w-[80px]">الموقع:</span>
-                          <span className="text-sm font-medium text-foreground">
+                        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2 min-w-0">
+                          <span className="text-xs sm:text-sm text-muted-foreground sm:min-w-[70px]">الموقع:</span>
+                          <span className="text-xs sm:text-sm font-medium text-foreground break-words">
                             {task.locationId?.name || "-"}
                           </span>
                         </div>
-                        <div className="flex items-start gap-2">
-                          <span className="text-sm text-muted-foreground min-w-[80px]">القسم:</span>
-                          <span className="text-sm font-medium text-foreground">
+                        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2 min-w-0">
+                          <span className="text-xs sm:text-sm text-muted-foreground sm:min-w-[70px]">القسم:</span>
+                          <span className="text-xs sm:text-sm font-medium text-foreground break-words">
                             {task.departmentId.name}
                           </span>
                         </div>
-                        <div className="flex items-start gap-2">
-                          <span className="text-sm text-muted-foreground min-w-[80px]">النظام:</span>
-                          <span className="text-sm font-medium text-foreground">
+                        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2 min-w-0">
+                          <span className="text-xs sm:text-sm text-muted-foreground sm:min-w-[70px]">النظام:</span>
+                          <span className="text-xs sm:text-sm font-medium text-foreground break-words">
                             {task.systemId?.name || "-"}
                           </span>
                         </div>
-                        <div className="flex items-start gap-2">
-                          <span className="text-sm text-muted-foreground min-w-[80px]">الآلة:</span>
-                          <span className="text-sm font-medium text-foreground">
+                        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2 min-w-0">
+                          <span className="text-xs sm:text-sm text-muted-foreground sm:min-w-[70px]">الآلة:</span>
+                          <span className="text-xs sm:text-sm font-medium text-foreground break-words">
                             {task.machineId.name}
                           </span>
                         </div>
                         {task.status !== TaskStatus.COMPLETED &&
                           task.status !== TaskStatus.CANCELLED && (
-                            <div className="flex items-start gap-2">
-                              <span className="text-sm text-muted-foreground min-w-[80px]">الوقت المتبقي:</span>
-                              <span className={`text-sm font-medium ${isOverdue ? "text-destructive" : "text-foreground"}`}>
+                            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2 min-w-0">
+                              <span className="text-xs sm:text-sm text-muted-foreground sm:min-w-[70px]">الوقت المتبقي:</span>
+                              <span className={`text-xs sm:text-sm font-medium break-words ${isOverdue ? "text-destructive" : "text-foreground"}`}>
                                 {isOverdue 
                                   ? `متأخرة ${Math.abs(daysRemaining)} يوم`
                                   : `متبقي ${daysRemaining} يوم`}
@@ -569,20 +572,20 @@ export default function MyScheduledTasks() {
 
                       {/* المكونات */}
                       {task.machineId?.components && task.machineId.components.length > 0 && (
-                        <div className="space-y-2">
-                          <span className="text-sm font-medium text-muted-foreground block">
+                        <div className="space-y-1.5 sm:space-y-2">
+                          <span className="text-xs sm:text-sm font-medium text-muted-foreground block">
                             المكونات:
                           </span>
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-1.5 sm:gap-2">
                             {task.maintainAllComponents ? (
-                              <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+                              <span className="text-xs sm:text-sm bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full">
                                 جميع المكونات ({task.machineId.components.length})
                               </span>
                             ) : task.selectedComponents && task.selectedComponents.length > 0 ? (
                               task.selectedComponents.map((component, idx) => (
                                 <span
                                   key={idx}
-                                  className="text-sm bg-gray-100 text-gray-800 px-3 py-1 rounded-full"
+                                  className="text-xs sm:text-sm bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full break-all"
                                 >
                                   {component}
                                 </span>
@@ -594,27 +597,27 @@ export default function MyScheduledTasks() {
 
                       {/* الوصف */}
                       {task.description && (
-                        <div className="space-y-2 pt-2 border-t">
-                          <span className="text-sm font-medium text-muted-foreground block">
+                        <div className="space-y-1.5 sm:space-y-2 pt-2 border-t">
+                          <span className="text-xs sm:text-sm font-medium text-muted-foreground block">
                             الوصف:
                           </span>
-                          <div className="text-sm text-foreground leading-relaxed">
+                          <div className="text-xs sm:text-sm text-foreground leading-relaxed break-words">
                             {task.description.length > 100 ? (
                               <>
-                                <p className="whitespace-pre-wrap">
+                                <p className="whitespace-pre-wrap break-words">
                                   {expandedDescriptions[task.id] 
                                     ? task.description 
                                     : task.description.slice(0, 100) + "..."}
                                 </p>
                                 <button
                                   onClick={() => toggleDescription(task.id)}
-                                  className="text-primary hover:underline text-sm mt-1 font-medium"
+                                  className="text-primary hover:underline text-xs sm:text-sm mt-1 font-medium"
                                 >
                                   {expandedDescriptions[task.id] ? "عرض أقل" : "قراءة المزيد"}
                                 </button>
                               </>
                             ) : (
-                              <p className="whitespace-pre-wrap">{task.description}</p>
+                              <p className="whitespace-pre-wrap break-words">{task.description}</p>
                             )}
                           </div>
                         </div>
@@ -623,7 +626,7 @@ export default function MyScheduledTasks() {
                       {/* معلومات إضافية */}
                       <div className="space-y-2 pt-2 border-t">
                         {task.repetitionInterval && (
-                          <div className="flex items-center gap-2 text-sm">
+                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
                             <span className="text-muted-foreground">معدل التكرار:</span>
                             <span className="font-medium text-foreground">
                               {task.repetitionInterval === "weekly" && "أسبوعي"}
@@ -636,11 +639,11 @@ export default function MyScheduledTasks() {
 
                         {task.status === TaskStatus.COMPLETED &&
                           task.completedRequestId && (
-                            <div className="flex items-center gap-2 text-sm">
+                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
                               <span className="text-muted-foreground">الطلب المكتمل:</span>
                               <Button
                                 variant="link"
-                                className="p-0 h-auto text-sm font-medium"
+                                className="p-0 h-auto text-xs sm:text-sm font-medium min-w-0"
                                 onClick={() =>
                                   navigate(
                                     `/requests/${task.completedRequestId?.id}`
@@ -657,22 +660,24 @@ export default function MyScheduledTasks() {
                     {/* أزرار الإجراءات */}
                     {(task.status === TaskStatus.PENDING ||
                       task.status === TaskStatus.OVERDUE) && (
-                      <div className="flex flex-col gap-2 flex-shrink-0">
+                      <div className="flex flex-col gap-2 w-full sm:w-auto shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0">
                         <Button
                           onClick={() => handleQuickExecute(task)}
                           variant="default"
                           size="sm"
+                          className="w-full sm:w-auto"
                         >
-                          <CheckCircle2 className="h-4 w-4 ml-2" />
-                          تنفيذ المهمة
+                          <CheckCircle2 className="h-4 w-4 ml-2 shrink-0" />
+                          <span className="truncate">تنفيذ المهمة</span>
                         </Button>
                         <Button
                           onClick={() => handleCreateRequest(task)}
                           variant="outline"
                           size="sm"
+                          className="w-full sm:w-auto"
                         >
-                          <Plus className="h-4 w-4 ml-2" />
-                          طلب مخصص
+                          <Plus className="h-4 w-4 ml-2 shrink-0" />
+                          <span className="truncate">طلب مخصص</span>
                         </Button>
                       </div>
                     )}
@@ -686,17 +691,17 @@ export default function MyScheduledTasks() {
 
       {/* Pagination */}
       {meta && meta.totalPages > 1 && (
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-2 pt-2">
+        <div className="flex flex-row flex-wrap items-center justify-center gap-2 sm:gap-3 pt-2 px-1">
           <Button
             variant="outline"
             size="sm"
             onClick={() => setFilters({ ...filters, page: filters.page - 1 })}
             disabled={filters.page === 1}
-            className="w-full sm:w-auto"
+            className="flex-1 min-w-[100px] sm:flex-none sm:min-w-0"
           >
             السابق
           </Button>
-          <span className="text-xs sm:text-sm text-muted-foreground">
+          <span className="text-xs sm:text-sm text-muted-foreground shrink-0 px-2">
             صفحة {meta.page} من {meta.totalPages}
           </span>
           <Button
@@ -704,7 +709,7 @@ export default function MyScheduledTasks() {
             size="sm"
             onClick={() => setFilters({ ...filters, page: filters.page + 1 })}
             disabled={filters.page >= meta.totalPages}
-            className="w-full sm:w-auto"
+            className="flex-1 min-w-[100px] sm:flex-none sm:min-w-0"
           >
             التالي
           </Button>
@@ -713,21 +718,21 @@ export default function MyScheduledTasks() {
 
       {/* Execute Task Dialog */}
       <Dialog open={executeDialogOpen} onOpenChange={setExecuteDialogOpen}>
-        <DialogContent className="max-w-[95vw] sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-lg sm:text-xl">تنفيذ الصيانة الوقائية</DialogTitle>
-            <DialogDescription className="text-sm">
-              {selectedTaskForExecution?.title}
-              <div className="mt-2 space-y-1 text-xs sm:text-sm">
-                <p>القسم: {selectedTaskForExecution?.departmentId.name}</p>
-                <p>الآلة: {selectedTaskForExecution?.machineId.name}</p>
+        <DialogContent className="max-w-[calc(100vw-1.5rem)] sm:max-w-md w-[calc(100vw-1.5rem)] sm:w-full p-4 sm:p-6 overflow-y-auto max-h-[90dvh] overflow-x-hidden">
+          <DialogHeader className="space-y-2 px-1 sm:px-0 gap-2">
+            <DialogTitle className="text-base sm:text-lg md:text-xl break-words pr-8">تنفيذ الصيانة الوقائية</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm break-words">
+              <span className="block mb-2">{selectedTaskForExecution?.title}</span>
+              <div className="space-y-1 text-muted-foreground">
+                <p className="break-words">القسم: {selectedTaskForExecution?.departmentId.name}</p>
+                <p className="break-words">الآلة: {selectedTaskForExecution?.machineId.name}</p>
               </div>
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleExecuteSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
+            <div className="space-y-2 min-w-0">
+              <label className="text-xs sm:text-sm font-medium block">
                 ملاحظات إضافية (اختياري)
               </label>
               <Textarea
@@ -735,11 +740,11 @@ export default function MyScheduledTasks() {
                 value={executionNotes}
                 onChange={(e) => setExecutionNotes(e.target.value)}
                 rows={4}
-                className="text-sm"
+                className="text-sm min-h-[80px] resize-y max-w-full"
               />
             </div>
 
-            <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+            <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-2 pt-2">
               <Button
                 type="button"
                 variant="outline"
@@ -749,7 +754,7 @@ export default function MyScheduledTasks() {
                   setSelectedTaskForExecution(null);
                 }}
                 disabled={createRequestMutation.isPending}
-                className="w-full sm:w-auto order-2 sm:order-1"
+                className="w-full sm:w-auto"
                 size="sm"
               >
                 إلغاء
@@ -757,18 +762,18 @@ export default function MyScheduledTasks() {
               <Button 
                 type="submit" 
                 disabled={createRequestMutation.isPending}
-                className="w-full sm:w-auto order-1 sm:order-2"
+                className="w-full sm:w-auto"
                 size="sm"
               >
                 {createRequestMutation.isPending ? (
                   <>
-                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="ml-2 h-4 w-4 animate-spin shrink-0" />
                     <span className="hidden sm:inline">جاري الإنشاء...</span>
                     <span className="sm:hidden">جاري...</span>
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="ml-2 h-4 w-4" />
+                    <CheckCircle2 className="ml-2 h-4 w-4 shrink-0" />
                     <span className="hidden sm:inline">إنشاء الطلب</span>
                     <span className="sm:hidden">إنشاء</span>
                   </>

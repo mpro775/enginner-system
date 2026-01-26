@@ -136,9 +136,6 @@ export interface MaintenanceRequest {
   projectManagerNotes?: string;
   stopReason?: string;
   implementedWork?: string;
-  isApproved?: boolean;
-  approvedAt?: string;
-  approvedBy?: User;
   openedAt: string;
   closedAt?: string;
   stoppedAt?: string;

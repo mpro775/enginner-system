@@ -511,7 +511,7 @@ export default function NewRequest() {
 
               {/* System */}
               <div className="space-y-2">
-                <Label>النظام *</Label>
+                <Label>النظام / الفرع *</Label>
                 <Select 
                   value={watch("systemId")}
                   onValueChange={handleSystemChange}
@@ -540,7 +540,7 @@ export default function NewRequest() {
 
               {/* Machine */}
               <div className="space-y-2">
-                <Label>الآلة *</Label>
+                <Label>الآلة / البند *</Label>
                 <Select
                   disabled={!watchSystemId || isLoadingMachines}
                   onValueChange={handleMachineChange}
@@ -587,7 +587,7 @@ export default function NewRequest() {
 
               {/* Machine Number */}
               <div className="space-y-2">
-                <Label>رقم الآلة</Label>
+                <Label>رقم الآلة / البند / التوصيف</Label>
                 <Input
                   placeholder="رقم أو كود الآلة"
                   {...register("machineNumber")}

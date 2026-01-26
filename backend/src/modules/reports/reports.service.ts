@@ -223,7 +223,7 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
 
   // Maintenance type translation map
   const typeMap: Record<string, string> = {
-    emergency: "طارئية",
+    emergency: "طارئة",
     preventive: "وقائية",
   };
 
@@ -328,30 +328,22 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
         </table>
       </div>
 
-      ${request.engineerNotes || request.consultantNotes || request.healthSafetyNotes ? `
+      ${request.healthSafetyNotes || request.projectManagerNotes ? `
       <div style="margin-bottom: 20px;">
         <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">الملاحظات</h3>
-        ${request.engineerNotes ? `
-        <div style="margin-bottom: 10px;">
-          <strong>ملاحظات المهندس:</strong>
-          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; ${MULTI_LINE_STYLE}">
-            ${escapeHtml(request.engineerNotes)}
-          </div>
-        </div>
-        ` : ""}
-        ${request.consultantNotes ? `
-        <div style="margin-bottom: 10px;">
-          <strong>ملاحظات المستشار:</strong>
-          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; ${MULTI_LINE_STYLE}">
-            ${escapeHtml(request.consultantNotes)}
-          </div>
-        </div>
-        ` : ""}
         ${request.healthSafetyNotes ? `
         <div style="margin-bottom: 10px;">
           <strong>ملاحظات الصحة والسلامة:</strong>
           <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; ${MULTI_LINE_STYLE}">
             ${escapeHtml(request.healthSafetyNotes)}
+          </div>
+        </div>
+        ` : ""}
+        ${request.projectManagerNotes ? `
+        <div style="margin-bottom: 10px;">
+          <strong>ملاحظات مدير المشروع:</strong>
+          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; ${MULTI_LINE_STYLE}">
+            ${escapeHtml(request.projectManagerNotes)}
           </div>
         </div>
         ` : ""}
@@ -369,7 +361,7 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
 
       ${consultant ? `
       <div style="margin-bottom: 20px;">
-        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">إعتماد الاستشاري</h3>
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">ملاحظات الاستشاري</h3>
         <table class="data-table" style="width: 100%;">
           <tr>
             <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">المهندس الاستشاري</td>
@@ -381,19 +373,25 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
             <td style="${MULTI_LINE_STYLE}">${escapeHtml(request.consultantNotes)}</td>
           </tr>
           ` : ""}
+        </table>
+      </div>
+      ` : ""}
+
+      <div style="margin-bottom: 20px;">
+        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">حالة الطلب</h3>
+        <table class="data-table" style="width: 100%;">
           <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">إعتماد الاستشاري</td>
-            <td>${request.isApproved ? "مكتمل" : "غير مكتمل"}</td>
+            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">الحالة</td>
+            <td>${escapeHtml(statusText)}</td>
           </tr>
-          ${request.approvedAt ? `
+          ${request.status === RequestStatus.COMPLETED && request.closedAt ? `
           <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ الاعتماد</td>
-            <td>${formatDateEnglish(new Date(request.approvedAt))}</td>
+            <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ الإغلاق</td>
+            <td>${formatDateEnglish(new Date(request.closedAt))}</td>
           </tr>
           ` : ""}
         </table>
       </div>
-      ` : ""}
     </div>
   `;
 
@@ -420,10 +418,6 @@ function generateEmptyRequestTemplateContent(): string {
           </tr>
           <tr>
             <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ الفتح</td>
-            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ التوقف</td>
             <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
           </tr>
         </table>
@@ -484,62 +478,6 @@ function generateEmptyRequestTemplateContent(): string {
         </table>
       </div>
 
-      <div style="margin-bottom: 20px;">
-        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">الملاحظات</h3>
-        <div style="margin-bottom: 10px;">
-          <strong>ملاحظات المهندس:</strong>
-          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; min-height: 60px; border-bottom: 1px dashed #ccc;">
-            &nbsp;
-          </div>
-        </div>
-        <div style="margin-bottom: 10px;">
-          <strong>ملاحظات المستشار:</strong>
-          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; min-height: 60px; border-bottom: 1px dashed #ccc;">
-            &nbsp;
-          </div>
-        </div>
-        <div style="margin-bottom: 10px;">
-          <strong>ملاحظات الصحة والسلامة:</strong>
-          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; min-height: 60px; border-bottom: 1px dashed #ccc;">
-            &nbsp;
-          </div>
-        </div>
-        <div style="margin-bottom: 10px;">
-          <strong>ملاحظات مدير المشروع:</strong>
-          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; min-height: 60px; border-bottom: 1px dashed #ccc;">
-            &nbsp;
-          </div>
-        </div>
-      </div>
-
-      <div style="margin-bottom: 20px;">
-        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">سبب التوقف</h3>
-        <div style="padding: 10px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; min-height: 60px; border-bottom: 1px dashed #ccc;">
-          &nbsp;
-        </div>
-      </div>
-
-      <div style="margin-bottom: 20px;">
-        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">إعتماد الاستشاري</h3>
-        <table class="data-table" style="width: 100%;">
-          <tr>
-            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">المهندس الاستشاري</td>
-            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">ملاحظة الاستشاري</td>
-            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">إعتماد الاستشاري</td>
-            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ الاعتماد</td>
-            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
-          </tr>
-        </table>
-      </div>
     </div>
   `;
 

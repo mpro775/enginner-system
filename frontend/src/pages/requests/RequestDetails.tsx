@@ -22,6 +22,8 @@ import {
   AlertCircle,
   Printer,
   Trash2,
+  Eye,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,6 +104,9 @@ export default function RequestDetails() {
   const [projectManagerNotes, setProjectManagerNotes] = useState("");
   const [implementedWork, setImplementedWork] = useState("");
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
   const [expandedDescriptions, setExpandedDescriptions] = useState<
     Record<string, boolean>
   >({});
@@ -301,33 +306,6 @@ export default function RequestDetails() {
     },
   });
 
-  const approveMutation = useMutation({
-    mutationFn: (isApproved: boolean) =>
-      requestsService.approve(id!, isApproved),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["request", id] });
-      queryClient.invalidateQueries({ queryKey: ["requests"] });
-      toast({
-        title: "تم بنجاح",
-        description: request?.isApproved
-          ? "تم إلغاء اعتماد الطلب"
-          : "تم اعتماد الطلب بنجاح",
-        variant: "default",
-      });
-    },
-    onError: (error: any) => {
-      const errorMessage =
-        error?.response?.data?.message ||
-        error?.message ||
-        "فشل تحديث حالة الاعتماد. يرجى المحاولة مرة أخرى.";
-      toast({
-        title: "خطأ",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    },
-  });
-
   const updateMutation = useMutation({
     mutationFn: (data: UpdateRequestFormData) =>
       requestsService.update(id!, data),
@@ -454,12 +432,6 @@ export default function RequestDetails() {
   const canEdit = isOwner && request.status === RequestStatus.IN_PROGRESS;
   const canStop = isOwner && request.status === RequestStatus.IN_PROGRESS;
   const canComplete = isOwner && request.status === RequestStatus.IN_PROGRESS;
-  const canApprove =
-    request.status === RequestStatus.COMPLETED &&
-    (isAdmin ||
-      (isConsultant &&
-        !!user?.departmentId?.id &&
-        request.departmentId?.id === user.departmentId?.id));
   const canAddNote =
     (isConsultant || isMaintenanceManager || isAdmin) &&
     request.status !== RequestStatus.STOPPED;
@@ -515,10 +487,6 @@ export default function RequestDetails() {
     });
   };
 
-  const handleApprove = () => {
-    approveMutation.mutate(!request.isApproved);
-  };
-
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ["request", id] });
   };
@@ -531,10 +499,48 @@ export default function RequestDetails() {
       await reportsService.downloadSingleRequestReport(id);
     } catch (error) {
       console.error("Error downloading PDF:", error);
-      alert("حدث خطأ أثناء تحميل التقرير");
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء تحميل التقرير",
+        variant: "destructive",
+      });
     } finally {
       setDownloadingPdf(false);
     }
+  };
+
+  const handlePreview = async () => {
+    if (!id || loadingPreview) return;
+
+    try {
+      setLoadingPreview(true);
+      const url = await reportsService.previewSingleRequestReport(id);
+      setPdfPreviewUrl(url);
+      setShowPreviewDialog(true);
+    } catch (error) {
+      console.error("Error previewing PDF:", error);
+      toast({
+        title: "خطأ",
+        description: "حدث خطأ أثناء معاينة التقرير",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  const handleClosePreview = () => {
+    setShowPreviewDialog(false);
+    if (pdfPreviewUrl) {
+      window.URL.revokeObjectURL(pdfPreviewUrl);
+      setPdfPreviewUrl(null);
+    }
+  };
+
+  const handleDownloadFromPreview = async () => {
+    if (!id) return;
+    handleClosePreview();
+    await handlePrint();
   };
 
   const handleEdit = () => {
@@ -605,13 +611,41 @@ export default function RequestDetails() {
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 justify-end">
+          {/* Preview button - icon only on mobile */}
+          <Button
+            variant="outline"
+            size="icon"
+            className="sm:hidden"
+            onClick={handlePreview}
+            disabled={loadingPreview || downloadingPdf}
+          >
+            {loadingPreview ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+          </Button>
+          {/* Preview button - full on desktop */}
+          <Button
+            variant="outline"
+            className="hidden sm:inline-flex"
+            onClick={handlePreview}
+            disabled={loadingPreview || downloadingPdf}
+          >
+            {loadingPreview ? (
+              <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Eye className="ml-2 h-4 w-4" />
+            )}
+            {loadingPreview ? "جاري التحميل..." : "معاينة التقرير"}
+          </Button>
           {/* Print button - icon only on mobile */}
           <Button
             variant="outline"
             size="icon"
             className="sm:hidden"
             onClick={handlePrint}
-            disabled={downloadingPdf}
+            disabled={downloadingPdf || loadingPreview}
           >
             {downloadingPdf ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -624,14 +658,14 @@ export default function RequestDetails() {
             variant="outline"
             className="hidden sm:inline-flex"
             onClick={handlePrint}
-            disabled={downloadingPdf}
+            disabled={downloadingPdf || loadingPreview}
           >
             {downloadingPdf ? (
               <Loader2 className="ml-2 h-4 w-4 animate-spin" />
             ) : (
               <Printer className="ml-2 h-4 w-4" />
             )}
-            {downloadingPdf ? "جاري التحميل..." : "طباعة التقرير"}
+            {downloadingPdf ? "جاري التحميل..." : "تحميل التقرير"}
           </Button>
           {/* Badges hidden on mobile (shown inline with title) */}
           <div className="hidden sm:flex sm:items-center sm:gap-3">
@@ -668,14 +702,14 @@ export default function RequestDetails() {
                 <div className="flex items-center gap-3">
                   <Cog className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="text-sm text-muted-foreground">النظام</p>
+                    <p className="text-sm text-muted-foreground">النظام / الفرع</p>
                     <p className="font-medium">{request.systemId?.name}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <Wrench className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="text-sm text-muted-foreground">الآلة</p>
+                    <p className="text-sm text-muted-foreground">الآلة / البند</p>
                     <p className="font-medium">
                       {request.machineId?.name}
                       {request.machineNumber && ` (${request.machineNumber})`}
@@ -840,37 +874,6 @@ export default function RequestDetails() {
                   </div>
                 )}
 
-              {request.status === RequestStatus.COMPLETED && (
-                <div className="border-t pt-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm text-muted-foreground">حالة الاعتماد</p>
-                    {request.isApproved ? (
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        <span className="text-sm font-medium text-green-600">
-                          معتمد
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4 text-orange-500" />
-                        <span className="text-sm font-medium text-orange-600">
-                          غير معتمد
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  {request.isApproved && request.approvedBy && (
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      <p>
-                        تم الاعتماد بواسطة: {request.approvedBy.name}
-                        {request.approvedAt &&
-                          ` في ${formatDateTime(request.approvedAt)}`}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
             </CardContent>
           </Card>
 
@@ -918,7 +921,6 @@ export default function RequestDetails() {
           {(canEdit ||
             canStop ||
             canComplete ||
-            canApprove ||
             canAddNote ||
             canAddHealthSafetyNote ||
             canAddProjectManagerNote ||
@@ -947,28 +949,6 @@ export default function RequestDetails() {
                       >
                         <CheckCircle2 className="ml-2 h-4 w-4" />
                         إكمال الطلب
-                      </Button>
-                    )}
-                    {canApprove && (
-                      <Button
-                        variant={request.isApproved ? "outline" : "default"}
-                        onClick={handleApprove}
-                        disabled={approveMutation.isPending}
-                        className="flex-1"
-                      >
-                        {approveMutation.isPending ? (
-                          <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                        ) : request.isApproved ? (
-                          <>
-                            <AlertCircle className="ml-2 h-4 w-4" />
-                            إلغاء الاعتماد
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="ml-2 h-4 w-4" />
-                            اعتماد الطلب
-                          </>
-                        )}
                       </Button>
                     )}
                     {canStop && (
@@ -1477,7 +1457,7 @@ export default function RequestDetails() {
 
               {/* System */}
               <div className="space-y-2">
-                <Label>النظام *</Label>
+                <Label>النظام / الفرع *</Label>
                 <Select
                   onValueChange={handleSystemChange}
                   defaultValue={request?.systemId?.id}
@@ -1510,7 +1490,7 @@ export default function RequestDetails() {
 
               {/* Machine */}
               <div className="space-y-2">
-                <Label>الآلة *</Label>
+                <Label>الآلة / البند *</Label>
                 <Select
                   disabled={!watchSystemId || isLoadingMachines}
                   onValueChange={(value) => setValue("machineId", value)}
@@ -1557,7 +1537,7 @@ export default function RequestDetails() {
 
               {/* Machine Number */}
               <div className="space-y-2">
-                <Label>رقم الآلة</Label>
+                <Label>رقم الآلة / البند / التوصيف</Label>
                 <Input
                   placeholder="رقم أو كود الآلة"
                   {...register("machineNumber")}
@@ -1698,6 +1678,49 @@ export default function RequestDetails() {
                 <Loader2 className="ml-2 h-4 w-4 animate-spin" />
               )}
               حذف نهائي
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* PDF Preview Dialog */}
+      <Dialog open={showPreviewDialog} onOpenChange={handleClosePreview}>
+        <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>معاينة التقرير</DialogTitle>
+            <DialogDescription>
+              معاينة تقرير طلب الصيانة قبل التحميل
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden min-h-0">
+            {pdfPreviewUrl ? (
+              <iframe
+                src={pdfPreviewUrl}
+                className="w-full h-full min-h-[600px] border rounded-lg"
+                title="PDF Preview"
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full min-h-[600px]">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleClosePreview}>
+              إغلاق
+            </Button>
+            <Button onClick={handleDownloadFromPreview} disabled={downloadingPdf}>
+              {downloadingPdf ? (
+                <>
+                  <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                  جاري التحميل...
+                </>
+              ) : (
+                <>
+                  <Download className="ml-2 h-4 w-4" />
+                  تحميل التقرير
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

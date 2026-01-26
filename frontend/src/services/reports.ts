@@ -179,6 +179,31 @@ export const reportsService = {
     }
   },
 
+  async previewSingleRequestReport(requestId: string): Promise<string> {
+    try {
+      const response = await api.get(`/reports/requests/${requestId}`, {
+        params: { format: "pdf", preview: "true" },
+        responseType: "blob",
+      });
+
+      if (response.data instanceof Blob) {
+        return window.URL.createObjectURL(response.data);
+      } else {
+        // If response is not a blob, it might be an error JSON
+        const text = await response.data.text();
+        try {
+          const errorData = JSON.parse(text);
+          throw new Error(errorData.message || "Failed to preview report");
+        } catch (e) {
+          throw new Error("Failed to preview report: Invalid response format");
+        }
+      }
+    } catch (error: any) {
+      console.error("Error previewing single request report:", error);
+      throw error;
+    }
+  },
+
   async downloadEmptyRequestTemplate(): Promise<void> {
     try {
       const response = await api.get(`/reports/requests/template`, {
