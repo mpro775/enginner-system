@@ -424,6 +424,20 @@ export default function RequestDetails() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request, searchParams, user]);
 
+  // Reset system when department changes if current system is not available for new department
+  // This must be before early returns to maintain consistent hook order
+  useEffect(() => {
+    if (watchDepartmentId && watchSystemId && filteredSystems) {
+      const currentSystemAvailable = filteredSystems.some(
+        (sys) => sys.id === watchSystemId
+      );
+      if (!currentSystemAvailable) {
+        setValue("systemId", "");
+        setValue("machineId", "");
+      }
+    }
+  }, [watchDepartmentId, watchSystemId, filteredSystems, setValue]);
+
   if (isLoading) {
     return <PageLoader />;
   }
@@ -545,19 +559,6 @@ export default function RequestDetails() {
     setValue("systemId", value);
     setValue("machineId", "");
   };
-
-  // Reset system when department changes if current system is not available for new department
-  useEffect(() => {
-    if (watchDepartmentId && watchSystemId && filteredSystems) {
-      const currentSystemAvailable = filteredSystems.some(
-        (sys) => sys.id === watchSystemId
-      );
-      if (!currentSystemAvailable) {
-        setValue("systemId", "");
-        setValue("machineId", "");
-      }
-    }
-  }, [watchDepartmentId, watchSystemId, filteredSystems, setValue]);
 
   const onSubmitEdit = (data: UpdateRequestFormData) => {
     updateMutation.mutate(data);
