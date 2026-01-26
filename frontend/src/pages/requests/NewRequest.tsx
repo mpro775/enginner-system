@@ -528,11 +528,7 @@ export default function NewRequest() {
                           {system.name}
                         </SelectItem>
                       ))
-                    ) : (
-                      <SelectItem value="" disabled>
-                        لا توجد أنظمة متاحة
-                      </SelectItem>
-                    )}
+                    ) : null}
                   </SelectContent>
                 </Select>
                 {errors.systemId && (
