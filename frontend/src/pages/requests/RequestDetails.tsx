@@ -107,6 +107,7 @@ export default function RequestDetails() {
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [pdfIframeRef, setPdfIframeRef] = useState<HTMLIFrameElement | null>(null);
   const [expandedDescriptions, setExpandedDescriptions] = useState<
     Record<string, boolean>
   >({});
@@ -526,6 +527,39 @@ export default function RequestDetails() {
       });
     } finally {
       setLoadingPreview(false);
+    }
+  };
+
+  const handlePdfLoad = () => {
+    // Force iframe to resize and show full content
+    if (pdfIframeRef) {
+      // Try to access iframe content to ensure full display
+      setTimeout(() => {
+        try {
+          const iframeDoc = pdfIframeRef.contentDocument || pdfIframeRef.contentWindow?.document;
+          if (iframeDoc) {
+            // Ensure iframe shows full content
+            const body = iframeDoc.body;
+            if (body) {
+              body.style.overflow = 'auto';
+              body.style.height = 'auto';
+            }
+            // Scroll to ensure footer visibility
+            iframeDoc.documentElement.scrollTop = iframeDoc.documentElement.scrollHeight;
+          }
+        } catch (e) {
+          // Cross-origin restrictions may prevent access - this is normal
+          // The PDF viewer will handle display internally
+        }
+      }, 500);
+      
+      // Additional attempt after longer delay
+      setTimeout(() => {
+        if (pdfIframeRef) {
+          // Force iframe to recalculate height
+          pdfIframeRef.style.height = pdfIframeRef.offsetHeight + 'px';
+        }
+      }, 1500);
     }
   };
 
@@ -1685,44 +1719,67 @@ export default function RequestDetails() {
 
       {/* PDF Preview Dialog */}
       <Dialog open={showPreviewDialog} onOpenChange={handleClosePreview}>
-        <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>معاينة التقرير</DialogTitle>
-            <DialogDescription>
-              معاينة تقرير طلب الصيانة قبل التحميل
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 overflow-hidden min-h-0">
+        <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-0 gap-0">
+          <div className="px-6 pt-6 pb-4">
+            <DialogHeader>
+              <DialogTitle>معاينة التقرير</DialogTitle>
+              <DialogDescription>
+                معاينة تقرير طلب الصيانة قبل التحميل
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="flex-1 overflow-hidden min-h-0 px-6 pb-6">
             {pdfPreviewUrl ? (
-              <iframe
-                src={pdfPreviewUrl}
-                className="w-full h-full min-h-[600px] border rounded-lg"
-                title="PDF Preview"
-              />
+              <div 
+                className="w-full border rounded-lg overflow-hidden bg-muted/50 relative" 
+                style={{ 
+                  height: 'calc(90vh - 200px)', 
+                  minHeight: '600px',
+                  maxHeight: 'calc(90vh - 200px)'
+                }}
+              >
+                <iframe
+                  ref={setPdfIframeRef}
+                  src={`${pdfPreviewUrl}#toolbar=1&navpanes=1&scrollbar=1&view=FitH&zoom=page-width`}
+                  className="w-full h-full border-0"
+                  style={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    minHeight: '600px',
+                    display: 'block',
+                    overflow: 'auto'
+                  }}
+                  title="PDF Preview"
+                  onLoad={handlePdfLoad}
+                  allowFullScreen
+                />
+              </div>
             ) : (
               <div className="flex items-center justify-center h-full min-h-[600px]">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={handleClosePreview}>
-              إغلاق
-            </Button>
-            <Button onClick={handleDownloadFromPreview} disabled={downloadingPdf}>
-              {downloadingPdf ? (
-                <>
-                  <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                  جاري التحميل...
-                </>
-              ) : (
-                <>
-                  <Download className="ml-2 h-4 w-4" />
-                  تحميل التقرير
-                </>
-              )}
-            </Button>
-          </DialogFooter>
+          <div className="px-6 pb-6 pt-4 border-t">
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={handleClosePreview}>
+                إغلاق
+              </Button>
+              <Button onClick={handleDownloadFromPreview} disabled={downloadingPdf}>
+                {downloadingPdf ? (
+                  <>
+                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                    جاري التحميل...
+                  </>
+                ) : (
+                  <>
+                    <Download className="ml-2 h-4 w-4" />
+                    تحميل التقرير
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

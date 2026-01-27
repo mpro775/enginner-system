@@ -42,6 +42,31 @@ function convertLogoToBase64(): string {
   }
 }
 
+// Convert TNC logo to base64 for embedding in HTML
+function convertLogoToBase64TNC(): string {
+  try {
+    const logoPath = path.join(
+      __dirname,
+      "..",
+      "..",
+      "assets",
+      "image",
+      "logo-tnc.png"
+    );
+    if (!fs.existsSync(logoPath)) {
+      console.warn("TNC Logo file not found at:", logoPath);
+      return "";
+    }
+
+    const logoBuffer = fs.readFileSync(logoPath);
+    const base64 = logoBuffer.toString("base64");
+    return `data:image/png;base64,${base64}`;
+  } catch (error) {
+    console.error("Error converting TNC logo to base64:", error);
+    return "";
+  }
+}
+
 // Convert date to English numerals format (YYYY/MM/DD)
 function formatDateEnglish(date: Date): string {
   const year = date.getFullYear();
@@ -313,18 +338,10 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
             <td style="${MULTI_LINE_STYLE}">${escapeHtml(request.requestNeeds)}</td>
           </tr>
           ` : ""}
-          ${request.implementedWork ? `
           <tr>
             <td style="font-weight: bold; background-color: #f8f9fa;">ما تم تنفيذه</td>
-            <td style="${MULTI_LINE_STYLE}">${escapeHtml(request.implementedWork)}</td>
+            <td style="${MULTI_LINE_STYLE}">${request.implementedWork ? escapeHtml(request.implementedWork) : "لا يوجد"}</td>
           </tr>
-          ` : ""}
-          ${request.engineerNotes ? `
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">معلومات الإجراء المتخذ</td>
-            <td style="${MULTI_LINE_STYLE}">${escapeHtml(request.engineerNotes)}</td>
-          </tr>
-          ` : ""}
         </table>
       </div>
 
@@ -359,23 +376,19 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
       </div>
       ` : ""}
 
-      ${consultant ? `
       <div style="margin-bottom: 20px;">
         <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">ملاحظات الاستشاري</h3>
         <table class="data-table" style="width: 100%;">
           <tr>
             <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">المهندس الاستشاري</td>
-            <td>${escapeHtml(consultant.name || "-")}</td>
+            <td>${consultant ? escapeHtml(consultant.name || "-") : "لا يوجد"}</td>
           </tr>
-          ${request.consultantNotes ? `
           <tr>
             <td style="font-weight: bold; background-color: #f8f9fa;">ملاحظة الاستشاري</td>
-            <td style="${MULTI_LINE_STYLE}">${escapeHtml(request.consultantNotes)}</td>
+            <td style="${MULTI_LINE_STYLE}">${request.consultantNotes ? escapeHtml(request.consultantNotes) : "لا يوجد"}</td>
           </tr>
-          ` : ""}
         </table>
       </div>
-      ` : ""}
 
       <div style="margin-bottom: 20px;">
         <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">حالة الطلب</h3>
@@ -650,32 +663,20 @@ export class ReportsService {
 
     // 1. تجهيز الصور والبيانات
     const logoBase64 = convertLogoToBase64();
-    const reportNumber = `REP-${Date.now().toString().slice(-6)}`;
-    const reportDate = formatDateEnglish(new Date()); // استخدام أرقام إنجليزية
+    const tncLogoBase64 = convertLogoToBase64TNC();
     const reportContent = generateReportContent(data, stats);
 
     // 2. تصميم الهيدر (HTML + CSS مدمج)
-    // استخدام خطوط النظام المتاحة في Docker (font-noto-arabic)
-    // قمنا بتقليل margin و line-height لحل مشكلة التباعد
-    // كبرنا الشعار إلى 100px
     const headerTemplate = `
-    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: flex-start; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
-        
+    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
         <div style="text-align: right; width: 30%;">
-            <p style="margin: 2px 0; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
-            <p style="margin: 2px 0; font-weight: bold; color: #0f5b7a;">جامعة الملك سعود</p>
-            <p style="margin: 2px 0;">إدارة التشغيل والصيانة</p>
-            <p style="margin: 2px 0;">بكليات الجامعة - فرع المزاحمية</p>
+            <img src="${tncLogoBase64}" style="max-width: 150px; height: auto;" />
         </div>
-
-        <div style="text-align: center; width: 30%;">
-            <p style="margin: 0 0 5px 0; font-size: 12px; color: #0f5b7a;">بسم الله الرحمن الرحيم</p>
-            <img src="${logoBase64}" style="width: 100px; height: auto;" />
+        <div style="text-align: center; width: 40%;">
+            <p style="margin: 0; font-size: 14px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">تشغيل وصيانة ونظافة وكافحة وتشجير مباني كليات وإسكان أعضاء هيئة التدريس فرع المزاجمية</p>
         </div>
-
-        <div style="text-align: left; width: 30%; padding-top: 15px; direction: rtl;">
-            <p style="margin: 2px 0;"><strong>رقم التقرير:</strong> ${reportNumber}</p>
-            <p style="margin: 2px 0;"><strong>التاريخ:</strong> ${reportDate}</p>
+        <div style="text-align: left; width: 30%;">
+            <img src="${logoBase64}" style="max-width: 150px; height: auto;" />
         </div>
     </div>`;
 
@@ -1035,29 +1036,20 @@ export class ReportsService {
 
     // 1. تجهيز الصور والبيانات
     const logoBase64 = convertLogoToBase64();
-    const reportNumber = `REQ-${request.requestCode}`;
-    const reportDate = formatDateEnglish(new Date());
+    const tncLogoBase64 = convertLogoToBase64TNC();
     const reportContent = generateSingleRequestContent(request);
 
     // 2. تصميم الهيدر (HTML + CSS مدمج)
     const headerTemplate = `
-    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: flex-start; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
-        
+    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
         <div style="text-align: right; width: 30%;">
-            <p style="margin: 2px 0; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
-            <p style="margin: 2px 0; font-weight: bold; color: #0f5b7a;">جامعة الملك سعود</p>
-            <p style="margin: 2px 0;">إدارة التشغيل والصيانة</p>
-            <p style="margin: 2px 0;">بكليات الجامعة - فرع المزاحمية</p>
+            <img src="${tncLogoBase64}" style="max-width: 150px; height: auto;" />
         </div>
-
-        <div style="text-align: center; width: 30%;">
-            <p style="margin: 0 0 5px 0; font-size: 12px; color: #0f5b7a;">بسم الله الرحمن الرحيم</p>
-            <img src="${logoBase64}" style="width: 100px; height: auto;" />
+        <div style="text-align: center; width: 40%;">
+            <p style="margin: 0; font-size: 14px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">تشغيل وصيانة ونظافة وكافحة وتشجير مباني كليات وإسكان أعضاء هيئة التدريس فرع المزاجمية</p>
         </div>
-
-        <div style="text-align: left; width: 30%; padding-top: 15px; direction: rtl;">
-            <p style="margin: 2px 0;"><strong>رقم التقرير:</strong> ${reportNumber}</p>
-            <p style="margin: 2px 0;"><strong>التاريخ:</strong> ${reportDate}</p>
+        <div style="text-align: left; width: 30%;">
+            <img src="${logoBase64}" style="max-width: 150px; height: auto;" />
         </div>
     </div>`;
 
@@ -1178,29 +1170,20 @@ export class ReportsService {
   async generateEmptyRequestTemplatePdfBuffer(): Promise<Buffer> {
     // 1. تجهيز الصور والبيانات
     const logoBase64 = convertLogoToBase64();
-    const reportNumber = `TEMPLATE-${Date.now().toString().slice(-6)}`;
-    const reportDate = formatDateEnglish(new Date());
+    const tncLogoBase64 = convertLogoToBase64TNC();
     const reportContent = generateEmptyRequestTemplateContent();
 
     // 2. تصميم الهيدر (HTML + CSS مدمج)
     const headerTemplate = `
-    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: flex-start; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
-        
+    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
         <div style="text-align: right; width: 30%;">
-            <p style="margin: 2px 0; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
-            <p style="margin: 2px 0; font-weight: bold; color: #0f5b7a;">جامعة الملك سعود</p>
-            <p style="margin: 2px 0;">إدارة التشغيل والصيانة</p>
-            <p style="margin: 2px 0;">بكليات الجامعة - فرع المزاحمية</p>
+            <img src="${tncLogoBase64}" style="max-width: 150px; height: auto;" />
         </div>
-
-        <div style="text-align: center; width: 30%;">
-            <p style="margin: 0 0 5px 0; font-size: 12px; color: #0f5b7a;">بسم الله الرحمن الرحيم</p>
-            <img src="${logoBase64}" style="width: 100px; height: auto;" />
+        <div style="text-align: center; width: 40%;">
+            <p style="margin: 0; font-size: 14px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">تشغيل وصيانة ونظافة وكافحة وتشجير مباني كليات وإسكان أعضاء هيئة التدريس فرع المزاجمية</p>
         </div>
-
-        <div style="text-align: left; width: 30%; padding-top: 15px; direction: rtl;">
-            <p style="margin: 2px 0;"><strong>رقم التقرير:</strong> ${reportNumber}</p>
-            <p style="margin: 2px 0;"><strong>التاريخ:</strong> ${reportDate}</p>
+        <div style="text-align: left; width: 30%;">
+            <img src="${logoBase64}" style="max-width: 150px; height: auto;" />
         </div>
     </div>`;
 
