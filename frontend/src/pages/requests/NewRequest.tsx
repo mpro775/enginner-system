@@ -515,19 +515,13 @@ export default function NewRequest() {
                     <SelectValue placeholder="اختر النظام" />
                   </SelectTrigger>
                   <SelectContent>
-                    {systems && systems.length > 0 ? (
-                      systems.map((system) => (
-                        <SelectItem key={system.id} value={system.id}>
-                          {system.name}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="" disabled>
-                        {watchDepartmentId
-                          ? "لا توجد أنظمة مرتبطة بهذا القسم"
-                          : "اختر القسم أولاً"}
-                      </SelectItem>
-                    )}
+                    {systems && systems.length > 0
+                      ? systems.map((system) => (
+                          <SelectItem key={system.id} value={system.id}>
+                            {system.name}
+                          </SelectItem>
+                        ))
+                      : null}
                   </SelectContent>
                 </Select>
                 {errors.systemId && (
@@ -535,6 +529,13 @@ export default function NewRequest() {
                     {errors.systemId.message}
                   </p>
                 )}
+                {!systems || systems.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {watchDepartmentId
+                      ? "لا توجد أنظمة مرتبطة بهذا القسم"
+                      : "اختر القسم أولاً"}
+                  </p>
+                ) : null}
               </div>
 
               {/* Machine */}
