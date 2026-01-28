@@ -191,9 +191,17 @@ export class SystemsService {
   }
 
   async findByDepartment(departmentId: string): Promise<SystemDocument[]> {
+    // Build filter to match both ObjectId and string departmentId
     const filter: any = {
+      $or: [
+        { departmentId: departmentId }, // Match string
+        {
+          departmentId: Types.ObjectId.isValid(departmentId)
+            ? new Types.ObjectId(departmentId)
+            : null,
+        }, // Match ObjectId
+      ],
       deletedAt: null,
-      departmentId: new Types.ObjectId(departmentId),
     };
 
     return this.systemModel
