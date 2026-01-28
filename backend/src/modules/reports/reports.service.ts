@@ -670,13 +670,13 @@ export class ReportsService {
     const headerTemplate = `
     <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
         <div style="text-align: right; width: 30%;">
-            <img src="${tncLogoBase64}" style="max-width: 150px; height: auto;" />
+            <img src="${logoBase64}" style="max-width: 150px; height: auto;" />
         </div>
         <div style="text-align: center; width: 40%;">
-            <p style="margin: 0; font-size: 14px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">تشغيل وصيانة ونظافة وكافحة وتشجير مباني كليات وإسكان أعضاء هيئة التدريس فرع المزاجمية</p>
+            <p style="margin: 0; font-size: 14px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">تشغيل وصيانة ونظافة ومكافحة وتشجير مباني كليات إسكان أعضاء هيئة التدريس فرع المزاحمية</p>
         </div>
         <div style="text-align: left; width: 30%;">
-            <img src="${logoBase64}" style="max-width: 150px; height: auto;" />
+            <img src="${tncLogoBase64}" style="max-width: 150px; height: auto;" />
         </div>
     </div>`;
 
@@ -1043,13 +1043,13 @@ export class ReportsService {
     const headerTemplate = `
     <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
         <div style="text-align: right; width: 30%;">
-            <img src="${tncLogoBase64}" style="max-width: 150px; height: auto;" />
+            <img src="${logoBase64}" style="max-width: 150px; height: auto;" />
         </div>
         <div style="text-align: center; width: 40%;">
-            <p style="margin: 0; font-size: 14px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">تشغيل وصيانة ونظافة وكافحة وتشجير مباني كليات وإسكان أعضاء هيئة التدريس فرع المزاجمية</p>
+            <p style="margin: 0; font-size: 14px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">تشغيل وصيانة ونظافة ومكافحة وتشجير مباني كليات إسكان أعضاء هيئة التدريس فرع المزاحمية</p>
         </div>
         <div style="text-align: left; width: 30%;">
-            <img src="${logoBase64}" style="max-width: 150px; height: auto;" />
+            <img src="${tncLogoBase64}" style="max-width: 150px; height: auto;" />
         </div>
     </div>`;
 
@@ -1177,13 +1177,13 @@ export class ReportsService {
     const headerTemplate = `
     <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
         <div style="text-align: right; width: 30%;">
-            <img src="${tncLogoBase64}" style="max-width: 150px; height: auto;" />
+            <img src="${logoBase64}" style="max-width: 150px; height: auto;" />
         </div>
         <div style="text-align: center; width: 40%;">
-            <p style="margin: 0; font-size: 14px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">تشغيل وصيانة ونظافة وكافحة وتشجير مباني كليات وإسكان أعضاء هيئة التدريس فرع المزاجمية</p>
+            <p style="margin: 0; font-size: 14px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">تشغيل وصيانة ونظافة ومكافحة وتشجير مباني كليات إسكان أعضاء هيئة التدريس فرع المزاحمية</p>
         </div>
         <div style="text-align: left; width: 30%;">
-            <img src="${logoBase64}" style="max-width: 150px; height: auto;" />
+            <img src="${tncLogoBase64}" style="max-width: 150px; height: auto;" />
         </div>
     </div>`;
 
