@@ -193,11 +193,7 @@ export class SystemsService {
   async findByDepartment(departmentId: string): Promise<SystemDocument[]> {
     const filter: any = {
       deletedAt: null,
-      $or: [
-        { departmentId: new Types.ObjectId(departmentId) },
-        { departmentId: null },
-        { departmentId: { $exists: false } },
-      ],
+      departmentId: new Types.ObjectId(departmentId),
     };
 
     return this.systemModel

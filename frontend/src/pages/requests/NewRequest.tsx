@@ -68,7 +68,7 @@ const requestSchema = z
     {
       message: "يجب اختيار مكون واحد على الأقل عند اختيار مكونات محددة",
       path: ["selectedComponents"],
-    }
+    },
   );
 
 type RequestFormData = z.infer<typeof requestSchema>;
@@ -107,8 +107,12 @@ export default function NewRequest() {
   });
 
   const { data: systems } = useQuery({
-    queryKey: ["systems"],
-    queryFn: () => systemsService.getAll(),
+    queryKey: ["systems", watchDepartmentId],
+    queryFn: () =>
+      watchDepartmentId
+        ? systemsService.getByDepartment(watchDepartmentId)
+        : systemsService.getAll(),
+    enabled: true,
   });
 
   const {
@@ -129,24 +133,6 @@ export default function NewRequest() {
   const selectedMachine = machines?.find((m) => m.id === watch("machineId"));
   const hasComponents =
     selectedMachine?.components && selectedMachine.components.length > 0;
-
-  // Filter systems based on selected department
-  const filteredSystems = systems?.filter((system) => {
-    if (!watchDepartmentId) {
-      // If no department selected, show all systems
-      return true;
-    }
-    // Show systems that are either:
-    // 1. Linked to the selected department
-    // 2. Not linked to any department (departmentId is null/undefined)
-    if (!system.departmentId) {
-      return true;
-    }
-    if (typeof system.departmentId === "object") {
-      return system.departmentId.id === watchDepartmentId;
-    }
-    return system.departmentId === watchDepartmentId;
-  });
 
   const createMutation = useMutation({
     mutationFn: requestsService.create,
@@ -170,16 +156,16 @@ export default function NewRequest() {
 
   // Reset system when department changes if current system is not available for new department
   useEffect(() => {
-    if (watchDepartmentId && watchSystemId && filteredSystems) {
-      const currentSystemAvailable = filteredSystems.some(
-        (sys) => sys.id === watchSystemId
+    if (watchDepartmentId && watchSystemId && systems) {
+      const currentSystemAvailable = systems.some(
+        (sys) => sys.id === watchSystemId,
       );
       if (!currentSystemAvailable) {
         setValue("systemId", "");
         setValue("machineId", "");
       }
     }
-  }, [watchDepartmentId, watchSystemId, filteredSystems, setValue]);
+  }, [watchDepartmentId, watchSystemId, systems, setValue]);
 
   const handleMachineChange = (value: string) => {
     setValue("machineId", value);
@@ -209,7 +195,7 @@ export default function NewRequest() {
   // Set machineId after machines are loaded
   useEffect(() => {
     if (pendingMachineId && machines && machines.length > 0) {
-      const machineExists = machines.find(m => m.id === pendingMachineId);
+      const machineExists = machines.find((m) => m.id === pendingMachineId);
       if (machineExists) {
         setValue("machineId", pendingMachineId);
         setPendingMachineId(null);
@@ -229,7 +215,11 @@ export default function NewRequest() {
     const now = new Date();
     // Use scheduledDay if provided, otherwise use 1 (first day of month)
     const day = task.scheduledDay || 1;
-    const targetDate = new Date(task.scheduledYear, task.scheduledMonth - 1, day);
+    const targetDate = new Date(
+      task.scheduledYear,
+      task.scheduledMonth - 1,
+      day,
+    );
     const diffTime = targetDate.getTime() - now.getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
@@ -291,10 +281,11 @@ export default function NewRequest() {
                 return (
                   <div
                     key={task.id}
-                    className={`p-4 border rounded-lg cursor-pointer transition-colors ${isOverdue
-                      ? "border-destructive bg-destructive/5 hover:bg-destructive/10"
-                      : "border-border hover:bg-accent"
-                      }`}
+                    className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                      isOverdue
+                        ? "border-destructive bg-destructive/5 hover:bg-destructive/10"
+                        : "border-border hover:bg-accent"
+                    }`}
                     onClick={() => handleTaskSelect(task)}
                   >
                     <div className="flex items-start justify-between">
@@ -343,7 +334,8 @@ export default function NewRequest() {
           <DialogHeader>
             <DialogTitle>جميع الصيانة الوقائية المعلقة</DialogTitle>
             <DialogDescription>
-              اختر صيانة وقائية لملء البيانات تلقائياً ({pendingTasks?.length || 0} مهمة)
+              اختر صيانة وقائية لملء البيانات تلقائياً (
+              {pendingTasks?.length || 0} مهمة)
             </DialogDescription>
           </DialogHeader>
           <div className="overflow-y-auto space-y-3 pr-2">
@@ -353,10 +345,11 @@ export default function NewRequest() {
               return (
                 <div
                   key={task.id}
-                  className={`p-4 border rounded-lg cursor-pointer transition-colors ${isOverdue
-                    ? "border-destructive bg-destructive/5 hover:bg-destructive/10"
-                    : "border-border hover:bg-accent"
-                    }`}
+                  className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                    isOverdue
+                      ? "border-destructive bg-destructive/5 hover:bg-destructive/10"
+                      : "border-border hover:bg-accent"
+                  }`}
                   onClick={() => handleTaskSelect(task)}
                 >
                   <div className="flex items-start justify-between">
@@ -512,7 +505,7 @@ export default function NewRequest() {
               {/* System */}
               <div className="space-y-2">
                 <Label>النظام / الفرع *</Label>
-                <Select 
+                <Select
                   value={watch("systemId")}
                   onValueChange={handleSystemChange}
                 >
@@ -522,13 +515,19 @@ export default function NewRequest() {
                     <SelectValue placeholder="اختر النظام" />
                   </SelectTrigger>
                   <SelectContent>
-                    {filteredSystems && filteredSystems.length > 0 ? (
-                      filteredSystems.map((system) => (
+                    {systems && systems.length > 0 ? (
+                      systems.map((system) => (
                         <SelectItem key={system.id} value={system.id}>
                           {system.name}
                         </SelectItem>
                       ))
-                    ) : null}
+                    ) : (
+                      <SelectItem value="" disabled>
+                        {watchDepartmentId
+                          ? "لا توجد أنظمة مرتبطة بهذا القسم"
+                          : "اختر القسم أولاً"}
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
                 {errors.systemId && (
@@ -566,10 +565,10 @@ export default function NewRequest() {
                   <SelectContent>
                     {machines && machines.length > 0
                       ? machines.map((machine) => (
-                        <SelectItem key={machine.id} value={machine.id}>
-                          {machine.name}
-                        </SelectItem>
-                      ))
+                          <SelectItem key={machine.id} value={machine.id}>
+                            {machine.name}
+                          </SelectItem>
+                        ))
                       : null}
                   </SelectContent>
                 </Select>
@@ -664,7 +663,7 @@ export default function NewRequest() {
                             id={`component-${component}`}
                             checked={
                               watch("selectedComponents")?.includes(
-                                component
+                                component,
                               ) || false
                             }
                             onChange={(e) => {
@@ -677,7 +676,7 @@ export default function NewRequest() {
                               } else {
                                 setValue(
                                   "selectedComponents",
-                                  current.filter((c) => c !== component)
+                                  current.filter((c) => c !== component),
                                 );
                               }
                             }}
@@ -711,7 +710,9 @@ export default function NewRequest() {
                 className={errors.reasonText ? "border-destructive" : ""}
                 value={watch("reasonText") || ""}
                 onChange={(e) => {
-                  setValue("reasonText", e.target.value, { shouldValidate: true });
+                  setValue("reasonText", e.target.value, {
+                    shouldValidate: true,
+                  });
                 }}
               />
               {errors.reasonText && (

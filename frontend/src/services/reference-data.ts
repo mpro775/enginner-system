@@ -161,6 +161,13 @@ export const systemsService = {
     const response = await api.get<ApiResponse<System[]>>('/systems/trash');
     return response.data.data;
   },
+
+  async getByDepartment(departmentId: string, activeOnly = true): Promise<System[]> {
+    const response = await api.get<ApiResponse<System[]>>(`/systems/by-department/${departmentId}`, {
+      params: { all: !activeOnly },
+    });
+    return response.data.data;
+  },
 };
 
 // Machines

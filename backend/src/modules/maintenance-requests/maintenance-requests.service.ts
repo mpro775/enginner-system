@@ -154,7 +154,7 @@ export class MaintenanceRequestsService {
     const { skip, limit } = getSkipAndLimit(filterDto);
     const sortOptions = getSortOptions(filterDto);
 
-    const filter = this.buildFilter(filterDto, user);
+    const filter = await this.buildFilter(filterDto, user);
 
     const [requests, total] = await Promise.all([
       this.requestModel
@@ -544,16 +544,15 @@ export class MaintenanceRequestsService {
     return `${prefix}-${year}${month}-${String(sequence).padStart(4, "0")}`;
   }
 
-  private buildFilter(
+  private async buildFilter(
     filterDto: FilterRequestsDto,
     user: { userId: string; role: string }
-  ): FilterQuery<MaintenanceRequestDocument> {
+  ): Promise<FilterQuery<MaintenanceRequestDocument>> {
     const filter: FilterQuery<MaintenanceRequestDocument> = {
       deletedAt: null, // استبعاد المحذوفين ناعماً
     };
 
     // Engineers can only see their own requests (always apply engineerId filter)
-    // Admins and Consultants can see all requests
     if (user.role === Role.ENGINEER) {
       // Support both String and ObjectId formats
       filter.engineerId = { 
@@ -562,6 +561,23 @@ export class MaintenanceRequestsService {
           Types.ObjectId.isValid(user.userId) ? new Types.ObjectId(user.userId) : null
         ].filter(Boolean)
       } as any;
+    }
+
+    // Consultants can only see requests from their department
+    if (user.role === Role.CONSULTANT) {
+      const consultant = await this.userModel
+        .findById(user.userId)
+        .select("departmentId");
+      if (consultant?.departmentId) {
+        filter.departmentId = {
+          $in: [
+            consultant.departmentId,
+            Types.ObjectId.isValid(consultant.departmentId.toString())
+              ? new Types.ObjectId(consultant.departmentId.toString())
+              : null,
+          ].filter(Boolean),
+        } as any;
+      }
     }
 
     if (filterDto.status) {
@@ -599,7 +615,8 @@ export class MaintenanceRequestsService {
       } as any;
     }
 
-    if (filterDto.departmentId) {
+    // Only allow manual departmentId filter for Admins (Consultants are auto-filtered by their department)
+    if (filterDto.departmentId && user.role !== Role.CONSULTANT) {
       // Support both String and ObjectId formats
       filter.departmentId = { 
         $in: [
