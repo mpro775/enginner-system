@@ -363,16 +363,21 @@ export default function ScheduledTaskForm() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-in">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+    <div className="w-full max-w-2xl mx-auto overflow-x-hidden px-3 py-4 sm:px-4 sm:py-5 md:px-6 space-y-4 sm:space-y-6 animate-in">
+      <div className="flex items-start gap-3 sm:gap-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
+          onClick={() => navigate(-1)}
+        >
           <ArrowRight className="h-5 w-5" />
         </Button>
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight break-words">
             {isEditing ? "تعديل صيانة وقائية" : "إضافة صيانة وقائية جديدة"}
           </h2>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-xs sm:text-sm mt-0.5 break-words">
             {isEditing
               ? "تعديل بيانات الصيانة الوقائية"
               : "إنشاء صيانة وقائية جديدة للمهندسين"}
@@ -383,12 +388,16 @@ export default function ScheduledTaskForm() {
       {isLoadingEditData ? (
         <PageLoader />
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>بيانات الصيانة الوقائية</CardTitle>
-            <CardDescription>أدخل تفاصيل الصيانة الوقائية</CardDescription>
+        <Card className="overflow-hidden">
+          <CardHeader className="px-3 sm:px-6 pt-4 sm:pt-6 pb-2 sm:pb-4">
+            <CardTitle className="text-base sm:text-lg">
+              بيانات الصيانة الوقائية
+            </CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
+              أدخل تفاصيل الصيانة الوقائية
+            </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-3 sm:px-6 pb-4 sm:pb-6">
             <form
               key={isEditing ? task?.id : "new"}
               onSubmit={handleSubmit(onSubmit)}
@@ -520,7 +529,7 @@ export default function ScheduledTaskForm() {
                           </SelectItem>
                         ))
                       ) : (
-                        <SelectItem value="" disabled>
+                        <SelectItem value="__no_systems__" disabled>
                           لا توجد أنظمة متاحة
                         </SelectItem>
                       )}
@@ -748,11 +757,12 @@ export default function ScheduledTaskForm() {
                 </div>
               </div>
 
-              <div className="flex gap-3 justify-end">
+              <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 justify-end pt-2">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => navigate(-1)}
+                  className="w-full sm:w-auto"
                 >
                   إلغاء
                 </Button>
@@ -761,10 +771,11 @@ export default function ScheduledTaskForm() {
                   disabled={
                     createMutation.isPending || updateMutation.isPending
                   }
+                  className="w-full sm:w-auto"
                 >
                   {createMutation.isPending || updateMutation.isPending ? (
                     <>
-                      <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="ml-2 h-4 w-4 animate-spin shrink-0" />
                       جاري الحفظ...
                     </>
                   ) : isEditing ? (

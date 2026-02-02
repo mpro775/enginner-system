@@ -14,7 +14,7 @@ import { ForbiddenAccessException } from "../../common/exceptions";
 
 @Controller("reports")
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER, Role.ENGINEER)
+@Roles(Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER, Role.ENGINEER, Role.PROJECT_MANAGER)
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
