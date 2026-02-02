@@ -563,20 +563,19 @@ export class MaintenanceRequestsService {
       } as any;
     }
 
-    // Consultants can only see requests from their department
+    // Consultants can only see requests from their departments
     if (user.role === Role.CONSULTANT) {
       const consultant = await this.userModel
         .findById(user.userId)
-        .select("departmentId");
-      if (consultant?.departmentId) {
-        filter.departmentId = {
-          $in: [
-            consultant.departmentId,
-            Types.ObjectId.isValid(consultant.departmentId.toString())
-              ? new Types.ObjectId(consultant.departmentId.toString())
-              : null,
-          ].filter(Boolean),
-        } as any;
+        .select("departmentIds");
+      const deptIds = consultant?.departmentIds ?? [];
+      if (deptIds.length > 0) {
+        const validIds = deptIds
+          .map((id) => (Types.ObjectId.isValid(String(id)) ? new Types.ObjectId(String(id)) : null))
+          .filter(Boolean);
+        if (validIds.length > 0) {
+          filter.departmentId = { $in: validIds } as any;
+        }
       }
     }
 

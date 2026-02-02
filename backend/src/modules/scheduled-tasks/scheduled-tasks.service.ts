@@ -6,6 +6,7 @@ import {
   ScheduledTaskDocument,
 } from "./schemas/scheduled-task.schema";
 import { Machine, MachineDocument } from "../machines/schemas/machine.schema";
+import { User, UserDocument } from "../users/schemas/user.schema";
 import {
   CreateScheduledTaskDto,
   UpdateScheduledTaskDto,
@@ -33,6 +34,8 @@ export class ScheduledTasksService {
     private taskModel: Model<ScheduledTaskDocument>,
     @InjectModel(Machine.name)
     private machineModel: Model<MachineDocument>,
+    @InjectModel(User.name)
+    private userModel: Model<UserDocument>,
     @Inject(forwardRef(() => AuditLogsService))
     private auditLogsService: AuditLogsService,
     @Inject(forwardRef(() => NotificationsGateway))
@@ -132,7 +135,7 @@ export class ScheduledTasksService {
     filterDto: FilterScheduledTasksDto,
     user: { userId: string; role: string }
   ): Promise<PaginatedResult<ScheduledTaskDocument>> {
-    const filter = this.buildFilter(filterDto, user);
+    const filter = await this.buildFilter(filterDto, user);
     const { skip, limit } = getSkipAndLimit(filterDto);
     const sortOptions = getSortOptions(filterDto);
 
@@ -658,13 +661,29 @@ export class ScheduledTasksService {
     return `${prefix}-${year}${month}-${String(sequence).padStart(4, "0")}`;
   }
 
-  private buildFilter(
+  private async buildFilter(
     filterDto: FilterScheduledTasksDto,
     user: { userId: string; role: string }
-  ): FilterQuery<ScheduledTaskDocument> {
+  ): Promise<FilterQuery<ScheduledTaskDocument>> {
     const filter: FilterQuery<ScheduledTaskDocument> = {
       deletedAt: null, // استبعاد المحذوفين ناعماً
     };
+
+    // Consultants can only see tasks from their departments
+    if (user.role === Role.CONSULTANT) {
+      const consultant = await this.userModel
+        .findById(user.userId)
+        .select("departmentIds");
+      const deptIds = consultant?.departmentIds ?? [];
+      if (deptIds.length > 0) {
+        const validIds = deptIds
+          .map((id) => (Types.ObjectId.isValid(String(id)) ? new Types.ObjectId(String(id)) : null))
+          .filter(Boolean);
+        if (validIds.length > 0) {
+          filter.departmentId = { $in: validIds } as any;
+        }
+      }
+    }
 
     if (filterDto.status) {
       filter.status = filterDto.status;
@@ -690,7 +709,8 @@ export class ScheduledTasksService {
       } as any;
     }
 
-    if (filterDto.departmentId) {
+    // Only allow manual departmentId filter for non-Consultants (Consultants are auto-filtered)
+    if (filterDto.departmentId && user.role !== Role.CONSULTANT) {
       // Support both String and ObjectId formats
       filter.departmentId = { 
         $in: [

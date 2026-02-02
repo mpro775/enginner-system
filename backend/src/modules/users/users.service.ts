@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, FilterQuery } from 'mongoose';
+import { Model, FilterQuery, Types } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
 import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto, UpdateUserDto, FilterUsersDto } from './dto';
@@ -40,11 +40,18 @@ export class UsersService {
     // Hash password
     const hashedPassword = await bcrypt.hash(createUserDto.password, 12);
 
-    const user = new this.userModel({
+    const userData: any = {
       ...createUserDto,
       email: createUserDto.email.toLowerCase(),
       password: hashedPassword,
-    });
+    };
+    if (createUserDto.departmentIds?.length) {
+      userData.departmentIds = createUserDto.departmentIds.map((id) => new Types.ObjectId(id));
+    } else {
+      userData.departmentIds = [];
+    }
+    delete userData.departmentId;
+    const user = new this.userModel(userData);
 
     const savedUser = await user.save();
 
@@ -84,8 +91,8 @@ export class UsersService {
       filter.role = filterDto.role;
     }
 
-    if (filterDto.departmentId) {
-      filter.departmentId = filterDto.departmentId;
+    if (filterDto.departmentId && Types.ObjectId.isValid(filterDto.departmentId)) {
+      filter.departmentIds = { $in: [new Types.ObjectId(filterDto.departmentId)] };
     }
 
     if (filterDto.isActive !== undefined) {
@@ -96,7 +103,7 @@ export class UsersService {
       this.userModel
         .find(filter)
         .select('-password -refreshToken')
-        .populate('departmentId', 'name')
+        .populate('departmentIds', 'name')
         .populate('deletedBy', 'name email')
         .sort(sortOptions)
         .skip(skip)
@@ -115,7 +122,7 @@ export class UsersService {
     const user = await this.userModel
       .findById(id)
       .select('-password -refreshToken')
-      .populate('departmentId', 'name');
+      .populate('departmentIds', 'name');
 
     if (!user) {
       throw new EntityNotFoundException('User', id);
@@ -169,10 +176,16 @@ export class UsersService {
       updateUserDto.email = updateUserDto.email.toLowerCase();
     }
 
+    const updateData: any = { ...updateUserDto };
+    if (updateUserDto.departmentIds !== undefined) {
+      updateData.departmentIds = (updateUserDto.departmentIds || []).map((id) => new Types.ObjectId(id));
+    }
+    delete updateData.departmentId;
+
     const updatedUser = await this.userModel
-      .findByIdAndUpdate(id, updateUserDto, { new: true })
+      .findByIdAndUpdate(id, updateData, { new: true })
       .select('-password -refreshToken')
-      .populate('departmentId', 'name');
+      .populate('departmentIds', 'name');
 
     // Log the action
     await this.auditLogsService.create({
@@ -203,7 +216,7 @@ export class UsersService {
     const updatedUser = await this.userModel
       .findByIdAndUpdate(id, { isActive: newStatus }, { new: true })
       .select('-password -refreshToken')
-      .populate('departmentId', 'name');
+      .populate('departmentIds', 'name');
 
     // Log the action
     await this.auditLogsService.create({
@@ -293,7 +306,7 @@ export class UsersService {
         { new: true }
       )
       .select('-password -refreshToken')
-      .populate('departmentId', 'name');
+      .populate('departmentIds', 'name');
 
     if (!restored) {
       throw new EntityNotFoundException('User', id);
@@ -334,15 +347,15 @@ export class UsersService {
       filter.role = filterDto.role;
     }
 
-    if (filterDto.departmentId) {
-      filter.departmentId = filterDto.departmentId;
+    if (filterDto.departmentId && Types.ObjectId.isValid(filterDto.departmentId)) {
+      filter.departmentIds = { $in: [new Types.ObjectId(filterDto.departmentId)] };
     }
 
     const [users, total] = await Promise.all([
       this.userModel
         .find(filter)
         .select('-password -refreshToken')
-        .populate('departmentId', 'name')
+        .populate('departmentIds', 'name')
         .populate('deletedBy', 'name email')
         .sort({ deletedAt: -1 })
         .skip(skip)
@@ -368,8 +381,8 @@ export class UsersService {
   async getEngineers(): Promise<UserDocument[]> {
     return this.userModel
       .find({ role: 'engineer', isActive: true, deletedAt: null })
-      .select('name email departmentId')
-      .populate('departmentId', 'name')
+      .select('name email departmentIds')
+      .populate('departmentIds', 'name')
       .sort({ name: 1 });
   }
 

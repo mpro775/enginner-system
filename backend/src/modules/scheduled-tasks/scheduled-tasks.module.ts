@@ -8,6 +8,7 @@ import {
   ScheduledTaskSchema,
 } from "./schemas/scheduled-task.schema";
 import { Machine, MachineSchema } from "../machines/schemas/machine.schema";
+import { User, UserSchema } from "../users/schemas/user.schema";
 import { AuditLogsModule } from "../audit-logs/audit-logs.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 
@@ -16,6 +17,7 @@ import { NotificationsModule } from "../notifications/notifications.module";
     MongooseModule.forFeature([
       { name: ScheduledTask.name, schema: ScheduledTaskSchema },
       { name: Machine.name, schema: MachineSchema },
+      { name: User.name, schema: UserSchema },
     ]),
     forwardRef(() => AuditLogsModule),
     forwardRef(() => NotificationsModule),

@@ -32,14 +32,22 @@ export class SystemsService {
       throw new DuplicateEntityException('System', 'name', createSystemDto.name);
     }
 
-    const system = new this.systemModel(createSystemDto);
+    const systemData: any = { ...createSystemDto };
+    if (createSystemDto.departmentIds?.length) {
+      systemData.departmentIds = createSystemDto.departmentIds.map((id) =>
+        new Types.ObjectId(id),
+      );
+    } else {
+      systemData.departmentIds = [];
+    }
+    const system = new this.systemModel(systemData);
     const saved = await system.save();
 
     // Invalidate cache for both activeOnly and all
     await this.cacheManager.del(CACHE_KEY);
     await this.cacheManager.del(`${CACHE_KEY}:all`);
 
-    return saved.populate('departmentId', 'name');
+    return saved.populate('departmentIds', 'name');
   }
 
   async findAll(activeOnly: boolean = true): Promise<SystemDocument[]> {
@@ -56,7 +64,7 @@ export class SystemsService {
     }
     const systems = await this.systemModel
       .find(filter)
-      .populate('departmentId', 'name')
+      .populate('departmentIds', 'name')
       .sort({ createdAt: -1 });
 
     await this.cacheManager.set(cacheKey, systems, CACHE_TTL);
@@ -67,7 +75,7 @@ export class SystemsService {
   async findOne(id: string): Promise<SystemDocument> {
     const system = await this.systemModel
       .findById(id)
-      .populate('departmentId', 'name');
+      .populate('departmentIds', 'name');
 
     if (!system) {
       throw new EntityNotFoundException('System', id);
@@ -94,11 +102,15 @@ export class SystemsService {
       }
     }
 
-    const updated = await this.systemModel.findByIdAndUpdate(
-      id,
-      updateSystemDto,
-      { new: true },
-    ).populate('departmentId', 'name');
+    const updateData: any = { ...updateSystemDto };
+    if (updateSystemDto.departmentIds !== undefined) {
+      updateData.departmentIds = (updateSystemDto.departmentIds || []).map(
+        (id) => new Types.ObjectId(id),
+      );
+    }
+    const updated = await this.systemModel
+      .findByIdAndUpdate(id, updateData, { new: true })
+      .populate('departmentIds', 'name');
 
     await this.cacheManager.del(CACHE_KEY);
     await this.cacheManager.del(`${CACHE_KEY}:all`);
@@ -157,11 +169,9 @@ export class SystemsService {
       throw new EntityNotFoundException('System', id);
     }
 
-    const restored = await this.systemModel.findByIdAndUpdate(
-      id,
-      { $unset: { deletedAt: 1, deletedBy: 1 } },
-      { new: true }
-    ).populate('departmentId', 'name');
+    const restored = await this.systemModel
+      .findByIdAndUpdate(id, { $unset: { deletedAt: 1, deletedBy: 1 } }, { new: true })
+      .populate('departmentIds', 'name');
 
     if (!restored) {
       throw new EntityNotFoundException('System', id);
@@ -191,22 +201,22 @@ export class SystemsService {
   }
 
   async findByDepartment(departmentId: string): Promise<SystemDocument[]> {
-    // Build filter to match both ObjectId and string departmentId
+    if (!Types.ObjectId.isValid(departmentId)) {
+      return [];
+    }
+    const deptObjId = new Types.ObjectId(departmentId);
+    // Match both new (departmentIds array) and legacy (departmentId single) for backward compatibility
     const filter: any = {
-      $or: [
-        { departmentId: departmentId }, // Match string
-        {
-          departmentId: Types.ObjectId.isValid(departmentId)
-            ? new Types.ObjectId(departmentId)
-            : null,
-        }, // Match ObjectId
-      ],
       deletedAt: null,
+      $or: [
+        { departmentIds: { $in: [deptObjId] } },
+        { departmentId: deptObjId },
+      ],
     };
 
     return this.systemModel
       .find(filter)
-      .populate('departmentId', 'name')
+      .populate('departmentIds', 'name')
       .sort({ createdAt: -1 });
   }
 

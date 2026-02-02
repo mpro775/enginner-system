@@ -107,7 +107,9 @@ export default function RequestDetails() {
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
-  const [pdfIframeRef, setPdfIframeRef] = useState<HTMLIFrameElement | null>(null);
+  const [pdfIframeRef, setPdfIframeRef] = useState<HTMLIFrameElement | null>(
+    null
+  );
   const [expandedDescriptions, setExpandedDescriptions] = useState<
     Record<string, boolean>
   >({});
@@ -119,11 +121,7 @@ export default function RequestDetails() {
     }));
   };
 
-  const renderFormattedText = (
-    text: string,
-    key: string,
-    maxLength = 100
-  ) => {
+  const renderFormattedText = (text: string, key: string, maxLength = 100) => {
     if (!text?.trim()) return null;
     const isLong = text.length > maxLength;
     return (
@@ -210,19 +208,13 @@ export default function RequestDetails() {
   // Filter systems based on selected department
   const filteredSystems = systems?.filter((system) => {
     if (!watchDepartmentId) {
-      // If no department selected, show all systems
       return true;
     }
-    // Show systems that are either:
-    // 1. Linked to the selected department
-    // 2. Not linked to any department (departmentId is null/undefined)
-    if (!system.departmentId) {
-      return true;
-    }
-    if (typeof system.departmentId === "object") {
-      return system.departmentId.id === watchDepartmentId;
-    }
-    return system.departmentId === watchDepartmentId;
+    const ids = system.departmentIds || [];
+    if (ids.length === 0) return true;
+    return ids.some(
+      (d) => (typeof d === "object" && d ? d.id : d) === watchDepartmentId
+    );
   });
 
   const stopMutation = useMutation({
@@ -260,7 +252,9 @@ export default function RequestDetails() {
 
   const addProjectManagerNoteMutation = useMutation({
     mutationFn: (notes: string) =>
-      requestsService.addProjectManagerNote(id!, { projectManagerNotes: notes }),
+      requestsService.addProjectManagerNote(id!, {
+        projectManagerNotes: notes,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["request", id] });
       queryClient.invalidateQueries({ queryKey: ["requests"] });
@@ -440,8 +434,7 @@ export default function RequestDetails() {
     (isMaintenanceSafetyMonitor || isAdmin) &&
     request.status !== RequestStatus.STOPPED;
   const canAddProjectManagerNote =
-    (isProjectManager || isAdmin) &&
-    request.status !== RequestStatus.STOPPED;
+    (isProjectManager || isAdmin) && request.status !== RequestStatus.STOPPED;
 
   const handleStop = () => {
     setShowStopDialog(true);
@@ -536,28 +529,31 @@ export default function RequestDetails() {
       // Try to access iframe content to ensure full display
       setTimeout(() => {
         try {
-          const iframeDoc = pdfIframeRef.contentDocument || pdfIframeRef.contentWindow?.document;
+          const iframeDoc =
+            pdfIframeRef.contentDocument ||
+            pdfIframeRef.contentWindow?.document;
           if (iframeDoc) {
             // Ensure iframe shows full content
             const body = iframeDoc.body;
             if (body) {
-              body.style.overflow = 'auto';
-              body.style.height = 'auto';
+              body.style.overflow = "auto";
+              body.style.height = "auto";
             }
             // Scroll to ensure footer visibility
-            iframeDoc.documentElement.scrollTop = iframeDoc.documentElement.scrollHeight;
+            iframeDoc.documentElement.scrollTop =
+              iframeDoc.documentElement.scrollHeight;
           }
         } catch (e) {
           // Cross-origin restrictions may prevent access - this is normal
           // The PDF viewer will handle display internally
         }
       }, 500);
-      
+
       // Additional attempt after longer delay
       setTimeout(() => {
         if (pdfIframeRef) {
           // Force iframe to recalculate height
-          pdfIframeRef.style.height = pdfIframeRef.offsetHeight + 'px';
+          pdfIframeRef.style.height = pdfIframeRef.offsetHeight + "px";
         }
       }, 1500);
     }
@@ -641,7 +637,9 @@ export default function RequestDetails() {
                 <MaintenanceTypeBadge type={request.maintenanceType} />
               </div>
             </div>
-            <p className="text-muted-foreground text-sm sm:text-base">تفاصيل طلب الصيانة</p>
+            <p className="text-muted-foreground text-sm sm:text-base">
+              تفاصيل طلب الصيانة
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 justify-end">
@@ -736,14 +734,18 @@ export default function RequestDetails() {
                 <div className="flex items-center gap-3">
                   <Cog className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="text-sm text-muted-foreground">النظام / الفرع</p>
+                    <p className="text-sm text-muted-foreground">
+                      النظام / الفرع
+                    </p>
                     <p className="font-medium">{request.systemId?.name}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <Wrench className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="text-sm text-muted-foreground">الآلة / البند</p>
+                    <p className="text-sm text-muted-foreground">
+                      الآلة / البند
+                    </p>
                     <p className="font-medium">
                       {request.machineId?.name}
                       {request.machineNumber && ` (${request.machineNumber})`}
@@ -799,10 +801,7 @@ export default function RequestDetails() {
                   <span className="text-sm font-medium text-muted-foreground block">
                     ملاحظات المهندس
                   </span>
-                  {renderFormattedText(
-                    request.engineerNotes,
-                    "engineer-notes"
-                  )}
+                  {renderFormattedText(request.engineerNotes, "engineer-notes")}
                 </div>
               )}
 
@@ -811,69 +810,69 @@ export default function RequestDetails() {
                   <span className="text-sm font-medium text-muted-foreground block">
                     احتياجات الطلب
                   </span>
-                  {renderFormattedText(
-                    request.requestNeeds,
-                    "request-needs"
-                  )}
+                  {renderFormattedText(request.requestNeeds, "request-needs")}
                 </div>
               )}
 
-              {request.consultantNotes && (() => {
-                const { text, author } = parseNoteWithAuthor(
-                  request.consultantNotes
-                );
-                return (
-                  <div className="space-y-2 pt-4 border-t">
-                    <span className="text-sm font-medium text-muted-foreground block">
-                      ملاحظات المكتب الاستشاري
-                    </span>
-                    {renderFormattedText(text, "consultant-notes")}
-                    {author && (
-                      <p className="text-xs text-muted-foreground text-left pt-1">
-                        — {author}
-                      </p>
-                    )}
-                  </div>
-                );
-              })()}
+              {request.consultantNotes &&
+                (() => {
+                  const { text, author } = parseNoteWithAuthor(
+                    request.consultantNotes
+                  );
+                  return (
+                    <div className="space-y-2 pt-4 border-t">
+                      <span className="text-sm font-medium text-muted-foreground block">
+                        ملاحظات المكتب الاستشاري
+                      </span>
+                      {renderFormattedText(text, "consultant-notes")}
+                      {author && (
+                        <p className="text-xs text-muted-foreground text-left pt-1">
+                          — {author}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
 
-              {request.healthSafetyNotes && (() => {
-                const { text, author } = parseNoteWithAuthor(
-                  request.healthSafetyNotes
-                );
-                return (
-                  <div className="space-y-2 pt-4 border-t">
-                    <span className="text-sm font-medium text-muted-foreground block">
-                      ملاحظات مراقب الصيانة والسلامة
-                    </span>
-                    {renderFormattedText(text, "health-safety-notes")}
-                    {author && (
-                      <p className="text-xs text-muted-foreground text-left pt-1">
-                        — {author}
-                      </p>
-                    )}
-                  </div>
-                );
-              })()}
+              {request.healthSafetyNotes &&
+                (() => {
+                  const { text, author } = parseNoteWithAuthor(
+                    request.healthSafetyNotes
+                  );
+                  return (
+                    <div className="space-y-2 pt-4 border-t">
+                      <span className="text-sm font-medium text-muted-foreground block">
+                        ملاحظات مراقب الصيانة والسلامة
+                      </span>
+                      {renderFormattedText(text, "health-safety-notes")}
+                      {author && (
+                        <p className="text-xs text-muted-foreground text-left pt-1">
+                          — {author}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
 
-              {request.projectManagerNotes && (() => {
-                const { text, author } = parseNoteWithAuthor(
-                  request.projectManagerNotes
-                );
-                return (
-                  <div className="space-y-2 pt-4 border-t">
-                    <span className="text-sm font-medium text-muted-foreground block">
-                      ملاحظات مدير المشروع
-                    </span>
-                    {renderFormattedText(text, "project-manager-notes")}
-                    {author && (
-                      <p className="text-xs text-muted-foreground text-left pt-1">
-                        — {author}
-                      </p>
-                    )}
-                  </div>
-                );
-              })()}
+              {request.projectManagerNotes &&
+                (() => {
+                  const { text, author } = parseNoteWithAuthor(
+                    request.projectManagerNotes
+                  );
+                  return (
+                    <div className="space-y-2 pt-4 border-t">
+                      <span className="text-sm font-medium text-muted-foreground block">
+                        ملاحظات مدير المشروع
+                      </span>
+                      {renderFormattedText(text, "project-manager-notes")}
+                      {author && (
+                        <p className="text-xs text-muted-foreground text-left pt-1">
+                          — {author}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
 
               {request.status === RequestStatus.STOPPED &&
                 request.stopReason && (
@@ -907,7 +906,6 @@ export default function RequestDetails() {
                     )}
                   </div>
                 )}
-
             </CardContent>
           </Card>
 
@@ -936,9 +934,10 @@ export default function RequestDetails() {
                     size="sm"
                     onClick={() =>
                       navigate(
-                        `/app/complaints/${typeof request.complaintId === "string"
-                          ? request.complaintId
-                          : (request.complaintId as any).id
+                        `/app/complaints/${
+                          typeof request.complaintId === "string"
+                            ? request.complaintId
+                            : (request.complaintId as any).id
                         }`
                       )
                     }
@@ -959,117 +958,117 @@ export default function RequestDetails() {
             canAddHealthSafetyNote ||
             canAddProjectManagerNote ||
             isAdmin) && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>الإجراءات المتاحة</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-3">
-                    {canEdit && (
-                      <Button
-                        variant="outline"
-                        onClick={handleEdit}
-                        className="flex-1"
-                      >
-                        <Edit className="ml-2 h-4 w-4" />
-                        تعديل الطلب
-                      </Button>
-                    )}
-                    {canComplete && (
-                      <Button
-                        onClick={handleComplete}
-                        disabled={completeMutation.isPending}
-                        className="flex-1"
-                      >
-                        <CheckCircle2 className="ml-2 h-4 w-4" />
-                        إكمال الطلب
-                      </Button>
-                    )}
-                    {canStop && (
-                      <Button
-                        variant="destructive"
-                        onClick={handleStop}
-                        className="flex-1"
-                      >
-                        <StopCircle className="ml-2 h-4 w-4" />
-                        إيقاف الطلب
-                      </Button>
-                    )}
-                    {canAddNote && (
-                      <Button
-                        variant="outline"
-                        onClick={handleAddNote}
-                        className="flex-1"
-                      >
-                        <MessageSquarePlus className="ml-2 h-4 w-4" />
-                        {request.consultantNotes
-                          ? "تعديل الملاحظة"
-                          : "إضافة ملاحظة"}
-                      </Button>
-                    )}
-                    {canAddHealthSafetyNote && (
-                      <Button
-                        variant="outline"
-                        onClick={handleAddHealthSafetyNote}
-                        className="flex-1"
-                      >
-                        <MessageSquarePlus className="ml-2 h-4 w-4" />
-                        {request.healthSafetyNotes
-                          ? "تعديل ملاحظة الصحة والسلامة"
-                          : "إضافة ملاحظة الصحة والسلامة"}
-                      </Button>
-                    )}
-                    {canAddProjectManagerNote && (
-                      <Button
-                        variant="outline"
-                        onClick={handleAddProjectManagerNote}
-                        className="flex-1"
-                      >
-                        <MessageSquarePlus className="ml-2 h-4 w-4" />
-                        {request.projectManagerNotes
-                          ? "تعديل ملاحظة مدير المشروع"
-                          : "إضافة ملاحظة مدير المشروع"}
-                      </Button>
-                    )}
+            <Card>
+              <CardHeader>
+                <CardTitle>الإجراءات المتاحة</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-3">
+                  {canEdit && (
                     <Button
                       variant="outline"
-                      onClick={handleRefresh}
+                      onClick={handleEdit}
                       className="flex-1"
                     >
-                      <RefreshCw className="ml-2 h-4 w-4" />
-                      تحديث
+                      <Edit className="ml-2 h-4 w-4" />
+                      تعديل الطلب
                     </Button>
+                  )}
+                  {canComplete && (
+                    <Button
+                      onClick={handleComplete}
+                      disabled={completeMutation.isPending}
+                      className="flex-1"
+                    >
+                      <CheckCircle2 className="ml-2 h-4 w-4" />
+                      إكمال الطلب
+                    </Button>
+                  )}
+                  {canStop && (
+                    <Button
+                      variant="destructive"
+                      onClick={handleStop}
+                      className="flex-1"
+                    >
+                      <StopCircle className="ml-2 h-4 w-4" />
+                      إيقاف الطلب
+                    </Button>
+                  )}
+                  {canAddNote && (
+                    <Button
+                      variant="outline"
+                      onClick={handleAddNote}
+                      className="flex-1"
+                    >
+                      <MessageSquarePlus className="ml-2 h-4 w-4" />
+                      {request.consultantNotes
+                        ? "تعديل الملاحظة"
+                        : "إضافة ملاحظة"}
+                    </Button>
+                  )}
+                  {canAddHealthSafetyNote && (
+                    <Button
+                      variant="outline"
+                      onClick={handleAddHealthSafetyNote}
+                      className="flex-1"
+                    >
+                      <MessageSquarePlus className="ml-2 h-4 w-4" />
+                      {request.healthSafetyNotes
+                        ? "تعديل ملاحظة الصحة والسلامة"
+                        : "إضافة ملاحظة الصحة والسلامة"}
+                    </Button>
+                  )}
+                  {canAddProjectManagerNote && (
+                    <Button
+                      variant="outline"
+                      onClick={handleAddProjectManagerNote}
+                      className="flex-1"
+                    >
+                      <MessageSquarePlus className="ml-2 h-4 w-4" />
+                      {request.projectManagerNotes
+                        ? "تعديل ملاحظة مدير المشروع"
+                        : "إضافة ملاحظة مدير المشروع"}
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={handleRefresh}
+                    className="flex-1"
+                  >
+                    <RefreshCw className="ml-2 h-4 w-4" />
+                    تحديث
+                  </Button>
 
-                    {isAdmin && (
-                      <>
-                        <div className="w-full border-t border-border/50 pt-3 mt-2">
-                          <div className="flex flex-wrap gap-3">
-                            <Button
-                              variant="outline"
-                              className="flex-1 text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950"
-                              onClick={() => setSoftDeleteDialog(true)}
-                              disabled={deleteMutation.isPending}
-                            >
-                              <Trash2 className="ml-2 h-4 w-4" />
-                              نقل إلى سلة المهملات
-                            </Button>
-                            <Button
-                              variant="outline"
-                              className="flex-1 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => setHardDeleteDialog(true)}
-                              disabled={hardDeleteMutation.isPending}
-                            >
-                              <AlertTriangle className="ml-2 h-4 w-4" />
-                              حذف نهائي
-                            </Button>
-                          </div>
+                  {isAdmin && (
+                    <>
+                      <div className="w-full border-t border-border/50 pt-3 mt-2">
+                        <div className="flex flex-wrap gap-3">
+                          <Button
+                            variant="outline"
+                            className="flex-1 text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950"
+                            onClick={() => setSoftDeleteDialog(true)}
+                            disabled={deleteMutation.isPending}
+                          >
+                            <Trash2 className="ml-2 h-4 w-4" />
+                            نقل إلى سلة المهملات
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="flex-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => setHardDeleteDialog(true)}
+                            disabled={hardDeleteMutation.isPending}
+                          >
+                            <AlertTriangle className="ml-2 h-4 w-4" />
+                            حذف نهائي
+                          </Button>
                         </div>
-                      </>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Sidebar */}
@@ -1538,22 +1537,22 @@ export default function RequestDetails() {
                         !watchSystemId
                           ? "اختر النظام أولاً"
                           : isLoadingMachines
-                            ? "جاري التحميل..."
-                            : isMachinesError
-                              ? "حدث خطأ في التحميل"
-                              : machines && machines.length === 0
-                                ? "لا توجد آلات متاحة"
-                                : "اختر الآلة"
+                          ? "جاري التحميل..."
+                          : isMachinesError
+                          ? "حدث خطأ في التحميل"
+                          : machines && machines.length === 0
+                          ? "لا توجد آلات متاحة"
+                          : "اختر الآلة"
                       }
                     />
                   </SelectTrigger>
                   <SelectContent>
                     {machines && machines.length > 0
                       ? machines.map((machine) => (
-                        <SelectItem key={machine.id} value={machine.id}>
-                          {machine.name}
-                        </SelectItem>
-                      ))
+                          <SelectItem key={machine.id} value={machine.id}>
+                            {machine.name}
+                          </SelectItem>
+                        ))
                       : null}
                   </SelectContent>
                 </Select>
@@ -1657,11 +1656,15 @@ export default function RequestDetails() {
               تأكيد النقل إلى سلة المهملات
             </DialogTitle>
             <DialogDescription>
-              هل أنت متأكد من نقل طلب الصيانة "{request?.requestCode}" إلى سلة المهملات؟ يمكنك استعادته لاحقاً.
+              هل أنت متأكد من نقل طلب الصيانة "{request?.requestCode}" إلى سلة
+              المهملات؟ يمكنك استعادته لاحقاً.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSoftDeleteDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setSoftDeleteDialog(false)}
+            >
               إلغاء
             </Button>
             <Button
@@ -1691,12 +1694,15 @@ export default function RequestDetails() {
               تأكيد الحذف النهائي
             </DialogTitle>
             <DialogDescription>
-              هل أنت متأكد من الحذف النهائي لطلب الصيانة "{request?.requestCode}"؟ هذا الإجراء لا يمكن
-              التراجع عنه!
+              هل أنت متأكد من الحذف النهائي لطلب الصيانة "{request?.requestCode}
+              "؟ هذا الإجراء لا يمكن التراجع عنه!
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setHardDeleteDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setHardDeleteDialog(false)}
+            >
               إلغاء
             </Button>
             <Button
@@ -1730,24 +1736,24 @@ export default function RequestDetails() {
           </div>
           <div className="flex-1 overflow-hidden min-h-0 px-6 pb-6">
             {pdfPreviewUrl ? (
-              <div 
-                className="w-full border rounded-lg overflow-hidden bg-muted/50 relative" 
-                style={{ 
-                  height: 'calc(90vh - 200px)', 
-                  minHeight: '600px',
-                  maxHeight: 'calc(90vh - 200px)'
+              <div
+                className="w-full border rounded-lg overflow-hidden bg-muted/50 relative"
+                style={{
+                  height: "calc(90vh - 200px)",
+                  minHeight: "600px",
+                  maxHeight: "calc(90vh - 200px)",
                 }}
               >
                 <iframe
                   ref={setPdfIframeRef}
                   src={`${pdfPreviewUrl}#toolbar=1&navpanes=1&scrollbar=1&view=FitH&zoom=page-width`}
                   className="w-full h-full border-0"
-                  style={{ 
-                    width: '100%', 
-                    height: '100%', 
-                    minHeight: '600px',
-                    display: 'block',
-                    overflow: 'auto'
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    minHeight: "600px",
+                    display: "block",
+                    overflow: "auto",
                   }}
                   title="PDF Preview"
                   onLoad={handlePdfLoad}
@@ -1765,7 +1771,10 @@ export default function RequestDetails() {
               <Button variant="outline" onClick={handleClosePreview}>
                 إغلاق
               </Button>
-              <Button onClick={handleDownloadFromPreview} disabled={downloadingPdf}>
+              <Button
+                onClick={handleDownloadFromPreview}
+                disabled={downloadingPdf}
+              >
                 {downloadingPdf ? (
                   <>
                     <Loader2 className="ml-2 h-4 w-4 animate-spin" />

@@ -4,6 +4,7 @@ import {
   MinLength,
   IsEnum,
   IsOptional,
+  IsArray,
   IsMongoId,
   IsBoolean,
 } from "class-validator";
@@ -31,8 +32,9 @@ export class UpdateUserDto {
   role?: Role;
 
   @IsOptional()
-  @IsMongoId({ message: "Invalid department ID" })
-  departmentId?: string;
+  @IsArray()
+  @IsMongoId({ each: true, message: "Invalid department ID" })
+  departmentIds?: string[];
 
   @IsOptional()
   @IsBoolean()

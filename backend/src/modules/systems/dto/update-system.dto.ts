@@ -1,4 +1,10 @@
-import { IsString, IsOptional, IsBoolean, IsMongoId } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsArray,
+  IsMongoId,
+} from 'class-validator';
 
 export class UpdateSystemDto {
   @IsOptional()
@@ -14,8 +20,9 @@ export class UpdateSystemDto {
   isActive?: boolean;
 
   @IsOptional()
-  @IsMongoId({ message: 'Invalid department ID' })
-  departmentId?: string;
+  @IsArray()
+  @IsMongoId({ each: true, message: 'Invalid department ID' })
+  departmentIds?: string[];
 }
 
 

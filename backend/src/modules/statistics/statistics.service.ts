@@ -80,7 +80,7 @@ export class StatisticsService {
     const cached = await this.cacheManager.get<DashboardStatistics>(cacheKey);
     if (cached) return cached;
 
-    const matchStage = this.buildMatchStage(filter, userRole, userId);
+    const matchStage = await this.buildMatchStage(filter, userRole, userId);
     const now = new Date();
     const todayStart = new Date(now.setHours(0, 0, 0, 0));
     const weekStart = new Date(now);
@@ -179,7 +179,7 @@ export class StatisticsService {
     const cached = await this.cacheManager.get<EngineerStatistics[]>(cacheKey);
     if (cached) return cached;
 
-    const matchStage = this.buildMatchStage(filter);
+    const matchStage = await this.buildMatchStage(filter);
 
     const stats = await this.requestModel.aggregate([
       { $match: matchStage },
@@ -287,7 +287,7 @@ export class StatisticsService {
   async getByStatus(
     filter: StatisticsFilterDto
   ): Promise<Record<string, number>> {
-    const matchStage = this.buildMatchStage(filter);
+    const matchStage = await this.buildMatchStage(filter);
     const stats = await this.requestModel.aggregate([
       { $match: matchStage },
       { $group: { _id: "$status", count: { $sum: 1 } } },
@@ -302,7 +302,7 @@ export class StatisticsService {
   async getByMaintenanceType(
     filter: StatisticsFilterDto
   ): Promise<Record<string, number>> {
-    const matchStage = this.buildMatchStage(filter);
+    const matchStage = await this.buildMatchStage(filter);
     const stats = await this.requestModel.aggregate([
       { $match: matchStage },
       { $group: { _id: "$maintenanceType", count: { $sum: 1 } } },
@@ -315,7 +315,7 @@ export class StatisticsService {
   }
 
   async getByLocation(filter: StatisticsFilterDto): Promise<any[]> {
-    const matchStage = this.buildMatchStage(filter);
+    const matchStage = await this.buildMatchStage(filter);
     return this.requestModel.aggregate([
       { $match: matchStage },
       { $group: { _id: "$locationId", count: { $sum: 1 } } },
@@ -340,7 +340,7 @@ export class StatisticsService {
   }
 
   async getByDepartment(filter: StatisticsFilterDto): Promise<any[]> {
-    const matchStage = this.buildMatchStage(filter);
+    const matchStage = await this.buildMatchStage(filter);
     return this.requestModel.aggregate([
       { $match: matchStage },
       { $group: { _id: "$departmentId", count: { $sum: 1 } } },
@@ -365,7 +365,7 @@ export class StatisticsService {
   }
 
   async getBySystem(filter: StatisticsFilterDto): Promise<any[]> {
-    const matchStage = this.buildMatchStage(filter);
+    const matchStage = await this.buildMatchStage(filter);
     return this.requestModel.aggregate([
       { $match: matchStage },
       { $group: { _id: "$systemId", count: { $sum: 1 } } },
@@ -393,7 +393,7 @@ export class StatisticsService {
     filter: StatisticsFilterDto,
     limit: number = 10
   ): Promise<TopFailingMachine[]> {
-    const matchStage = this.buildMatchStage(filter);
+    const matchStage = await this.buildMatchStage(filter);
     const stats = await this.requestModel.aggregate([
       { $match: matchStage },
       {
@@ -513,7 +513,7 @@ export class StatisticsService {
     minCompletionTimeHours: number;
     maxCompletionTimeHours: number;
   }> {
-    const matchStage = this.buildMatchStage(filter);
+    const matchStage = await this.buildMatchStage(filter);
 
     const stats = await this.requestModel.aggregate([
       {
@@ -549,11 +549,11 @@ export class StatisticsService {
     };
   }
 
-  private buildMatchStage(
+  private async buildMatchStage(
     filter: StatisticsFilterDto,
     userRole?: string,
     userId?: string
-  ): Record<string, any> {
+  ): Promise<Record<string, any>> {
     const matchStage: Record<string, any> = {};
 
     // Engineers can only see their own statistics
@@ -565,6 +565,22 @@ export class StatisticsService {
           Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : null
         ].filter(Boolean)
       } as any;
+    }
+
+    // Consultants can only see statistics from their departments
+    if (userRole === Role.CONSULTANT && userId) {
+      const consultant = await this.userModel
+        .findById(userId)
+        .select("departmentIds");
+      const deptIds = consultant?.departmentIds ?? [];
+      if (deptIds.length > 0) {
+        const validIds = deptIds
+          .map((id) => (Types.ObjectId.isValid(String(id)) ? new Types.ObjectId(String(id)) : null))
+          .filter(Boolean);
+        if (validIds.length > 0) {
+          matchStage.departmentId = { $in: validIds };
+        }
+      }
     }
 
     if (filter.engineerId) {

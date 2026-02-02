@@ -5,6 +5,7 @@ import {
   MinLength,
   IsEnum,
   IsOptional,
+  IsArray,
   IsMongoId,
 } from "class-validator";
 import { Role } from "../../../common/enums";
@@ -31,6 +32,7 @@ export class CreateUserDto {
   role: Role;
 
   @IsOptional()
-  @IsMongoId({ message: "Invalid department ID" })
-  departmentId?: string;
+  @IsArray()
+  @IsMongoId({ each: true, message: "Invalid department ID" })
+  departmentIds?: string[];
 }

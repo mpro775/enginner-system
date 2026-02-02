@@ -29,8 +29,8 @@ export class System {
   @Prop({ type: Types.ObjectId, ref: 'User' })
   deletedBy?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Department' })
-  departmentId?: Types.ObjectId;
+  @Prop({ type: [Types.ObjectId], ref: 'Department', default: [] })
+  departmentIds?: Types.ObjectId[];
 }
 
 export const SystemSchema = SchemaFactory.createForClass(System);

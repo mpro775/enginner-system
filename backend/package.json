@@ -20,7 +20,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "change-admin-password": "ts-node src/seed/change-admin-password.ts"
+    "change-admin-password": "ts-node src/seed/change-admin-password.ts",
+    "migrate:department-ids": "node scripts/migrate-department-to-department-ids.js"
   },
   "dependencies": {
     "@nestjs/cache-manager": "^2.2.0",

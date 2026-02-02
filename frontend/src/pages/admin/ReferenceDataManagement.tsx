@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, Loader2, UserCheck, UserX, MoreVertical, AlertTriangle } from "lucide-react";
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Loader2,
+  UserCheck,
+  UserX,
+  MoreVertical,
+  AlertTriangle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +39,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { TagsInput } from "@/components/ui/tags-input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
 import { useAuthStore } from "@/store/auth";
 import { Role } from "@/types";
@@ -50,7 +60,7 @@ interface ReferenceDataProps {
   fields: {
     name: string;
     label: string;
-    type: "text" | "textarea" | "select" | "tags";
+    type: "text" | "textarea" | "select" | "tags" | "multiselect";
     required?: boolean;
     options?: { value: string; label: string }[];
   }[];
@@ -81,8 +91,19 @@ export default function ReferenceDataManagement({
   const [formData, setFormData] = useState<
     Record<string, string | boolean | string[]>
   >({});
-  const [softDeleteDialog, setSoftDeleteDialog] = useState<{ id: string; name: string } | null>(null);
-  
+
+  const toggleMultiselectValue = (fieldName: string, value: string) => {
+    const current = (formData[fieldName] as string[]) || [];
+    const next = current.includes(value)
+      ? current.filter((v) => v !== value)
+      : [...current, value];
+    setFormData({ ...formData, [fieldName]: next });
+  };
+  const [softDeleteDialog, setSoftDeleteDialog] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+
   const isAdmin = user?.role === Role.ADMIN;
 
   const { data, isLoading, refetch } = useQuery({
@@ -141,7 +162,10 @@ export default function ReferenceDataManagement({
     },
   });
 
-  const [hardDeleteDialog, setHardDeleteDialog] = useState<{ id: string; name: string } | null>(null);
+  const [hardDeleteDialog, setHardDeleteDialog] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const toggleStatusMutation = useMutation({
     mutationFn: async ({
@@ -175,6 +199,10 @@ export default function ReferenceDataManagement({
       const value = item[field.name];
       if (field.type === "tags") {
         initialData[field.name] = Array.isArray(value) ? value : [];
+      } else if (field.type === "multiselect" && Array.isArray(value)) {
+        initialData[field.name] = value.map((v: { id?: string } | string) =>
+          typeof v === "object" && v?.id ? v.id : String(v)
+        );
       } else if (typeof value === "object" && value !== null && "id" in value) {
         initialData[field.name] = (value as { id: string }).id;
       } else {
@@ -267,8 +295,19 @@ export default function ReferenceDataManagement({
                               <span className="text-muted-foreground">-</span>
                             )}
                           </div>
+                        ) : Array.isArray(item[col.key]) &&
+                          (item[col.key] as unknown[]).length > 0 &&
+                          typeof (item[col.key] as unknown[])[0] ===
+                            "object" ? (
+                          <span className="text-muted-foreground">
+                            {(item[col.key] as { name?: string }[])
+                              .map((d) => d?.name)
+                              .filter(Boolean)
+                              .join("، ")}
+                          </span>
                         ) : typeof item[col.key] === "object" &&
-                          item[col.key] !== null ? (
+                          item[col.key] !== null &&
+                          !Array.isArray(item[col.key]) ? (
                           (item[col.key] as { name: string }).name
                         ) : (
                           String(item[col.key] || "-")
@@ -318,17 +357,17 @@ export default function ReferenceDataManagement({
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() =>
-                                setSoftDeleteDialog({
-                                  id: item.id as string,
-                                  name: (item.name as string) || "",
-                                })
-                              }
-                            >
-                              <Trash2 className="h-4 w-4 ml-2" />
-                              نقل إلى سلة المهملات
-                            </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  setSoftDeleteDialog({
+                                    id: item.id as string,
+                                    name: (item.name as string) || "",
+                                  })
+                                }
+                              >
+                                <Trash2 className="h-4 w-4 ml-2" />
+                                نقل إلى سلة المهملات
+                              </DropdownMenuItem>
                               {service.hardDelete && (
                                 <>
                                   <DropdownMenuSeparator />
@@ -398,6 +437,32 @@ export default function ReferenceDataManagement({
                       }
                       required={field.required}
                     />
+                  ) : field.type === "multiselect" &&
+                    field.name === relatedService?.fieldName ? (
+                    <div className="max-h-40 overflow-y-auto space-y-2 rounded-md border p-3">
+                      {relatedData?.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center space-x-2 space-x-reverse"
+                        >
+                          <Checkbox
+                            id={`${field.name}-${item.id}`}
+                            checked={(
+                              (formData[field.name] as string[]) || []
+                            ).includes(item.id)}
+                            onCheckedChange={() =>
+                              toggleMultiselectValue(field.name, item.id)
+                            }
+                          />
+                          <label
+                            htmlFor={`${field.name}-${item.id}`}
+                            className="text-sm font-medium cursor-pointer"
+                          >
+                            {item.name}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
                   ) : field.type === "select" ? (
                     <Select
                       value={stringValue}
@@ -477,7 +542,10 @@ export default function ReferenceDataManagement({
       </Dialog>
 
       {/* Soft Delete Dialog */}
-      <Dialog open={!!softDeleteDialog} onOpenChange={() => setSoftDeleteDialog(null)}>
+      <Dialog
+        open={!!softDeleteDialog}
+        onOpenChange={() => setSoftDeleteDialog(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -485,7 +553,8 @@ export default function ReferenceDataManagement({
               تأكيد النقل إلى سلة المهملات
             </DialogTitle>
             <DialogDescription>
-              هل أنت متأكد من نقل "{softDeleteDialog?.name}" إلى سلة المهملات؟ يمكنك استعادته لاحقاً.
+              هل أنت متأكد من نقل "{softDeleteDialog?.name}" إلى سلة المهملات؟
+              يمكنك استعادته لاحقاً.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -512,7 +581,10 @@ export default function ReferenceDataManagement({
       </Dialog>
 
       {/* Hard Delete Dialog */}
-      <Dialog open={!!hardDeleteDialog} onOpenChange={() => setHardDeleteDialog(null)}>
+      <Dialog
+        open={!!hardDeleteDialog}
+        onOpenChange={() => setHardDeleteDialog(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
@@ -520,8 +592,8 @@ export default function ReferenceDataManagement({
               تأكيد الحذف النهائي
             </DialogTitle>
             <DialogDescription>
-              هل أنت متأكد من الحذف النهائي لـ "{hardDeleteDialog?.name}"؟ هذا الإجراء لا يمكن
-              التراجع عنه!
+              هل أنت متأكد من الحذف النهائي لـ "{hardDeleteDialog?.name}"؟ هذا
+              الإجراء لا يمكن التراجع عنه!
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

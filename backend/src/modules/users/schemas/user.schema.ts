@@ -28,8 +28,8 @@ export class User {
   @Prop({ required: true, enum: Role, default: Role.ENGINEER })
   role: Role;
 
-  @Prop({ type: Types.ObjectId, ref: 'Department' })
-  departmentId?: Types.ObjectId;
+  @Prop({ type: [Types.ObjectId], ref: 'Department', default: [] })
+  departmentIds?: Types.ObjectId[];
 
   @Prop({ default: true })
   isActive: boolean;

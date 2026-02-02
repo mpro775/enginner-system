@@ -25,7 +25,7 @@ export interface AuthResponse extends TokensResponse {
     name: string;
     email: string;
     role: string;
-    departmentId?: { id: string; name?: string };
+    departmentIds?: { id: string; name?: string }[];
   };
 }
 
@@ -49,7 +49,7 @@ export class AuthService {
   ): Promise<AuthResponse> {
     const user = await this.userModel
       .findOne({ email: loginDto.email.toLowerCase() })
-      .populate("departmentId", "name")
+      .populate("departmentIds", "name")
       .exec();
 
     if (!user) {
@@ -93,7 +93,15 @@ export class AuthService {
       this.notifyPendingTasks(user._id.toString());
     }
 
-    const departmentId = user.departmentId as { _id?: unknown; name?: string } | null | undefined;
+    const departmentIds = (user.departmentIds as { _id?: unknown; name?: string }[] | null | undefined) ?? [];
+    const departmentIdsFormatted = Array.isArray(departmentIds)
+      ? departmentIds
+          .filter(Boolean)
+          .map((d) => ({
+            id: String((d as any)._id ?? d),
+            name: (d as any).name,
+          }))
+      : [];
     return {
       ...tokens,
       user: {
@@ -101,12 +109,7 @@ export class AuthService {
         name: user.name,
         email: user.email,
         role: user.role,
-        departmentId: departmentId
-          ? {
-              id: String(departmentId._id ?? departmentId),
-              name: departmentId.name,
-            }
-          : undefined,
+        departmentIds: departmentIdsFormatted.length > 0 ? departmentIdsFormatted : undefined,
       },
     };
   }
@@ -167,7 +170,7 @@ export class AuthService {
     const user = await this.userModel
       .findById(userId)
       .select("-password -refreshToken")
-      .populate("departmentId", "name");
+      .populate("departmentIds", "name");
 
     if (!user) {
       throw new UnauthorizedException("User not found");

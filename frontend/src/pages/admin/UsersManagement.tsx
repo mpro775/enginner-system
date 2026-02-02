@@ -3,7 +3,16 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Edit, Trash2, UserCheck, UserX, Loader2, MoreVertical, AlertTriangle } from "lucide-react";
+import {
+  Plus,
+  Edit,
+  Trash2,
+  UserCheck,
+  UserX,
+  Loader2,
+  MoreVertical,
+  AlertTriangle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +40,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
 import { usersService } from "@/services/users";
 import { departmentsService } from "@/services/reference-data";
@@ -48,7 +58,7 @@ const userSchema = z.object({
     })
     .optional(),
   role: z.nativeEnum(Role),
-  departmentId: z.string().optional(),
+  departmentIds: z.array(z.string()).optional(),
 });
 
 type UserFormData = z.infer<typeof userSchema>;
@@ -60,7 +70,7 @@ export default function UsersManagement() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [hardDeleteDialog, setHardDeleteDialog] = useState<User | null>(null);
   const [softDeleteDialog, setSoftDeleteDialog] = useState<User | null>(null);
-  
+
   const isAdmin = user?.role === Role.ADMIN;
 
   const {
@@ -127,20 +137,20 @@ export default function UsersManagement() {
 
   const openCreateDialog = () => {
     setEditingUser(null);
-    reset({ role: Role.ENGINEER });
+    reset({ role: Role.ENGINEER, departmentIds: [] });
     setShowDialog(true);
   };
 
   const openEditDialog = (user: User) => {
     setEditingUser(user);
+    const deptIds = user.departmentIds || [];
     reset({
       name: user.name,
       email: user.email,
       role: user.role,
-      departmentId:
-        typeof user.departmentId === "object"
-          ? user.departmentId?.id
-          : undefined,
+      departmentIds: Array.isArray(deptIds)
+        ? deptIds.map((d) => (typeof d === "object" && d ? d.id : String(d)))
+        : [],
     });
     setShowDialog(true);
   };
@@ -222,11 +232,17 @@ export default function UsersManagement() {
                       {getRoleLabel(user.role)}
                     </Badge>
                   </div>
-                  {typeof user.departmentId === "object" &&
-                    user.departmentId?.name && (
+                  {Array.isArray(user.departmentIds) &&
+                    user.departmentIds.length > 0 && (
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <span className="text-xs">
-                          القسم: {user.departmentId.name}
+                          الأقسام:{" "}
+                          {user.departmentIds
+                            .map((d) =>
+                              typeof d === "object" && d ? d.name : ""
+                            )
+                            .filter(Boolean)
+                            .join("، ")}
                         </span>
                       </div>
                     )}
@@ -329,8 +345,14 @@ export default function UsersManagement() {
                         </Badge>
                       </td>
                       <td>
-                        {typeof user.departmentId === "object"
-                          ? user.departmentId?.name
+                        {Array.isArray(user.departmentIds) &&
+                        user.departmentIds.length > 0
+                          ? user.departmentIds
+                              .map((d) =>
+                                typeof d === "object" && d ? d.name : ""
+                              )
+                              .filter(Boolean)
+                              .join("، ") || "-"
                           : "-"}
                       </td>
                       <td>
@@ -368,12 +390,12 @@ export default function UsersManagement() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => setSoftDeleteDialog(user)}
-                              >
-                                <Trash2 className="h-4 w-4 ml-2" />
-                                نقل إلى سلة المهملات
-                              </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => setSoftDeleteDialog(user)}
+                                >
+                                  <Trash2 className="h-4 w-4 ml-2" />
+                                  نقل إلى سلة المهملات
+                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   className="text-destructive focus:text-destructive"
@@ -481,22 +503,36 @@ export default function UsersManagement() {
 
             {(watchRole === Role.ENGINEER || watchRole === Role.CONSULTANT) && (
               <div className="space-y-2">
-                <Label>القسم</Label>
-                <Select
-                  value={watch("departmentId") ?? ""}
-                  onValueChange={(value) => setValue("departmentId", value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="اختر القسم" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departments?.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.id}>
+                <Label>الأقسام (يمكن اختيار أكثر من قسم)</Label>
+                <div className="max-h-40 overflow-y-auto space-y-2 rounded-md border p-3">
+                  {departments?.map((dept) => (
+                    <div
+                      key={dept.id}
+                      className="flex items-center space-x-2 space-x-reverse"
+                    >
+                      <Checkbox
+                        id={`departmentIds-${dept.id}`}
+                        checked={(
+                          (watch("departmentIds") as string[]) || []
+                        ).includes(dept.id)}
+                        onCheckedChange={(checked) => {
+                          const current =
+                            (watch("departmentIds") as string[]) || [];
+                          const next = checked
+                            ? [...current, dept.id]
+                            : current.filter((id) => id !== dept.id);
+                          setValue("departmentIds", next);
+                        }}
+                      />
+                      <label
+                        htmlFor={`departmentIds-${dept.id}`}
+                        className="text-sm font-medium cursor-pointer"
+                      >
                         {dept.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </label>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -519,7 +555,10 @@ export default function UsersManagement() {
       </Dialog>
 
       {/* Soft Delete Dialog */}
-      <Dialog open={!!softDeleteDialog} onOpenChange={() => setSoftDeleteDialog(null)}>
+      <Dialog
+        open={!!softDeleteDialog}
+        onOpenChange={() => setSoftDeleteDialog(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -527,7 +566,8 @@ export default function UsersManagement() {
               تأكيد النقل إلى سلة المهملات
             </DialogTitle>
             <DialogDescription>
-              هل أنت متأكد من نقل المستخدم "{softDeleteDialog?.name}" إلى سلة المهملات؟ يمكنك استعادته لاحقاً.
+              هل أنت متأكد من نقل المستخدم "{softDeleteDialog?.name}" إلى سلة
+              المهملات؟ يمكنك استعادته لاحقاً.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -554,7 +594,10 @@ export default function UsersManagement() {
       </Dialog>
 
       {/* Hard Delete Dialog */}
-      <Dialog open={!!hardDeleteDialog} onOpenChange={() => setHardDeleteDialog(null)}>
+      <Dialog
+        open={!!hardDeleteDialog}
+        onOpenChange={() => setHardDeleteDialog(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
@@ -562,8 +605,8 @@ export default function UsersManagement() {
               تأكيد الحذف النهائي
             </DialogTitle>
             <DialogDescription>
-              هل أنت متأكد من الحذف النهائي للمستخدم "{hardDeleteDialog?.name}"؟ هذا الإجراء لا يمكن
-              التراجع عنه!
+              هل أنت متأكد من الحذف النهائي للمستخدم "{hardDeleteDialog?.name}"؟
+              هذا الإجراء لا يمكن التراجع عنه!
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

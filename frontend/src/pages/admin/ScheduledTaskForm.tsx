@@ -73,7 +73,9 @@ export default function ScheduledTaskForm() {
   const queryClient = useQueryClient();
   const isEditing = !!id;
 
-  const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
+  const [scheduledDate, setScheduledDate] = useState<Date | undefined>(
+    undefined
+  );
 
   const {
     register,
@@ -117,7 +119,9 @@ export default function ScheduledTaskForm() {
   });
 
   // Helper function to get ID from field (used in multiple places)
-  const getIdFromFieldHelper = (field: { id?: string; _id?: string } | string | undefined | null): string => {
+  const getIdFromFieldHelper = (
+    field: { id?: string; _id?: string } | string | undefined | null
+  ): string => {
     if (!field) return "";
     if (typeof field === "string") return field;
     return field.id || field._id || "";
@@ -142,8 +146,16 @@ export default function ScheduledTaskForm() {
   const [formInitialized, setFormInitialized] = useState(false);
 
   // Check if all reference data is loaded
-  const isReferenceDataLoaded = !isLoadingLocations && !isLoadingDepartments && !isLoadingSystems && locations && departments && systems;
-  const isEditDataReady = isEditing ? (task && !isLoadingTask && !isLoadingTaskMachines && taskMachines) : true;
+  const isReferenceDataLoaded =
+    !isLoadingLocations &&
+    !isLoadingDepartments &&
+    !isLoadingSystems &&
+    locations &&
+    departments &&
+    systems;
+  const isEditDataReady = isEditing
+    ? task && !isLoadingTask && !isLoadingTaskMachines && taskMachines
+    : true;
 
   // Filter systems based on selected department
   const filteredSystems = systems?.filter((system) => {
@@ -151,22 +163,25 @@ export default function ScheduledTaskForm() {
       // If no department selected, show all systems
       return true;
     }
-    // Show systems that are either:
-    // 1. Linked to the selected department
-    // 2. Not linked to any department (departmentId is null/undefined)
-    if (!system.departmentId) {
-      return true;
-    }
-    if (typeof system.departmentId === "object") {
-      return system.departmentId.id === watchDepartmentId;
-    }
-    return system.departmentId === watchDepartmentId;
+    const ids = system.departmentIds || [];
+    if (ids.length === 0) return true;
+    return ids.some(
+      (d) => (typeof d === "object" && d ? d.id : d) === watchDepartmentId
+    );
   });
 
   useEffect(() => {
-    if (task && isEditing && isReferenceDataLoaded && isEditDataReady && !formInitialized) {
+    if (
+      task &&
+      isEditing &&
+      isReferenceDataLoaded &&
+      isEditDataReady &&
+      !formInitialized
+    ) {
       // Get IDs from nested objects - handle both object format and direct ID format
-      const getIdFromField = (field: { id?: string; _id?: string } | string | undefined | null): string => {
+      const getIdFromField = (
+        field: { id?: string; _id?: string } | string | undefined | null
+      ): string => {
         if (!field) return "";
         if (typeof field === "string") return field;
         return field.id || field._id || "";
@@ -184,40 +199,88 @@ export default function ScheduledTaskForm() {
         systemId,
         machineId,
         engineerId,
-        repetitionInterval: task.repetitionInterval
+        repetitionInterval: task.repetitionInterval,
       });
 
       // Use setTimeout to ensure components are rendered before setting values
       setTimeout(() => {
         // Set each field individually using setValue with shouldValidate: false
-        setValue("title", task.title, { shouldValidate: false, shouldDirty: false });
-        setValue("engineerId", engineerId || undefined, { shouldValidate: false, shouldDirty: false });
-        setValue("locationId", locationId, { shouldValidate: false, shouldDirty: false });
-        setValue("departmentId", departmentId, { shouldValidate: false, shouldDirty: false });
-        setValue("systemId", systemId, { shouldValidate: false, shouldDirty: false });
-        setValue("machineId", machineId, { shouldValidate: false, shouldDirty: false });
-        setValue("maintainAllComponents", task.maintainAllComponents ?? true, { shouldValidate: false, shouldDirty: false });
-        setValue("selectedComponents", task.selectedComponents || [], { shouldValidate: false, shouldDirty: false });
-        setValue("scheduledMonth", task.scheduledMonth, { shouldValidate: false, shouldDirty: false });
-        setValue("scheduledYear", task.scheduledYear, { shouldValidate: false, shouldDirty: false });
-        setValue("scheduledDay", task.scheduledDay || 1, { shouldValidate: false, shouldDirty: false });
-        setValue("description", task.description || "", { shouldValidate: false, shouldDirty: false });
-        setValue("repetitionInterval", task.repetitionInterval, { shouldValidate: false, shouldDirty: false });
-        
+        setValue("title", task.title, {
+          shouldValidate: false,
+          shouldDirty: false,
+        });
+        setValue("engineerId", engineerId || undefined, {
+          shouldValidate: false,
+          shouldDirty: false,
+        });
+        setValue("locationId", locationId, {
+          shouldValidate: false,
+          shouldDirty: false,
+        });
+        setValue("departmentId", departmentId, {
+          shouldValidate: false,
+          shouldDirty: false,
+        });
+        setValue("systemId", systemId, {
+          shouldValidate: false,
+          shouldDirty: false,
+        });
+        setValue("machineId", machineId, {
+          shouldValidate: false,
+          shouldDirty: false,
+        });
+        setValue("maintainAllComponents", task.maintainAllComponents ?? true, {
+          shouldValidate: false,
+          shouldDirty: false,
+        });
+        setValue("selectedComponents", task.selectedComponents || [], {
+          shouldValidate: false,
+          shouldDirty: false,
+        });
+        setValue("scheduledMonth", task.scheduledMonth, {
+          shouldValidate: false,
+          shouldDirty: false,
+        });
+        setValue("scheduledYear", task.scheduledYear, {
+          shouldValidate: false,
+          shouldDirty: false,
+        });
+        setValue("scheduledDay", task.scheduledDay || 1, {
+          shouldValidate: false,
+          shouldDirty: false,
+        });
+        setValue("description", task.description || "", {
+          shouldValidate: false,
+          shouldDirty: false,
+        });
+        setValue("repetitionInterval", task.repetitionInterval, {
+          shouldValidate: false,
+          shouldDirty: false,
+        });
+
         console.log("Form values set, current values:", {
           locationId: watch("locationId"),
           departmentId: watch("departmentId"),
           systemId: watch("systemId"),
         });
       }, 100);
-      
+
       setFormInitialized(true);
-      
+
       // Set the date picker value
       const day = task.scheduledDay || 1;
-      setScheduledDate(new Date(task.scheduledYear, task.scheduledMonth - 1, day));
+      setScheduledDate(
+        new Date(task.scheduledYear, task.scheduledMonth - 1, day)
+      );
     }
-  }, [task, isEditing, setValue, isReferenceDataLoaded, isEditDataReady, formInitialized]);
+  }, [
+    task,
+    isEditing,
+    setValue,
+    isReferenceDataLoaded,
+    isEditDataReady,
+    formInitialized,
+  ]);
 
   const createMutation = useMutation({
     mutationFn: scheduledTasksService.create,
@@ -242,7 +305,7 @@ export default function ScheduledTaskForm() {
       ...data,
       engineerId: data.engineerId || undefined,
     };
-    
+
     if (isEditing) {
       updateMutation.mutate(submitData);
     } else {
@@ -278,11 +341,14 @@ export default function ScheduledTaskForm() {
 
   // Use taskMachines when editing, otherwise use machines
   const availableMachines = taskMachines || machines;
-  
-  const selectedMachine = availableMachines?.find((m) => m.id === watchMachineId);
+
+  const selectedMachine = availableMachines?.find(
+    (m) => m.id === watchMachineId
+  );
 
   // Show loader while loading data for editing
-  const isLoadingEditData = isEditing && (!isReferenceDataLoaded || !isEditDataReady);
+  const isLoadingEditData =
+    isEditing && (!isReferenceDataLoaded || !isEditDataReady);
 
   // Debug logging
   if (isEditing && formInitialized) {
@@ -323,358 +389,394 @@ export default function ScheduledTaskForm() {
             <CardDescription>أدخل تفاصيل الصيانة الوقائية</CardDescription>
           </CardHeader>
           <CardContent>
-            <form key={isEditing ? task?.id : 'new'} onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <form
+              key={isEditing ? task?.id : "new"}
+              onSubmit={handleSubmit(onSubmit)}
+              className="space-y-6"
+            >
               {(createMutation.isError || updateMutation.isError) && (
                 <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
                   حدث خطأ أثناء {isEditing ? "تعديل" : "إنشاء"} الصيانة الوقائية
                 </div>
               )}
 
-            <div className="space-y-2">
-              <Label>عنوان المهمة *</Label>
-              <Input
-                placeholder="مثال: صيانة دورية - تشيلر #5"
-                {...register("title")}
-                className={errors.title ? "border-destructive" : ""}
-              />
-              {errors.title && (
-                <p className="text-xs text-destructive">
-                  {errors.title.message}
-                </p>
-              )}
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>المهندس (اختياري)</Label>
-                <Select
-                  onValueChange={(value) => setValue("engineerId", value === "__none__" ? undefined : value)}
-                  value={watch("engineerId") || "__none__"}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="اتركه فارغاً للمهام المتاحة لجميع المهندسين" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">لا يوجد (مهمة متاحة لجميع المهندسين)</SelectItem>
-                    {engineers?.map(
-                      (engineer: { id: string; name: string }) => (
-                        <SelectItem key={engineer.id} value={engineer.id}>
-                          {engineer.name}
-                        </SelectItem>
+                <Label>عنوان المهمة *</Label>
+                <Input
+                  placeholder="مثال: صيانة دورية - تشيلر #5"
+                  {...register("title")}
+                  className={errors.title ? "border-destructive" : ""}
+                />
+                {errors.title && (
+                  <p className="text-xs text-destructive">
+                    {errors.title.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>المهندس (اختياري)</Label>
+                  <Select
+                    onValueChange={(value) =>
+                      setValue(
+                        "engineerId",
+                        value === "__none__" ? undefined : value
                       )
-                    )}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  اتركه فارغاً لجعل المهمة متاحة لجميع المهندسين
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label>الموقع *</Label>
-                <Select
-                  onValueChange={(value) => setValue("locationId", value)}
-                  value={watch("locationId") || undefined}
-                >
-                  <SelectTrigger
-                    className={errors.locationId ? "border-destructive" : ""}
+                    }
+                    value={watch("engineerId") || "__none__"}
                   >
-                    <SelectValue placeholder="اختر الموقع" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {locations?.map((location) => (
-                      <SelectItem key={location.id} value={location.id}>
-                        {location.name}
+                    <SelectTrigger>
+                      <SelectValue placeholder="اتركه فارغاً للمهام المتاحة لجميع المهندسين" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">
+                        لا يوجد (مهمة متاحة لجميع المهندسين)
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.locationId && (
-                  <p className="text-xs text-destructive">
-                    {errors.locationId.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label>القسم *</Label>
-                <Select
-                  onValueChange={(value) => setValue("departmentId", value)}
-                  value={watch("departmentId") || undefined}
-                >
-                  <SelectTrigger
-                    className={errors.departmentId ? "border-destructive" : ""}
-                  >
-                    <SelectValue placeholder="اختر القسم" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departments?.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.departmentId && (
-                  <p className="text-xs text-destructive">
-                    {errors.departmentId.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label>النظام *</Label>
-                <Select
-                  onValueChange={handleSystemChange}
-                  value={watch("systemId") || undefined}
-                >
-                  <SelectTrigger
-                    className={errors.systemId ? "border-destructive" : ""}
-                  >
-                    <SelectValue placeholder="اختر النظام" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filteredSystems && filteredSystems.length > 0 ? (
-                      filteredSystems.map((system) => (
-                        <SelectItem key={system.id} value={system.id}>
-                          {system.name}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="" disabled>
-                        لا توجد أنظمة متاحة
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-                {errors.systemId && (
-                  <p className="text-xs text-destructive">
-                    {errors.systemId.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label>الآلة *</Label>
-                <Select
-                  onValueChange={handleMachineChange}
-                  value={watch("machineId")}
-                  disabled={!watchSystemId || isLoadingMachines}
-                >
-                  <SelectTrigger
-                    className={errors.machineId ? "border-destructive" : ""}
-                  >
-                    <SelectValue
-                      placeholder={
-                        isLoadingMachines
-                          ? "جاري التحميل..."
-                          : !watchSystemId
-                          ? "اختر النظام أولاً"
-                          : "اختر الآلة"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableMachines?.map((machine) => (
-                      <SelectItem key={machine.id} value={machine.id}>
-                        {machine.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.machineId && (
-                  <p className="text-xs text-destructive">
-                    {errors.machineId.message}
-                  </p>
-                )}
-              </div>
-
-            </div>
-
-            <div className="space-y-2">
-              <Label>تاريخ المهمة المجدولة *</Label>
-              <DatePicker
-                date={scheduledDate}
-                onDateChange={(date) => {
-                  setScheduledDate(date);
-                  if (date) {
-                    setValue("scheduledYear", date.getFullYear());
-                    setValue("scheduledMonth", date.getMonth() + 1);
-                    setValue("scheduledDay", date.getDate());
-                  }
-                }}
-                placeholder="اختر تاريخ المهمة"
-              />
-              {(errors.scheduledYear || errors.scheduledMonth || errors.scheduledDay) && (
-                <p className="text-xs text-destructive">
-                  {errors.scheduledYear?.message || errors.scheduledMonth?.message || errors.scheduledDay?.message}
-                </p>
-              )}
-            </div>
-
-            {watchMachineId && selectedMachine && selectedMachine.components && selectedMachine.components.length > 0 && (
-              <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
-                <div className="space-y-3">
-                  <Label className="text-base font-semibold">المكونات</Label>
-                  
-                  <div className="flex items-center space-x-3 space-x-reverse">
-                    <Checkbox
-                      id="all-components"
-                      checked={watchMaintainAllComponents !== false}
-                      onCheckedChange={(checked) => {
-                        setValue("maintainAllComponents", checked as boolean);
-                        if (checked) {
-                          setValue("selectedComponents", []);
-                        }
-                      }}
-                    />
-                    <Label
-                      htmlFor="all-components"
-                      className="cursor-pointer font-medium"
-                    >
-                      جميع المكونات ({selectedMachine.components.length})
-                    </Label>
-                  </div>
-
-                  {watchMaintainAllComponents === false && (
-                    <div className="space-y-3 pt-3 border-t">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium">
-                          المكونات المحددة ({watch("selectedComponents")?.length || 0}/{selectedMachine.components.length})
-                        </Label>
-                        <Button
-                          type="button"
-                          variant="link"
-                          size="sm"
-                          className="h-auto p-0 text-xs"
-                          onClick={() => {
-                            setValue("selectedComponents", selectedMachine.components || []);
-                          }}
-                        >
-                          تحديد الكل
-                        </Button>
-                      </div>
-                      
-                      <div className="grid gap-2 max-h-48 overflow-y-auto p-3 border rounded-md bg-background">
-                        {selectedMachine.components.map((component) => (
-                          <div
-                            key={component}
-                            className="flex items-center space-x-3 space-x-reverse"
-                          >
-                            <Checkbox
-                              id={`component-${component}`}
-                              checked={
-                                watch("selectedComponents")?.includes(
-                                  component
-                                ) || false
-                              }
-                              onCheckedChange={(checked) => {
-                                const current =
-                                  watch("selectedComponents") || [];
-                                if (checked) {
-                                  setValue("selectedComponents", [
-                                    ...current,
-                                    component,
-                                  ]);
-                                } else {
-                                  setValue(
-                                    "selectedComponents",
-                                    current.filter((c) => c !== component)
-                                  );
-                                }
-                              }}
-                            />
-                            <Label
-                              htmlFor={`component-${component}`}
-                              className="cursor-pointer font-normal"
-                            >
-                              {component}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                      
-                      {errors.selectedComponents && (
-                        <p className="text-xs text-destructive">
-                          {errors.selectedComponents.message}
-                        </p>
+                      {engineers?.map(
+                        (engineer: { id: string; name: string }) => (
+                          <SelectItem key={engineer.id} value={engineer.id}>
+                            {engineer.name}
+                          </SelectItem>
+                        )
                       )}
-                    </div>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    اتركه فارغاً لجعل المهمة متاحة لجميع المهندسين
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>الموقع *</Label>
+                  <Select
+                    onValueChange={(value) => setValue("locationId", value)}
+                    value={watch("locationId") || undefined}
+                  >
+                    <SelectTrigger
+                      className={errors.locationId ? "border-destructive" : ""}
+                    >
+                      <SelectValue placeholder="اختر الموقع" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locations?.map((location) => (
+                        <SelectItem key={location.id} value={location.id}>
+                          {location.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.locationId && (
+                    <p className="text-xs text-destructive">
+                      {errors.locationId.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>القسم *</Label>
+                  <Select
+                    onValueChange={(value) => setValue("departmentId", value)}
+                    value={watch("departmentId") || undefined}
+                  >
+                    <SelectTrigger
+                      className={
+                        errors.departmentId ? "border-destructive" : ""
+                      }
+                    >
+                      <SelectValue placeholder="اختر القسم" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departments?.map((dept) => (
+                        <SelectItem key={dept.id} value={dept.id}>
+                          {dept.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.departmentId && (
+                    <p className="text-xs text-destructive">
+                      {errors.departmentId.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>النظام *</Label>
+                  <Select
+                    onValueChange={handleSystemChange}
+                    value={watch("systemId") || undefined}
+                  >
+                    <SelectTrigger
+                      className={errors.systemId ? "border-destructive" : ""}
+                    >
+                      <SelectValue placeholder="اختر النظام" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {filteredSystems && filteredSystems.length > 0 ? (
+                        filteredSystems.map((system) => (
+                          <SelectItem key={system.id} value={system.id}>
+                            {system.name}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="" disabled>
+                          لا توجد أنظمة متاحة
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {errors.systemId && (
+                    <p className="text-xs text-destructive">
+                      {errors.systemId.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>الآلة *</Label>
+                  <Select
+                    onValueChange={handleMachineChange}
+                    value={watch("machineId")}
+                    disabled={!watchSystemId || isLoadingMachines}
+                  >
+                    <SelectTrigger
+                      className={errors.machineId ? "border-destructive" : ""}
+                    >
+                      <SelectValue
+                        placeholder={
+                          isLoadingMachines
+                            ? "جاري التحميل..."
+                            : !watchSystemId
+                            ? "اختر النظام أولاً"
+                            : "اختر الآلة"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableMachines?.map((machine) => (
+                        <SelectItem key={machine.id} value={machine.id}>
+                          {machine.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.machineId && (
+                    <p className="text-xs text-destructive">
+                      {errors.machineId.message}
+                    </p>
                   )}
                 </div>
               </div>
-            )}
 
-            <div className="space-y-2">
-              <Label>الوصف</Label>
-              <Textarea
-                placeholder="وصف إضافي للصيانة الوقائية..."
-                rows={3}
-                {...register("description")}
-              />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>معدل التكرار (اختياري)</Label>
-                <Select
-                  onValueChange={(value) =>
-                    setValue("repetitionInterval", value === "__none__" ? undefined : value as RepetitionInterval)
-                  }
-                  value={watch("repetitionInterval") || "__none__"}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="اختر معدل التكرار" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">لا يوجد تكرار</SelectItem>
-                    <SelectItem value={RepetitionInterval.WEEKLY}>
-                      أسبوعي
-                    </SelectItem>
-                    <SelectItem value={RepetitionInterval.MONTHLY}>
-                      شهري
-                    </SelectItem>
-                    <SelectItem value={RepetitionInterval.QUARTERLY}>
-                      كل 3 أشهر
-                    </SelectItem>
-                    <SelectItem value={RepetitionInterval.SEMI_ANNUALLY}>
-                      كل 6 أشهر
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  سيتم إنشاء مهام جديدة تلقائياً حسب المعدل المحدد
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3 justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate(-1)}
-              >
-                إلغاء
-              </Button>
-              <Button
-                type="submit"
-                disabled={createMutation.isPending || updateMutation.isPending}
-              >
-                {createMutation.isPending || updateMutation.isPending ? (
-                  <>
-                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                    جاري الحفظ...
-                  </>
-                ) : isEditing ? (
-                  "تحديث"
-                ) : (
-                  "إنشاء"
+                <Label>تاريخ المهمة المجدولة *</Label>
+                <DatePicker
+                  date={scheduledDate}
+                  onDateChange={(date) => {
+                    setScheduledDate(date);
+                    if (date) {
+                      setValue("scheduledYear", date.getFullYear());
+                      setValue("scheduledMonth", date.getMonth() + 1);
+                      setValue("scheduledDay", date.getDate());
+                    }
+                  }}
+                  placeholder="اختر تاريخ المهمة"
+                />
+                {(errors.scheduledYear ||
+                  errors.scheduledMonth ||
+                  errors.scheduledDay) && (
+                  <p className="text-xs text-destructive">
+                    {errors.scheduledYear?.message ||
+                      errors.scheduledMonth?.message ||
+                      errors.scheduledDay?.message}
+                  </p>
                 )}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+              </div>
+
+              {watchMachineId &&
+                selectedMachine &&
+                selectedMachine.components &&
+                selectedMachine.components.length > 0 && (
+                  <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                    <div className="space-y-3">
+                      <Label className="text-base font-semibold">
+                        المكونات
+                      </Label>
+
+                      <div className="flex items-center space-x-3 space-x-reverse">
+                        <Checkbox
+                          id="all-components"
+                          checked={watchMaintainAllComponents !== false}
+                          onCheckedChange={(checked) => {
+                            setValue(
+                              "maintainAllComponents",
+                              checked as boolean
+                            );
+                            if (checked) {
+                              setValue("selectedComponents", []);
+                            }
+                          }}
+                        />
+                        <Label
+                          htmlFor="all-components"
+                          className="cursor-pointer font-medium"
+                        >
+                          جميع المكونات ({selectedMachine.components.length})
+                        </Label>
+                      </div>
+
+                      {watchMaintainAllComponents === false && (
+                        <div className="space-y-3 pt-3 border-t">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm font-medium">
+                              المكونات المحددة (
+                              {watch("selectedComponents")?.length || 0}/
+                              {selectedMachine.components.length})
+                            </Label>
+                            <Button
+                              type="button"
+                              variant="link"
+                              size="sm"
+                              className="h-auto p-0 text-xs"
+                              onClick={() => {
+                                setValue(
+                                  "selectedComponents",
+                                  selectedMachine.components || []
+                                );
+                              }}
+                            >
+                              تحديد الكل
+                            </Button>
+                          </div>
+
+                          <div className="grid gap-2 max-h-48 overflow-y-auto p-3 border rounded-md bg-background">
+                            {selectedMachine.components.map((component) => (
+                              <div
+                                key={component}
+                                className="flex items-center space-x-3 space-x-reverse"
+                              >
+                                <Checkbox
+                                  id={`component-${component}`}
+                                  checked={
+                                    watch("selectedComponents")?.includes(
+                                      component
+                                    ) || false
+                                  }
+                                  onCheckedChange={(checked) => {
+                                    const current =
+                                      watch("selectedComponents") || [];
+                                    if (checked) {
+                                      setValue("selectedComponents", [
+                                        ...current,
+                                        component,
+                                      ]);
+                                    } else {
+                                      setValue(
+                                        "selectedComponents",
+                                        current.filter((c) => c !== component)
+                                      );
+                                    }
+                                  }}
+                                />
+                                <Label
+                                  htmlFor={`component-${component}`}
+                                  className="cursor-pointer font-normal"
+                                >
+                                  {component}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+
+                          {errors.selectedComponents && (
+                            <p className="text-xs text-destructive">
+                              {errors.selectedComponents.message}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+              <div className="space-y-2">
+                <Label>الوصف</Label>
+                <Textarea
+                  placeholder="وصف إضافي للصيانة الوقائية..."
+                  rows={3}
+                  {...register("description")}
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>معدل التكرار (اختياري)</Label>
+                  <Select
+                    onValueChange={(value) =>
+                      setValue(
+                        "repetitionInterval",
+                        value === "__none__"
+                          ? undefined
+                          : (value as RepetitionInterval)
+                      )
+                    }
+                    value={watch("repetitionInterval") || "__none__"}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر معدل التكرار" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">لا يوجد تكرار</SelectItem>
+                      <SelectItem value={RepetitionInterval.WEEKLY}>
+                        أسبوعي
+                      </SelectItem>
+                      <SelectItem value={RepetitionInterval.MONTHLY}>
+                        شهري
+                      </SelectItem>
+                      <SelectItem value={RepetitionInterval.QUARTERLY}>
+                        كل 3 أشهر
+                      </SelectItem>
+                      <SelectItem value={RepetitionInterval.SEMI_ANNUALLY}>
+                        كل 6 أشهر
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    سيتم إنشاء مهام جديدة تلقائياً حسب المعدل المحدد
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => navigate(-1)}
+                >
+                  إلغاء
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={
+                    createMutation.isPending || updateMutation.isPending
+                  }
+                >
+                  {createMutation.isPending || updateMutation.isPending ? (
+                    <>
+                      <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                      جاري الحفظ...
+                    </>
+                  ) : isEditing ? (
+                    "تحديث"
+                  ) : (
+                    "إنشاء"
+                  )}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

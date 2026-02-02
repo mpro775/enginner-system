@@ -7,7 +7,7 @@ interface User {
   name: string;
   email: string;
   role: Role;
-  departmentId?: { id: string; name?: string };
+  departmentIds?: { id: string; name?: string }[];
 }
 
 interface AuthState {

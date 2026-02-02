@@ -383,6 +383,12 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
             <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">المهندس الاستشاري</td>
             <td>${consultant ? escapeHtml(consultant.name || "-") : "لا يوجد"}</td>
           </tr>
+          ${(request.maintenanceType === "preventive" && (request as any).scheduledTaskId?.createdBy) ? `
+          <tr>
+            <td style="font-weight: bold; background-color: #f8f9fa;">الاستشاري الذي أنشأ المهمة الوقائية</td>
+            <td>${escapeHtml((request as any).scheduledTaskId.createdBy?.name || "-")}</td>
+          </tr>
+          ` : ""}
           <tr>
             <td style="font-weight: bold; background-color: #f8f9fa;">ملاحظة الاستشاري</td>
             <td style="${MULTI_LINE_STYLE}">${request.consultantNotes ? escapeHtml(request.consultantNotes) : "لا يوجد"}</td>
@@ -1021,6 +1027,10 @@ export class ReportsService {
       .populate("departmentId", "name")
       .populate("systemId", "name")
       .populate("machineId", "name components description")
+      .populate({
+        path: "scheduledTaskId",
+        populate: { path: "createdBy", select: "name email" },
+      })
       .exec();
 
     if (!request) {

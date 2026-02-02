@@ -1,4 +1,10 @@
-import { IsNotEmpty, IsString, IsOptional, IsMongoId } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsArray,
+  IsMongoId,
+} from 'class-validator';
 
 export class CreateSystemDto {
   @IsString()
@@ -10,8 +16,9 @@ export class CreateSystemDto {
   description?: string;
 
   @IsOptional()
-  @IsMongoId({ message: 'Invalid department ID' })
-  departmentId?: string;
+  @IsArray()
+  @IsMongoId({ each: true, message: 'Invalid department ID' })
+  departmentIds?: string[];
 }
 
 

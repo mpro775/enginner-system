@@ -63,7 +63,7 @@ export interface User {
   name: string;
   email: string;
   role: Role;
-  departmentId?: Department;
+  departmentIds?: Department[];
   isActive: boolean;
   lastLoginAt?: string;
   deletedAt?: string;
@@ -97,7 +97,7 @@ export interface System {
   isActive: boolean;
   deletedAt?: string;
   deletedBy?: User;
-  departmentId?: Department;
+  departmentIds?: Department[];
 }
 
 export interface Machine {
@@ -180,7 +180,7 @@ export interface AuthResponse {
     name: string;
     email: string;
     role: Role;
-    departmentId?: { id: string; name?: string };
+    departmentIds?: { id: string; name?: string }[];
   };
 }
 
@@ -294,7 +294,7 @@ export interface CreateUserForm {
   email: string;
   password: string;
   role: Role;
-  departmentId?: string;
+  departmentIds?: string[];
 }
 
 // Notification types
