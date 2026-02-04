@@ -565,16 +565,28 @@ export class MaintenanceRequestsService {
 
     // Consultants can only see requests from their departments
     if (user.role === Role.CONSULTANT) {
-      const consultant = await this.userModel
+      const consultant = (await this.userModel
         .findById(user.userId)
-        .select("departmentIds");
-      const deptIds = consultant?.departmentIds ?? [];
+        .select("departmentIds +departmentId")
+        .lean()) as { departmentIds?: unknown[]; departmentId?: unknown } | null;
+      // Support both departmentIds (array) and legacy departmentId (single)
+      const deptIds = Array.isArray((consultant as any)?.departmentIds)
+        ? (consultant as any).departmentIds
+        : (consultant as any)?.departmentId
+          ? [(consultant as any).departmentId]
+          : [];
       if (deptIds.length > 0) {
-        const validIds = deptIds
-          .map((id) => (Types.ObjectId.isValid(String(id)) ? new Types.ObjectId(String(id)) : null))
-          .filter(Boolean);
-        if (validIds.length > 0) {
-          filter.departmentId = { $in: validIds } as any;
+        const inValues: (Types.ObjectId | string)[] = [];
+        for (const id of deptIds) {
+          if (!id) continue;
+          const str = String(id);
+          if (Types.ObjectId.isValid(str)) {
+            inValues.push(str);
+            inValues.push(new Types.ObjectId(str));
+          }
+        }
+        if (inValues.length > 0) {
+          filter.departmentId = { $in: inValues } as any;
         }
       }
     }

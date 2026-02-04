@@ -31,6 +31,10 @@ export class User {
   @Prop({ type: [Types.ObjectId], ref: 'Department', default: [] })
   departmentIds?: Types.ObjectId[];
 
+  /** @deprecated Use departmentIds. Kept for backward compatibility with migrated data. */
+  @Prop({ type: Types.ObjectId, ref: 'Department', select: false })
+  departmentId?: Types.ObjectId;
+
   @Prop({ default: true })
   isActive: boolean;
 

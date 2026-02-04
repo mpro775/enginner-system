@@ -569,16 +569,27 @@ export class StatisticsService {
 
     // Consultants can only see statistics from their departments
     if (userRole === Role.CONSULTANT && userId) {
-      const consultant = await this.userModel
+      const consultant = (await this.userModel
         .findById(userId)
-        .select("departmentIds");
-      const deptIds = consultant?.departmentIds ?? [];
+        .select("departmentIds +departmentId")
+        .lean()) as { departmentIds?: unknown[]; departmentId?: unknown } | null;
+      const deptIds = Array.isArray(consultant?.departmentIds)
+        ? consultant.departmentIds
+        : consultant?.departmentId
+          ? [consultant.departmentId]
+          : [];
       if (deptIds.length > 0) {
-        const validIds = deptIds
-          .map((id) => (Types.ObjectId.isValid(String(id)) ? new Types.ObjectId(String(id)) : null))
-          .filter(Boolean);
-        if (validIds.length > 0) {
-          matchStage.departmentId = { $in: validIds };
+        const inValues: (Types.ObjectId | string)[] = [];
+        for (const id of deptIds) {
+          if (!id) continue;
+          const str = String(id);
+          if (Types.ObjectId.isValid(str)) {
+            inValues.push(str);
+            inValues.push(new Types.ObjectId(str));
+          }
+        }
+        if (inValues.length > 0) {
+          matchStage.departmentId = { $in: inValues };
         }
       }
     }

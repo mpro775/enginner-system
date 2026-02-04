@@ -224,7 +224,7 @@ async function seed() {
       email: "consultant1@maintenance.com",
       password: hashedPassword,
       role: Role.CONSULTANT,
-      departmentId: departments[0]._id, // ميكانيك
+      departmentIds: [departments[0]._id], // ميكانيك
       isActive: true,
     },
     {
@@ -232,7 +232,7 @@ async function seed() {
       email: "consultant2@maintenance.com",
       password: hashedPassword,
       role: Role.CONSULTANT,
-      departmentId: departments[1]._id, // كهرباء
+      departmentIds: [departments[1]._id], // كهرباء
       isActive: true,
     },
     // Engineers - Mechanical
@@ -241,7 +241,7 @@ async function seed() {
       email: "engineer1@maintenance.com",
       password: hashedPassword,
       role: Role.ENGINEER,
-      departmentId: departments[0]._id, // ميكانيك
+      departmentIds: [departments[0]._id], // ميكانيك
       isActive: true,
     },
     {
@@ -249,7 +249,7 @@ async function seed() {
       email: "engineer2@maintenance.com",
       password: hashedPassword,
       role: Role.ENGINEER,
-      departmentId: departments[0]._id, // ميكانيك
+      departmentIds: [departments[0]._id], // ميكانيك
       isActive: true,
     },
     // Engineers - Electrical
@@ -258,7 +258,7 @@ async function seed() {
       email: "engineer3@maintenance.com",
       password: hashedPassword,
       role: Role.ENGINEER,
-      departmentId: departments[1]._id, // كهرباء
+      departmentIds: [departments[1]._id], // كهرباء
       isActive: true,
     },
     {
@@ -266,7 +266,7 @@ async function seed() {
       email: "engineer4@maintenance.com",
       password: hashedPassword,
       role: Role.ENGINEER,
-      departmentId: departments[1]._id, // كهرباء
+      departmentIds: [departments[1]._id], // كهرباء
       isActive: true,
     },
     // Maintenance Safety Monitor
