@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Plus,
   Filter,
@@ -63,8 +63,30 @@ import {
   MaintenanceRequest,
 } from "@/types";
 
+const defaultFilters = {
+  page: 1,
+  limit: 10,
+  status: "",
+  maintenanceType: "",
+  locationId: "",
+  departmentId: "",
+};
+
+function parseFiltersFromSearchParams(searchParams: URLSearchParams) {
+  const page = searchParams.get("page");
+  return {
+    ...defaultFilters,
+    page: page ? Math.max(1, parseInt(page, 10) || 1) : 1,
+    status: searchParams.get("status") ?? "",
+    maintenanceType: searchParams.get("maintenanceType") ?? "",
+    locationId: searchParams.get("locationId") ?? "",
+    departmentId: searchParams.get("departmentId") ?? "",
+  };
+}
+
 export default function RequestsList() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const { toast } = useToast();
@@ -72,17 +94,49 @@ export default function RequestsList() {
   const isAdmin = user?.role === Role.ADMIN;
 
   const [now, setNow] = useState<Date>(new Date());
-  const [softDeleteDialog, setSoftDeleteDialog] = useState<MaintenanceRequest | null>(null);
-  const [hardDeleteDialog, setHardDeleteDialog] = useState<MaintenanceRequest | null>(null);
+  const [softDeleteDialog, setSoftDeleteDialog] =
+    useState<MaintenanceRequest | null>(null);
+  const [hardDeleteDialog, setHardDeleteDialog] =
+    useState<MaintenanceRequest | null>(null);
 
-  const [filters, setFilters] = useState({
-    page: 1,
-    limit: 10,
-    status: "",
-    maintenanceType: "",
-    locationId: "",
-    departmentId: "",
-  });
+  const filtersFromUrl = useMemo(
+    () => parseFiltersFromSearchParams(searchParams),
+    [searchParams]
+  );
+
+  const [filters, setFiltersState] = useState(() =>
+    parseFiltersFromSearchParams(new URLSearchParams(window.location.search))
+  );
+
+  const setFilters = (
+    next:
+      | typeof defaultFilters
+      | ((prev: typeof defaultFilters) => typeof defaultFilters)
+  ) => {
+    setFiltersState((prev) => {
+      const nextFilters = typeof next === "function" ? next(prev) : next;
+      const params = new URLSearchParams(searchParams);
+      if (nextFilters.page !== 1) params.set("page", String(nextFilters.page));
+      else params.delete("page");
+      if (nextFilters.status) params.set("status", nextFilters.status);
+      else params.delete("status");
+      if (nextFilters.maintenanceType)
+        params.set("maintenanceType", nextFilters.maintenanceType);
+      else params.delete("maintenanceType");
+      if (nextFilters.locationId)
+        params.set("locationId", nextFilters.locationId);
+      else params.delete("locationId");
+      if (nextFilters.departmentId)
+        params.set("departmentId", nextFilters.departmentId);
+      else params.delete("departmentId");
+      setSearchParams(params, { replace: true });
+      return nextFilters;
+    });
+  };
+
+  useEffect(() => {
+    setFiltersState(filtersFromUrl);
+  }, [filtersFromUrl]);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["requests", filters],
@@ -549,7 +603,9 @@ export default function RequestsList() {
                                 className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate(`/app/requests/${request.id}?edit=true`);
+                                  navigate(
+                                    `/app/requests/${request.id}?edit=true`
+                                  );
                                 }}
                               >
                                 <Edit className="h-4 w-4 ml-1" />
@@ -657,7 +713,10 @@ export default function RequestsList() {
       )}
 
       {/* Soft Delete Dialog */}
-      <Dialog open={!!softDeleteDialog} onOpenChange={() => setSoftDeleteDialog(null)}>
+      <Dialog
+        open={!!softDeleteDialog}
+        onOpenChange={() => setSoftDeleteDialog(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -665,7 +724,8 @@ export default function RequestsList() {
               تأكيد النقل إلى سلة المهملات
             </DialogTitle>
             <DialogDescription>
-              هل أنت متأكد من نقل طلب الصيانة "{softDeleteDialog?.requestCode}" إلى سلة المهملات؟ يمكنك استعادته لاحقاً.
+              هل أنت متأكد من نقل طلب الصيانة "{softDeleteDialog?.requestCode}"
+              إلى سلة المهملات؟ يمكنك استعادته لاحقاً.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -691,7 +751,10 @@ export default function RequestsList() {
       </Dialog>
 
       {/* Hard Delete Dialog */}
-      <Dialog open={!!hardDeleteDialog} onOpenChange={() => setHardDeleteDialog(null)}>
+      <Dialog
+        open={!!hardDeleteDialog}
+        onOpenChange={() => setHardDeleteDialog(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
@@ -699,8 +762,8 @@ export default function RequestsList() {
               تأكيد الحذف النهائي
             </DialogTitle>
             <DialogDescription>
-              هل أنت متأكد من الحذف النهائي لطلب الصيانة "{hardDeleteDialog?.requestCode}"؟ هذا الإجراء لا يمكن
-              التراجع عنه!
+              هل أنت متأكد من الحذف النهائي لطلب الصيانة "
+              {hardDeleteDialog?.requestCode}"؟ هذا الإجراء لا يمكن التراجع عنه!
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
