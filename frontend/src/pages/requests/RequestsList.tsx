@@ -10,8 +10,6 @@ import {
   Building2,
   User,
   FileText,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Edit,
   Trash2,
@@ -47,6 +45,7 @@ import {
   StatusBadge,
   MaintenanceTypeBadge,
 } from "@/components/shared/StatusBadge";
+import { Pagination } from "@/components/shared/Pagination";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
 import { requestsService } from "@/services/requests";
 import { useToast } from "@/hooks/use-toast";
@@ -206,6 +205,11 @@ export default function RequestsList() {
     const interval = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const returnState = {
+    fromPage: filters.page,
+    fromFilters: filters,
+  };
 
   const getRequestDuration = (request: MaintenanceRequest) => {
     const isClosed =
@@ -401,7 +405,9 @@ export default function RequestsList() {
             <Card
               key={request.id}
               className="dark:border-border/50 hover:shadow-md dark:hover:shadow-primary/5 transition-all duration-200 cursor-pointer active:scale-[0.99]"
-              onClick={() => navigate(`/app/requests/${request.id}`)}
+              onClick={() =>
+                navigate(`/app/requests/${request.id}`, { state: returnState })
+              }
             >
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-3 mb-3">
@@ -452,7 +458,9 @@ export default function RequestsList() {
                     className="flex-1 justify-center text-primary hover:text-primary hover:bg-primary/10"
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/app/requests/${request.id}`);
+                      navigate(`/app/requests/${request.id}`, {
+                        state: returnState,
+                      });
                     }}
                   >
                     <Eye className="h-4 w-4 ml-2" />
@@ -467,7 +475,9 @@ export default function RequestsList() {
                         className="flex-1 justify-center text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/app/requests/${request.id}?edit=true`);
+                          navigate(`/app/requests/${request.id}?edit=true`, {
+                            state: returnState,
+                          });
                         }}
                       >
                         <Edit className="h-4 w-4 ml-2" />
@@ -552,7 +562,11 @@ export default function RequestsList() {
                     <tr
                       key={request.id}
                       className="hover:bg-muted/30 dark:hover:bg-muted/10 transition-colors cursor-pointer"
-                      onClick={() => navigate(`/app/requests/${request.id}`)}
+                      onClick={() =>
+                        navigate(`/app/requests/${request.id}`, {
+                          state: returnState,
+                        })
+                      }
                     >
                       <td className="font-medium text-foreground">
                         {request.requestCode}
@@ -588,7 +602,9 @@ export default function RequestsList() {
                             className="text-primary hover:text-primary hover:bg-primary/10"
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigate(`/app/requests/${request.id}`);
+                              navigate(`/app/requests/${request.id}`, {
+                                state: returnState,
+                              });
                             }}
                           >
                             <Eye className="h-4 w-4 ml-1" />
@@ -604,7 +620,8 @@ export default function RequestsList() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   navigate(
-                                    `/app/requests/${request.id}?edit=true`
+                                    `/app/requests/${request.id}?edit=true`,
+                                    { state: returnState }
                                   );
                                 }}
                               >
@@ -662,52 +679,18 @@ export default function RequestsList() {
       {data?.meta && (
         <Card className="dark:border-border/50">
           <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-              <p className="text-xs sm:text-sm text-muted-foreground text-center sm:text-right order-2 sm:order-1">
-                عرض {(filters.page - 1) * filters.limit + 1} إلى{" "}
-                {Math.min(filters.page * filters.limit, data.meta.total)} من{" "}
-                <span className="font-semibold text-foreground">
-                  {data.meta.total}
-                </span>{" "}
-                طلب
-              </p>
-              <div className="flex items-center gap-2 order-1 sm:order-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!data.meta.hasPrevPage}
-                  onClick={() =>
-                    setFilters({ ...filters, page: filters.page - 1 })
-                  }
-                  className="flex items-center gap-1"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                  <span className="hidden sm:inline">السابق</span>
-                </Button>
-                <div className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-muted/50 dark:bg-muted/20">
-                  <span className="text-sm font-medium text-foreground">
-                    {filters.page}
-                  </span>
-                  <span className="text-muted-foreground text-xs">/</span>
-                  <span className="text-sm text-muted-foreground">
-                    {data.meta.totalPages ||
-                      Math.ceil(data.meta.total / filters.limit)}
-                  </span>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!data.meta.hasNextPage}
-                  onClick={() =>
-                    setFilters({ ...filters, page: filters.page + 1 })
-                  }
-                  className="flex items-center gap-1"
-                >
-                  <span className="hidden sm:inline">التالي</span>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            <Pagination
+              currentPage={filters.page}
+              totalPages={
+                data.meta.totalPages ||
+                Math.ceil(data.meta.total / filters.limit)
+              }
+              onPageChange={(page) => setFilters({ ...filters, page })}
+              showInfo
+              total={data.meta.total}
+              limit={filters.limit}
+              itemLabel="طلب"
+            />
           </CardContent>
         </Card>
       )}

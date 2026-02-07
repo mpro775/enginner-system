@@ -1,5 +1,10 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  useParams,
+  useNavigate,
+  useSearchParams,
+  useLocation,
+} from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -80,10 +85,37 @@ const updateRequestSchema = z.object({
 
 type UpdateRequestFormData = z.infer<typeof updateRequestSchema>;
 
+interface RequestsListState {
+  fromPage?: number;
+  fromFilters?: {
+    page: number;
+    limit: number;
+    status: string;
+    maintenanceType: string;
+    locationId: string;
+    departmentId: string;
+  };
+}
+
+function buildRequestsUrl(state: RequestsListState | null): string {
+  if (!state?.fromFilters) return "/app/requests";
+  const f = state.fromFilters;
+  const params = new URLSearchParams();
+  if (f.page > 1) params.set("page", String(f.page));
+  if (f.status) params.set("status", f.status);
+  if (f.maintenanceType) params.set("maintenanceType", f.maintenanceType);
+  if (f.locationId) params.set("locationId", f.locationId);
+  if (f.departmentId) params.set("departmentId", f.departmentId);
+  const query = params.toString();
+  return query ? `/app/requests?${query}` : "/app/requests";
+}
+
 export default function RequestDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const listState = location.state as RequestsListState | null;
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const { toast } = useToast();
@@ -321,7 +353,7 @@ export default function RequestDetails() {
         description: "تم نقل الطلب إلى سلة المهملات بنجاح",
         variant: "default",
       });
-      navigate("/app/requests");
+      navigate(buildRequestsUrl(listState));
     },
     onError: (error: any) => {
       const errorMessage =
@@ -346,7 +378,7 @@ export default function RequestDetails() {
         description: "تم حذف الطلب نهائياً",
         variant: "destructive",
       });
-      navigate("/app/requests");
+      navigate(buildRequestsUrl(listState));
     },
     onError: (error: any) => {
       const errorMessage =
@@ -623,7 +655,15 @@ export default function RequestDetails() {
       {/* Header - Responsive */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() =>
+              listState?.fromPage || listState?.fromFilters
+                ? navigate(buildRequestsUrl(listState))
+                : navigate(-1)
+            }
+          >
             <ArrowRight className="h-5 w-5" />
           </Button>
           <div className="flex-1 min-w-0">

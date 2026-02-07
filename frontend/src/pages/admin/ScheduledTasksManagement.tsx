@@ -37,6 +37,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Pagination } from "@/components/shared/Pagination";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
 import { scheduledTasksService } from "@/services/scheduled-tasks";
 import { ScheduledTask, TaskStatus, Role } from "@/types";
@@ -564,29 +565,19 @@ export default function ScheduledTasksManagement() {
 
       {/* Pagination */}
       {meta && meta.totalPages > 1 && (
-        <div className="flex flex-row flex-wrap items-center justify-center gap-2 sm:gap-3 pt-2 px-1">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setFilters({ ...filters, page: filters.page - 1 })}
-            disabled={filters.page === 1}
-            className="flex-1 min-w-[100px] sm:flex-none sm:min-w-0"
-          >
-            السابق
-          </Button>
-          <span className="text-xs sm:text-sm text-muted-foreground shrink-0 px-2">
-            صفحة {meta.page} من {meta.totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setFilters({ ...filters, page: filters.page + 1 })}
-            disabled={filters.page >= meta.totalPages}
-            className="flex-1 min-w-[100px] sm:flex-none sm:min-w-0"
-          >
-            التالي
-          </Button>
-        </div>
+        <Card className="overflow-hidden">
+          <CardContent className="p-3 sm:p-4">
+            <Pagination
+              currentPage={meta.page}
+              totalPages={meta.totalPages}
+              onPageChange={(page) => setFilters({ ...filters, page })}
+              showInfo
+              total={meta.total}
+              limit={filters.limit}
+              itemLabel="مهمة"
+            />
+          </CardContent>
+        </Card>
       )}
 
       {/* Delete Dialog */}
