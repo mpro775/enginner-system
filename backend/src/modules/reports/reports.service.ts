@@ -649,14 +649,16 @@ export class ReportsService {
     // 2. تصميم الهيدر (HTML + CSS مدمج)
     const headerTemplate = `
     <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
-        <div style="text-align: center; width: 65%; display: flex; flex-direction: column; align-items: center;">
-            <img src="${logoBase64}" style="max-width: 190px; height: auto; margin-bottom: 6px;" />
+        <div style="text-align: right; width: 30%;">
             <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
             <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">جامعة الملك سعود</p>
             <p style="margin: 0 0 2px 0; font-size: 10px; color: #0f5b7a;">نائب رئيس الجامعة للمشاريع</p>
             <p style="margin: 0; font-size: 10px; color: #0f5b7a;">الإدارة العامة للصيانة</p>
         </div>
-        <div style="text-align: left; width: 35%;">
+        <div style="text-align: center; width: 40%; display: flex; justify-content: center; align-items: center;">
+            <img src="${logoBase64}" style="max-width: 190px; height: auto;" />
+        </div>
+        <div style="text-align: left; width: 30%;">
             <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: bold; color: #0f5b7a; line-height: 1.3;">إدارة التشغيل والصيانة</p>
             <p style="margin: 0; font-size: 11px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">بكليات الجامعة - فرع المزاحمية</p>
         </div>
@@ -1027,14 +1029,16 @@ export class ReportsService {
     // 2. تصميم الهيدر (HTML + CSS مدمج)
     const headerTemplate = `
     <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
-        <div style="text-align: center; width: 65%; display: flex; flex-direction: column; align-items: center;">
-            <img src="${logoBase64}" style="max-width: 190px; height: auto; margin-bottom: 6px;" />
+        <div style="text-align: right; width: 30%;">
             <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
             <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">جامعة الملك سعود</p>
             <p style="margin: 0 0 2px 0; font-size: 10px; color: #0f5b7a;">نائب رئيس الجامعة للمشاريع</p>
             <p style="margin: 0; font-size: 10px; color: #0f5b7a;">الإدارة العامة للصيانة</p>
         </div>
-        <div style="text-align: left; width: 35%;">
+        <div style="text-align: center; width: 40%; display: flex; justify-content: center; align-items: center;">
+            <img src="${logoBase64}" style="max-width: 190px; height: auto;" />
+        </div>
+        <div style="text-align: left; width: 30%;">
             <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: bold; color: #0f5b7a; line-height: 1.3;">إدارة التشغيل والصيانة</p>
             <p style="margin: 0; font-size: 11px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">بكليات الجامعة - فرع المزاحمية</p>
         </div>
@@ -1162,14 +1166,16 @@ export class ReportsService {
     // 2. تصميم الهيدر (HTML + CSS مدمج)
     const headerTemplate = `
     <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
-        <div style="text-align: center; width: 65%; display: flex; flex-direction: column; align-items: center;">
-            <img src="${logoBase64}" style="max-width: 190px; height: auto; margin-bottom: 6px;" />
+        <div style="text-align: right; width: 30%;">
             <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
             <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">جامعة الملك سعود</p>
             <p style="margin: 0 0 2px 0; font-size: 10px; color: #0f5b7a;">نائب رئيس الجامعة للمشاريع</p>
             <p style="margin: 0; font-size: 10px; color: #0f5b7a;">الإدارة العامة للصيانة</p>
         </div>
-        <div style="text-align: left; width: 35%;">
+        <div style="text-align: center; width: 40%; display: flex; justify-content: center; align-items: center;">
+            <img src="${logoBase64}" style="max-width: 190px; height: auto;" />
+        </div>
+        <div style="text-align: left; width: 30%;">
             <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: bold; color: #0f5b7a; line-height: 1.3;">إدارة التشغيل والصيانة</p>
             <p style="margin: 0; font-size: 11px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">بكليات الجامعة - فرع المزاحمية</p>
         </div>
