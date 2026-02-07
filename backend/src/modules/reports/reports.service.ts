@@ -42,31 +42,6 @@ function convertLogoToBase64(): string {
   }
 }
 
-// Convert TNC logo to base64 for embedding in HTML
-function convertLogoToBase64TNC(): string {
-  try {
-    const logoPath = path.join(
-      __dirname,
-      "..",
-      "..",
-      "assets",
-      "image",
-      "logo-tnc.png"
-    );
-    if (!fs.existsSync(logoPath)) {
-      console.warn("TNC Logo file not found at:", logoPath);
-      return "";
-    }
-
-    const logoBuffer = fs.readFileSync(logoPath);
-    const base64 = logoBuffer.toString("base64");
-    return `data:image/png;base64,${base64}`;
-  } catch (error) {
-    console.error("Error converting TNC logo to base64:", error);
-    return "";
-  }
-}
-
 // Convert date to English numerals format (YYYY/MM/DD)
 function formatDateEnglish(date: Date): string {
   const year = date.getFullYear();
@@ -669,21 +644,21 @@ export class ReportsService {
 
     // 1. تجهيز الصور والبيانات
     const logoBase64 = convertLogoToBase64();
-    const tncLogoBase64 = convertLogoToBase64TNC();
     const reportContent = generateReportContent(data, stats);
 
     // 2. تصميم الهيدر (HTML + CSS مدمج)
     const headerTemplate = `
     <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
-        <div style="text-align: right; width: 30%;">
-            <img src="${logoBase64}" style="max-width: 190px; height: auto;" />
+        <div style="text-align: center; width: 65%; display: flex; flex-direction: column; align-items: center;">
+            <img src="${logoBase64}" style="max-width: 190px; height: auto; margin-bottom: 6px;" />
+            <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
+            <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">جامعة الملك سعود</p>
+            <p style="margin: 0 0 2px 0; font-size: 10px; color: #0f5b7a;">نائب رئيس الجامعة للمشاريع</p>
+            <p style="margin: 0; font-size: 10px; color: #0f5b7a;">الإدارة العامة للصيانة</p>
         </div>
-        <div style="text-align: center; width: 40%;">
+        <div style="text-align: left; width: 35%;">
             <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: bold; color: #0f5b7a; line-height: 1.3;">إدارة التشغيل والصيانة</p>
-            <p style="margin: 0; font-size: 14px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">مشروع تشغيل وصيانة ونظافة ومكافحة وتشجير مباني كليات وسكن أعضاء هيئة التدريس فرع المزاحمية</p>
-        </div>
-        <div style="text-align: left; width: 30%;">
-            <img src="${tncLogoBase64}" style="max-width: 190px; height: auto;" />
+            <p style="margin: 0; font-size: 11px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">بكليات الجامعة - فرع المزاحمية</p>
         </div>
     </div>`;
 
@@ -1047,21 +1022,21 @@ export class ReportsService {
 
     // 1. تجهيز الصور والبيانات
     const logoBase64 = convertLogoToBase64();
-    const tncLogoBase64 = convertLogoToBase64TNC();
     const reportContent = generateSingleRequestContent(request);
 
     // 2. تصميم الهيدر (HTML + CSS مدمج)
     const headerTemplate = `
     <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
-        <div style="text-align: right; width: 30%;">
-            <img src="${logoBase64}" style="max-width: 190px; height: auto;" />
+        <div style="text-align: center; width: 65%; display: flex; flex-direction: column; align-items: center;">
+            <img src="${logoBase64}" style="max-width: 190px; height: auto; margin-bottom: 6px;" />
+            <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
+            <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">جامعة الملك سعود</p>
+            <p style="margin: 0 0 2px 0; font-size: 10px; color: #0f5b7a;">نائب رئيس الجامعة للمشاريع</p>
+            <p style="margin: 0; font-size: 10px; color: #0f5b7a;">الإدارة العامة للصيانة</p>
         </div>
-        <div style="text-align: center; width: 40%;">
+        <div style="text-align: left; width: 35%;">
             <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: bold; color: #0f5b7a; line-height: 1.3;">إدارة التشغيل والصيانة</p>
-            <p style="margin: 0; font-size: 14px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">مشروع تشغيل وصيانة ونظافة ومكافحة وتشجير مباني كليات وسكن أعضاء هيئة التدريس فرع المزاحمية</p>
-        </div>
-        <div style="text-align: left; width: 30%;">
-            <img src="${tncLogoBase64}" style="max-width: 190px; height: auto;" />
+            <p style="margin: 0; font-size: 11px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">بكليات الجامعة - فرع المزاحمية</p>
         </div>
     </div>`;
 
@@ -1182,21 +1157,21 @@ export class ReportsService {
   async generateEmptyRequestTemplatePdfBuffer(): Promise<Buffer> {
     // 1. تجهيز الصور والبيانات
     const logoBase64 = convertLogoToBase64();
-    const tncLogoBase64 = convertLogoToBase64TNC();
     const reportContent = generateEmptyRequestTemplateContent();
 
     // 2. تصميم الهيدر (HTML + CSS مدمج)
     const headerTemplate = `
     <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
-        <div style="text-align: right; width: 30%;">
-            <img src="${logoBase64}" style="max-width: 190px; height: auto;" />
+        <div style="text-align: center; width: 65%; display: flex; flex-direction: column; align-items: center;">
+            <img src="${logoBase64}" style="max-width: 190px; height: auto; margin-bottom: 6px;" />
+            <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
+            <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">جامعة الملك سعود</p>
+            <p style="margin: 0 0 2px 0; font-size: 10px; color: #0f5b7a;">نائب رئيس الجامعة للمشاريع</p>
+            <p style="margin: 0; font-size: 10px; color: #0f5b7a;">الإدارة العامة للصيانة</p>
         </div>
-        <div style="text-align: center; width: 40%;">
+        <div style="text-align: left; width: 35%;">
             <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: bold; color: #0f5b7a; line-height: 1.3;">إدارة التشغيل والصيانة</p>
-            <p style="margin: 0; font-size: 14px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">مشروع تشغيل وصيانة ونظافة ومكافحة وتشجير مباني كليات وسكن أعضاء هيئة التدريس فرع المزاحمية</p>
-        </div>
-        <div style="text-align: left; width: 30%;">
-            <img src="${tncLogoBase64}" style="max-width: 190px; height: auto;" />
+            <p style="margin: 0; font-size: 11px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">بكليات الجامعة - فرع المزاحمية</p>
         </div>
     </div>`;
 
