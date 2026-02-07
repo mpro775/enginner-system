@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -67,9 +67,32 @@ const taskSchema = z
 
 type TaskFormData = z.infer<typeof taskSchema>;
 
+interface ScheduledTasksListState {
+  fromPage?: number;
+  fromFilters?: {
+    page: number;
+    limit: number;
+    status: string;
+  };
+}
+
+function buildScheduledTasksUrl(state: ScheduledTasksListState | null): string {
+  if (!state?.fromFilters) return "/app/admin/scheduled-tasks";
+  const f = state.fromFilters;
+  const params = new URLSearchParams();
+  if (f.page > 1) params.set("page", String(f.page));
+  if (f.status && f.status !== "all") params.set("status", f.status);
+  const query = params.toString();
+  return query
+    ? `/app/admin/scheduled-tasks?${query}`
+    : "/app/admin/scheduled-tasks";
+}
+
 export default function ScheduledTaskForm() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams<{ id: string }>();
+  const listState = location.state as ScheduledTasksListState | null;
   const queryClient = useQueryClient();
   const isEditing = !!id;
 
@@ -286,7 +309,7 @@ export default function ScheduledTaskForm() {
     mutationFn: scheduledTasksService.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["scheduled-tasks"] });
-      navigate("/app/admin/scheduled-tasks");
+      navigate(buildScheduledTasksUrl(listState));
     },
   });
 
@@ -295,7 +318,7 @@ export default function ScheduledTaskForm() {
       scheduledTasksService.update(id!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["scheduled-tasks"] });
-      navigate("/app/admin/scheduled-tasks");
+      navigate(buildScheduledTasksUrl(listState));
     },
   });
 
@@ -369,7 +392,11 @@ export default function ScheduledTaskForm() {
           variant="ghost"
           size="icon"
           className="shrink-0"
-          onClick={() => navigate(-1)}
+          onClick={() =>
+            listState?.fromPage || listState?.fromFilters
+              ? navigate(buildScheduledTasksUrl(listState))
+              : navigate(-1)
+          }
         >
           <ArrowRight className="h-5 w-5" />
         </Button>
@@ -761,7 +788,11 @@ export default function ScheduledTaskForm() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => navigate(-1)}
+                  onClick={() =>
+                    listState?.fromPage || listState?.fromFilters
+                      ? navigate(buildScheduledTasksUrl(listState))
+                      : navigate(-1)
+                  }
                   className="w-full sm:w-auto"
                 >
                   إلغاء

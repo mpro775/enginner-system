@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Plus,
   Edit,
@@ -131,11 +131,45 @@ export default function ScheduledTasksManagement() {
     }));
   };
 
-  const [filters, setFilters] = useState({
-    page: 1,
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filtersFromUrl = useMemo(() => {
+    const page = searchParams.get("page");
+    const status = searchParams.get("status");
+    return {
+      page: page ? Math.max(1, parseInt(page, 10) || 1) : 1,
+      status: status || "all",
+    };
+  }, [searchParams]);
+
+  const [filters, setFiltersState] = useState(() => ({
+    page: filtersFromUrl.page,
     limit: 10,
-    status: "all",
-  });
+    status: filtersFromUrl.status,
+  }));
+
+  const setFilters = (
+    next: typeof filters | ((prev: typeof filters) => typeof filters)
+  ) => {
+    setFiltersState((prev) => {
+      const nextFilters = typeof next === "function" ? next(prev) : next;
+      const params = new URLSearchParams(searchParams);
+      if (nextFilters.page !== 1) params.set("page", String(nextFilters.page));
+      else params.delete("page");
+      if (nextFilters.status && nextFilters.status !== "all")
+        params.set("status", nextFilters.status);
+      else params.delete("status");
+      setSearchParams(params, { replace: true });
+      return nextFilters;
+    });
+  };
+
+  useEffect(() => {
+    setFiltersState((prev) => ({
+      ...prev,
+      page: filtersFromUrl.page,
+      status: filtersFromUrl.status,
+    }));
+  }, [filtersFromUrl]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["scheduled-tasks", filters],
@@ -174,6 +208,11 @@ export default function ScheduledTasksManagement() {
     setTaskToDelete(task);
     setDeleteType(type);
     setShowDeleteDialog(true);
+  };
+
+  const returnState = {
+    fromPage: filters.page,
+    fromFilters: filters,
   };
 
   const confirmDelete = () => {
@@ -515,7 +554,9 @@ export default function ScheduledTasksManagement() {
                       size="sm"
                       className="flex-1 sm:flex-none w-full sm:w-auto"
                       onClick={() =>
-                        navigate(`/app/admin/scheduled-tasks/${task.id}/edit`)
+                        navigate(`/app/admin/scheduled-tasks/${task.id}/edit`, {
+                          state: returnState,
+                        })
                       }
                     >
                       <Edit className="h-4 w-4 ml-2 shrink-0" />
