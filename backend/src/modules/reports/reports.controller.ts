@@ -1,7 +1,17 @@
-import { Controller, Get, Query, Param, UseGuards, Res } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Res,
+  UseGuards,
+} from "@nestjs/common";
 import { Response } from "express";
 import { ReportsService } from "./reports.service";
 import { ReportFilterDto } from "./dto/report-filter.dto";
+import { BulkExportSelectedDto } from "./dto/bulk-export-selected.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -17,6 +27,14 @@ import { ForbiddenAccessException } from "../../common/exceptions";
 @Roles(Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER, Role.ENGINEER, Role.PROJECT_MANAGER)
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
+
+  @Get("config")
+  getReportsConfig() {
+    return {
+      data: this.reportsService.getReportsConfig(),
+      message: "Reports config retrieved successfully",
+    };
+  }
 
   @Get("requests/template")
   @Roles(Role.ADMIN)
@@ -149,7 +167,68 @@ export class ReportsController {
     } catch (error) {
       console.error("Report Generation Error:", error);
       if (!res.headersSent) {
-        res.status(500).json({ message: "Failed to generate report" });
+        const errorMessage =
+          error instanceof Error ? error.message : "Failed to generate report";
+        const statusCode =
+          typeof errorMessage === "string" &&
+          errorMessage.includes("لا يمكن تصدير PDF")
+            ? 413
+            : 500;
+
+        res.status(statusCode).json({ message: errorMessage });
+      }
+    }
+  }
+
+  @Post("requests/bulk-export")
+  async bulkExportSelectedRequests(
+    @Body() body: BulkExportSelectedDto,
+    @Res() res: Response,
+    @CurrentUser() user?: CurrentUserData
+  ) {
+    try {
+      await this.reportsService.streamBulkRequestsZipByIds(
+        body.requestIds,
+        res,
+        user
+      );
+    } catch (error) {
+      console.error("Bulk Selected Export Error:", error);
+      if (!res.headersSent) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Failed to export requests";
+        const statusCode =
+          typeof errorMessage === "string" &&
+          (errorMessage.includes("الحد الأقصى") ||
+            errorMessage.includes("at least one") ||
+            errorMessage.includes("No matching requests"))
+            ? 400
+            : 500;
+        res.status(statusCode).json({ message: errorMessage });
+      }
+    }
+  }
+
+  @Post("requests/bulk-export/filtered")
+  async bulkExportFilteredRequests(
+    @Body() filter: ReportFilterDto,
+    @Res() res: Response,
+    @CurrentUser() user?: CurrentUserData
+  ) {
+    try {
+      await this.reportsService.streamBulkRequestsZipByFilter(filter, res, user);
+    } catch (error) {
+      console.error("Bulk Filtered Export Error:", error);
+      if (!res.headersSent) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Failed to export requests";
+        const statusCode =
+          typeof errorMessage === "string" &&
+          (errorMessage.includes("الحد الأقصى") ||
+            errorMessage.includes("No matching requests"))
+            ? 400
+            : 500;
+        res.status(statusCode).json({ message: errorMessage });
       }
     }
   }

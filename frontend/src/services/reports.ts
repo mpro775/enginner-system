@@ -15,6 +15,7 @@ export interface ReportFilter {
 }
 
 export interface RequestReportData {
+  id: string;
   requestCode: string;
   engineerName: string;
   consultantName: string | null;
@@ -51,6 +52,12 @@ export interface SummaryReport {
   topFailingMachines: any[];
 }
 
+export interface ReportsConfig {
+  maxPdfExportRows: number;
+  bulkZipPartSize: number;
+  maxBulkExportRequests: number;
+}
+
 // Helper function to remove empty/undefined values from filter
 function cleanFilter(filter?: ReportFilter): ReportFilter | undefined {
   if (!filter) return undefined;
@@ -64,6 +71,11 @@ function cleanFilter(filter?: ReportFilter): ReportFilter | undefined {
 }
 
 export const reportsService = {
+  async getReportsConfig(): Promise<ReportsConfig> {
+    const response = await api.get<ApiResponse<ReportsConfig>>('/reports/config');
+    return response.data.data;
+  },
+
   async getRequestsReport(filter?: ReportFilter): Promise<RequestReportData[]> {
     const cleanedFilter = cleanFilter(filter);
     const response = await api.get<ApiResponse<RequestReportData[]>>(
@@ -237,5 +249,53 @@ export const reportsService = {
       console.error("Error downloading empty request template:", error);
       throw error;
     }
+  },
+
+  async downloadBulkRequestsZip(requestIds: string[]): Promise<void> {
+    const uniqueIds = Array.from(new Set((requestIds || []).filter(Boolean)));
+    if (uniqueIds.length === 0) {
+      throw new Error("يرجى تحديد طلب واحد على الأقل للتصدير");
+    }
+
+    const response = await api.post(
+      "/reports/requests/bulk-export",
+      { requestIds: uniqueIds },
+      { responseType: "blob" }
+    );
+
+    const blob = response.data;
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute(
+      "download",
+      `maintenance-requests-bundle-${new Date().toISOString().split("T")[0]}.zip`
+    );
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
+
+  async downloadFilteredRequestsZip(filter: ReportFilter): Promise<void> {
+    const cleanedFilter = cleanFilter(filter) || {};
+    const response = await api.post(
+      "/reports/requests/bulk-export/filtered",
+      cleanedFilter,
+      { responseType: "blob" }
+    );
+
+    const blob = response.data;
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute(
+      "download",
+      `maintenance-requests-bundle-${new Date().toISOString().split("T")[0]}.zip`
+    );
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
   },
 };

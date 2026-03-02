@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileSpreadsheet, FileText, FilePlus, Filter, Search, Calendar, Loader2 } from 'lucide-react';
+import { FileSpreadsheet, FileText, FilePlus, Filter, Search, Calendar, Loader2, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { StatusBadge, MaintenanceTypeBadge } from '@/components/shared/StatusBadge';
 import { PageLoader } from '@/components/shared/LoadingSpinner';
 import { reportsService } from '@/services/reports';
@@ -18,17 +19,22 @@ import { locationsService, departmentsService, systemsService } from '@/services
 import { usersService } from '@/services/users';
 import { useAuthStore } from '@/store/auth';
 import { formatDateTime } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 import { RequestStatus, MaintenanceType, Role } from '@/types';
 import type { ReportFilter } from '@/services/reports';
 
 export default function Reports() {
   const { user } = useAuthStore();
+  const { toast } = useToast();
   const isAdmin = user?.role === Role.ADMIN;
 
   const [filters, setFilters] = useState<ReportFilter>({});
   const [downloadingExcel, setDownloadingExcel] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const [downloadingSelectedZip, setDownloadingSelectedZip] = useState(false);
+  const [downloadingFilteredZip, setDownloadingFilteredZip] = useState(false);
+  const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set());
   const fromDateInputRef = useRef<HTMLInputElement | null>(null);
   const toDateInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -36,6 +42,54 @@ export default function Reports() {
     queryKey: ['reports', filters],
     queryFn: () => reportsService.getRequestsReport(filters),
   });
+  const currentResultsCount = Array.isArray(reportData) ? reportData.length : 0;
+
+  const { data: reportsConfig } = useQuery({
+    queryKey: ['reports-config'],
+    queryFn: () => reportsService.getReportsConfig(),
+  });
+  const maxPdfExportRows = reportsConfig?.maxPdfExportRows || 5000;
+  const bulkZipPartSize = reportsConfig?.bulkZipPartSize || 100;
+  const maxBulkExportRequests = reportsConfig?.maxBulkExportRequests || 2000;
+
+  const rows = useMemo(() => (Array.isArray(reportData) ? reportData : []), [reportData]);
+  const selectableRowIds = useMemo(
+    () => rows.map((row) => row.id).filter((id): id is string => !!id),
+    [rows]
+  );
+  const selectedCount = selectedRequestIds.size;
+  const allRowsSelected =
+    selectableRowIds.length > 0 && selectableRowIds.every((id) => selectedRequestIds.has(id));
+  const hasAnySelection = selectedCount > 0;
+  const selectedZipPartsCount = selectedCount > 0 ? Math.ceil(selectedCount / bulkZipPartSize) : 0;
+  const filteredZipPartsCount =
+    currentResultsCount > 0 ? Math.ceil(currentResultsCount / bulkZipPartSize) : 0;
+
+  const getZipPartsPreview = (count: number) => {
+    if (count <= 0) return '';
+    const parts: number[] = [];
+    let remaining = count;
+
+    while (remaining > 0) {
+      const currentPart = Math.min(remaining, bulkZipPartSize);
+      parts.push(currentPart);
+      remaining -= currentPart;
+    }
+
+    return parts.join('/');
+  };
+
+  const getArabicPartsPhrase = (count: number) => {
+    if (count <= 0) return '0 جزء';
+    if (count === 1) return 'جزء واحد';
+    if (count === 2) return 'جزآن';
+    if (count >= 3 && count <= 10) return `${count} أجزاء`;
+    return `${count} جزءًا`;
+  };
+
+  useEffect(() => {
+    setSelectedRequestIds(new Set());
+  }, [rows]);
 
   const { data: summaryReport, isLoading: loadingSummary } = useQuery({
     queryKey: ['summary-report', filters],
@@ -70,11 +124,27 @@ export default function Reports() {
 
   const handleDownload = async (format: 'excel' | 'pdf') => {
     // منع الضغط المتكرر
-    if (downloadingExcel || downloadingPdf) {
+    if (downloadingExcel || downloadingPdf || downloadingSelectedZip || downloadingFilteredZip) {
       return;
     }
 
     try {
+      if (format === 'pdf' && currentResultsCount > maxPdfExportRows) {
+        toast({
+          title: 'تعذر تصدير PDF',
+          description: `الحد الأقصى الحالي ${maxPdfExportRows} طلب. يرجى تضييق الفلاتر أو استخدام Excel.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (format === 'pdf' && currentResultsCount > Math.floor(maxPdfExportRows * 0.7)) {
+        toast({
+          title: 'تنبيه قبل التصدير',
+          description: `تصدير ${currentResultsCount} طلب إلى PDF قد يستغرق وقتًا أطول.`,
+        });
+      }
+
       // تعيين حالة التحميل
       if (format === 'excel') {
         setDownloadingExcel(true);
@@ -83,9 +153,18 @@ export default function Reports() {
       }
 
       await reportsService.downloadRequestsReport(filters, format);
+      toast({
+        title: 'تم بدء التنزيل',
+        description: format === 'pdf' ? 'جاري تنزيل تقرير PDF.' : 'جاري تنزيل تقرير Excel.',
+      });
     } catch (error) {
       console.error('Error downloading report:', error);
-      alert('حدث خطأ أثناء تحميل التقرير');
+      const message = error instanceof Error ? error.message : 'حدث خطأ أثناء تحميل التقرير';
+      toast({
+        title: 'فشل تحميل التقرير',
+        description: message,
+        variant: 'destructive',
+      });
     } finally {
       // إعادة تعيين حالة التحميل
       if (format === 'excel') {
@@ -98,16 +177,25 @@ export default function Reports() {
 
   const handleDownloadTemplate = async () => {
     // منع الضغط المتكرر
-    if (downloadingTemplate || downloadingExcel || downloadingPdf) {
+    if (downloadingTemplate || downloadingExcel || downloadingPdf || downloadingSelectedZip || downloadingFilteredZip) {
       return;
     }
 
     try {
       setDownloadingTemplate(true);
       await reportsService.downloadEmptyRequestTemplate();
+      toast({
+        title: 'تم بدء التنزيل',
+        description: 'جاري تنزيل القالب الفارغ.',
+      });
     } catch (error) {
       console.error('Error downloading template:', error);
-      alert('حدث خطأ أثناء تحميل القالب');
+      const message = error instanceof Error ? error.message : 'حدث خطأ أثناء تحميل القالب';
+      toast({
+        title: 'فشل تحميل القالب',
+        description: message,
+        variant: 'destructive',
+      });
     } finally {
       setDownloadingTemplate(false);
     }
@@ -123,6 +211,85 @@ export default function Reports() {
       }
       return newFilters;
     });
+  };
+
+  const handleToggleSelectAll = (checked: boolean | 'indeterminate') => {
+    const shouldSelect = checked === true;
+    if (shouldSelect) {
+      setSelectedRequestIds(new Set(selectableRowIds));
+      return;
+    }
+    setSelectedRequestIds(new Set());
+  };
+
+  const handleToggleRowSelection = (requestId: string, checked: boolean | 'indeterminate') => {
+    setSelectedRequestIds((prev) => {
+      const next = new Set(prev);
+      if (checked === true) {
+        next.add(requestId);
+      } else {
+        next.delete(requestId);
+      }
+      return next;
+    });
+  };
+
+  const handleDownloadSelectedZip = async () => {
+    if (!hasAnySelection) {
+      toast({
+        title: 'لا يوجد تحديد',
+        description: 'يرجى تحديد طلب واحد على الأقل قبل التصدير.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setDownloadingSelectedZip(true);
+      await reportsService.downloadBulkRequestsZip(Array.from(selectedRequestIds));
+      toast({
+        title: 'تم بدء التنزيل',
+        description: `جاري تنزيل حزمة ZIP للطلبات المحددة (${selectedCount}).`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'حدث خطأ أثناء تصدير الطلبات المحددة';
+      toast({
+        title: 'فشل تصدير ZIP',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setDownloadingSelectedZip(false);
+    }
+  };
+
+  const handleDownloadFilteredZip = async () => {
+    if (currentResultsCount === 0) {
+      toast({
+        title: 'لا توجد نتائج',
+        description: 'لا توجد طلبات ضمن الفلاتر الحالية للتصدير.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setDownloadingFilteredZip(true);
+      await reportsService.downloadFilteredRequestsZip(filters);
+      toast({
+        title: 'تم بدء التنزيل',
+        description: `سيتم تقسيم الطلبات تلقائيًا إلى أجزاء ${bulkZipPartSize} داخل ZIP رئيسي واحد.`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'حدث خطأ أثناء تصدير جميع نتائج الفلتر';
+      toast({
+        title: 'فشل تصدير ZIP',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setDownloadingFilteredZip(false);
+    }
   };
 
   if (isLoading || loadingSummary) {
@@ -339,7 +506,7 @@ export default function Reports() {
             <Button 
               variant="outline" 
               onClick={() => handleDownload('excel')}
-              disabled={downloadingExcel || downloadingPdf || downloadingTemplate}
+              disabled={downloadingExcel || downloadingPdf || downloadingTemplate || downloadingSelectedZip || downloadingFilteredZip}
             >
               {downloadingExcel ? (
                 <>
@@ -356,7 +523,7 @@ export default function Reports() {
             <Button 
               variant="outline" 
               onClick={() => handleDownload('pdf')}
-              disabled={downloadingExcel || downloadingPdf || downloadingTemplate}
+              disabled={downloadingExcel || downloadingPdf || downloadingTemplate || downloadingSelectedZip || downloadingFilteredZip}
             >
               {downloadingPdf ? (
                 <>
@@ -374,7 +541,7 @@ export default function Reports() {
               <Button 
                 variant="outline" 
                 onClick={handleDownloadTemplate}
-                disabled={downloadingExcel || downloadingPdf || downloadingTemplate}
+                disabled={downloadingExcel || downloadingPdf || downloadingTemplate || downloadingSelectedZip || downloadingFilteredZip}
               >
                 {downloadingTemplate ? (
                   <>
@@ -389,6 +556,68 @@ export default function Reports() {
                 )}
               </Button>
             )}
+            <Button
+              variant="outline"
+              onClick={handleDownloadSelectedZip}
+              disabled={
+                downloadingSelectedZip ||
+                downloadingFilteredZip ||
+                downloadingExcel ||
+                downloadingPdf ||
+                downloadingTemplate ||
+                !hasAnySelection
+              }
+            >
+              {downloadingSelectedZip ? (
+                <>
+                  <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                  جاري التحضير...
+                </>
+              ) : (
+                <>
+                  <Archive className="ml-2 h-4 w-4" />
+                  تحميل المحدد ZIP
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleDownloadFilteredZip}
+              disabled={
+                downloadingSelectedZip ||
+                downloadingFilteredZip ||
+                downloadingExcel ||
+                downloadingPdf ||
+                downloadingTemplate ||
+                currentResultsCount === 0
+              }
+            >
+              {downloadingFilteredZip ? (
+                <>
+                  <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                  جاري التحضير...
+                </>
+              ) : (
+                <>
+                  <Archive className="ml-2 h-4 w-4" />
+                  تحميل كل نتائج الفلتر ZIP
+                </>
+              )}
+            </Button>
+          </div>
+          <div className="mt-3 text-sm text-muted-foreground">
+            عدد النتائج الحالية حسب الفلاتر: <span className="font-semibold text-foreground">{currentResultsCount}</span>
+            {` - الحد الأقصى لتصدير PDF: ${maxPdfExportRows}.`}
+            {currentResultsCount > maxPdfExportRows ? ' العدد الحالي يتجاوز الحد المسموح لتصدير PDF؛ استخدم Excel أو ضيق الفلاتر.' : ''}
+            {` - المحدد حاليًا: ${selectedCount}.`}
+            {` - ZIP يُقسَّم تلقائيًا كل ${bulkZipPartSize} طلب داخل ملف رئيسي واحد.`}
+            {` - الحد الأقصى للتصدير المجمع: ${maxBulkExportRequests} طلب.`}
+            {hasAnySelection
+              ? ` - المحدد سينتج ${getArabicPartsPhrase(selectedZipPartsCount)} (${getZipPartsPreview(selectedCount)}).`
+              : ''}
+            {currentResultsCount > 0
+              ? ` - كل نتائج الفلتر ستنتج ${getArabicPartsPhrase(filteredZipPartsCount)} (${getZipPartsPreview(currentResultsCount)}).`
+              : ''}
           </div>
         </CardContent>
       </Card>
@@ -459,6 +688,13 @@ export default function Reports() {
               <table className="data-table">
                 <thead>
                   <tr>
+                    <th className="w-12">
+                      <Checkbox
+                        checked={allRowsSelected}
+                        onCheckedChange={handleToggleSelectAll}
+                        aria-label="تحديد جميع الطلبات الظاهرة"
+                      />
+                    </th>
                     <th>رمز الطلب</th>
                     <th>المهندس</th>
                     <th>الاستشاري</th>
@@ -473,8 +709,18 @@ export default function Reports() {
                   </tr>
                 </thead>
                 <tbody>
-                  {reportData.map((row, index) => (
-                    <tr key={index}>
+                  {rows.map((row, index) => (
+                    <tr key={row.id || `${row.requestCode}-${index}`}>
+                      <td>
+                        <Checkbox
+                          checked={selectedRequestIds.has(row.id)}
+                          onCheckedChange={(checked) =>
+                            handleToggleRowSelection(row.id, checked)
+                          }
+                          disabled={!row.id}
+                          aria-label={`تحديد الطلب ${row.requestCode}`}
+                        />
+                      </td>
                       <td className="font-medium">{row.requestCode}</td>
                       <td>{row.engineerName}</td>
                       <td>{row.consultantName || '-'}</td>
@@ -506,4 +752,3 @@ export default function Reports() {
     </div>
   );
 }
-

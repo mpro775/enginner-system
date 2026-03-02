@@ -52,6 +52,9 @@ CACHE_MAX=100
 
 THROTTLE_TTL=60
 THROTTLE_LIMIT=100
+
+# Reports
+REPORTS_MAX_PDF_EXPORT_ROWS=5000
 ```
 
 ## Running the Application
@@ -176,7 +179,6 @@ src/
 ## License
 
 MIT
-
 
 
 

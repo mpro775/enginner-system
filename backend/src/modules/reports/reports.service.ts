@@ -1,9 +1,11 @@
 import { Injectable } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
-import { Model, FilterQuery } from "mongoose";
+import { Model, FilterQuery, Types } from "mongoose";
 import * as ExcelJS from "exceljs";
 import * as PDFDocument from "pdfkit";
 import * as puppeteer from "puppeteer";
+import type { Browser } from "puppeteer";
+import * as archiver from "archiver";
 import { Response } from "express";
 import * as path from "path";
 import * as fs from "fs";
@@ -15,7 +17,8 @@ import { User, UserDocument } from "../users/schemas/user.schema";
 import { ReportFilterDto } from "./dto/report-filter.dto";
 import { StatisticsService } from "../statistics/statistics.service";
 import { EntityNotFoundException } from "../../common/exceptions/business.exception";
-import { RequestStatus, MaintenanceType } from "../../common/enums";
+import { RequestStatus, MaintenanceType, Role } from "../../common/enums";
+import { CurrentUserData } from "../../common/decorators/current-user.decorator";
 
 // Convert logo to base64 for embedding in HTML
 function convertLogoToBase64(): string {
@@ -165,9 +168,8 @@ function generateReportContent(data: RequestReportData[], stats: any): string {
     preventive: "وقائية",
   };
 
-  // Add table rows (limit to 30 rows for performance)
-  const limitedData = data.slice(0, 30);
-  limitedData.forEach((row) => {
+  // Add all filtered rows
+  data.forEach((row) => {
     const statusKey = String(row.status || "")
       .toLowerCase()
       .replace(/_/g, "_");
@@ -197,10 +199,6 @@ function generateReportContent(data: RequestReportData[], stats: any): string {
         </tbody>
       </table>
   `;
-
-  if (data.length > 30) {
-    html += `<p style="text-align: center; margin-top: 10px;">... و ${data.length - 30} طلبات أخرى</p>`;
-  }
 
   html += `
     </div>
@@ -467,6 +465,7 @@ function generateEmptyRequestTemplateContent(): string {
 }
 
 export interface RequestReportData {
+  id: string;
   requestCode: string;
   engineerName: string;
   consultantName: string | null;
@@ -487,6 +486,55 @@ export interface RequestReportData {
   createdAt: Date;
 }
 
+const DEFAULT_MAX_PDF_EXPORT_ROWS = 5000;
+const DEFAULT_BULK_ZIP_PART_SIZE = 100;
+const DEFAULT_MAX_BULK_EXPORT_REQUESTS = 2000;
+
+function getMaxPdfExportRows(): number {
+  const rawValue = process.env.REPORTS_MAX_PDF_EXPORT_ROWS;
+  const parsed = Number(rawValue);
+
+  if (!rawValue || Number.isNaN(parsed) || parsed <= 0) {
+    return DEFAULT_MAX_PDF_EXPORT_ROWS;
+  }
+
+  return Math.floor(parsed);
+}
+
+function getBulkZipPartSize(): number {
+  const rawValue = process.env.REPORTS_BULK_ZIP_PART_SIZE;
+  const parsed = Number(rawValue);
+
+  if (!rawValue || Number.isNaN(parsed) || parsed <= 0) {
+    return DEFAULT_BULK_ZIP_PART_SIZE;
+  }
+
+  return Math.floor(parsed);
+}
+
+function getMaxBulkExportRequests(): number {
+  const rawValue = process.env.REPORTS_MAX_BULK_EXPORT_REQUESTS;
+  const parsed = Number(rawValue);
+
+  if (!rawValue || Number.isNaN(parsed) || parsed <= 0) {
+    return DEFAULT_MAX_BULK_EXPORT_REQUESTS;
+  }
+
+  return Math.floor(parsed);
+}
+
+function chunkArray<T>(items: T[], chunkSize: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    chunks.push(items.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+function sanitizeFilename(name: string): string {
+  return name.replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, "-");
+}
+
 @Injectable()
 export class ReportsService {
   constructor(
@@ -496,6 +544,18 @@ export class ReportsService {
     private userModel: Model<UserDocument>,
     private statisticsService: StatisticsService
   ) {}
+
+  getReportsConfig(): {
+    maxPdfExportRows: number;
+    bulkZipPartSize: number;
+    maxBulkExportRequests: number;
+  } {
+    return {
+      maxPdfExportRows: getMaxPdfExportRows(),
+      bulkZipPartSize: getBulkZipPartSize(),
+      maxBulkExportRequests: getMaxBulkExportRequests(),
+    };
+  }
 
   async getRequestsReport(
     filter: ReportFilterDto
@@ -513,6 +573,7 @@ export class ReportsService {
       .sort({ createdAt: -1 });
 
     return requests.map((req) => ({
+      id: (req as any)._id?.toString?.() || "",
       requestCode: req.requestCode,
       engineerName: (req.engineerId as any)?.name || "N/A",
       consultantName: (req.consultantId as any)?.name || null,
@@ -613,6 +674,13 @@ export class ReportsService {
 
   async generatePdfBuffer(filter: ReportFilterDto): Promise<Buffer> {
     const data = await this.getRequestsReport(filter);
+    const maxPdfExportRows = getMaxPdfExportRows();
+
+    if (data.length > maxPdfExportRows) {
+      throw new Error(
+        `لا يمكن تصدير PDF لأكثر من ${maxPdfExportRows} طلب. يرجى تضييق الفلترة أو استخدام Excel.`
+      );
+    }
 
     // Convert ReportFilterDto to StatisticsFilterDto (remove format and consultantId)
     const statsFilter = {
@@ -630,55 +698,11 @@ export class ReportsService {
       "admin"
     );
 
-    // 1. تجهيز الصور والبيانات
     const logoBase64 = convertLogoToBase64();
     const reportContent = generateReportContent(data, stats);
+    const headerTemplate = this.getPdfHeaderTemplate(logoBase64);
+    const footerTemplate = this.getPdfFooterTemplate();
 
-    // 2. تصميم الهيدر (HTML + CSS مدمج)
-    const headerTemplate = `
-    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
-        <div style="text-align: right; width: 30%;">
-            <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
-            <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">جامعة الملك سعود</p>
-            <p style="margin: 0 0 2px 0; font-size: 10px; color: #0f5b7a;">نائب رئيس الجامعة للمشاريع</p>
-            <p style="margin: 0; font-size: 10px; color: #0f5b7a;">الإدارة العامة للصيانة</p>
-        </div>
-        <div style="text-align: center; width: 40%; display: flex; justify-content: center; align-items: center;">
-            <img src="${logoBase64}" style="max-width: 190px; height: auto;" />
-        </div>
-        <div style="text-align: left; width: 30%;">
-            <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: bold; color: #0f5b7a; line-height: 1.3;">إدارة التشغيل والصيانة</p>
-            <p style="margin: 0; font-size: 11px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">بكليات الجامعة - فرع المزاحمية</p>
-        </div>
-    </div>`;
-
-    // 3. تصميم الفوتر (HTML + CSS مدمج)
-    // استخدمنا Flexbox لتوزيع العناصر الـ 4 بالتساوي
-    // استخدام خطوط النظام المتاحة في Docker
-    const footerTemplate = `
-    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 8px; padding: 0 40px; border-top: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center; direction: rtl;">
-        
-        <div style="text-align: right;">
-            <p style="margin: 1px 0;">المملكة العربية السعودية</p>
-            <p style="margin: 1px 0;">ص.ب 2454 الرياض 11451</p>
-        </div>
-
-        <div style="text-align: center;">
-            <p style="margin: 1px 0;">العنوان الوطني</p>
-            <p style="margin: 1px 0;">RGSA8707</p>
-        </div>
-
-        <div style="text-align: center;">
-             <p style="margin: 1px 0;">هاتف +966 11 4686275</p>
-        </div>
-
-        <div style="text-align: left; direction: ltr;">
-            <p style="margin: 1px 0;">www.ksu.edu.sa</p>
-            <p style="margin: 1px 0;">hm@ksu.edu.sa</p>
-        </div>
-    </div>`;
-
-    // Read HTML template (المحتوى فقط بدون هيدر وفوتر)
     const templatePath = path.join(
       __dirname,
       "templates",
@@ -690,92 +714,7 @@ export class ReportsService {
     let htmlContent = fs.readFileSync(templatePath, "utf-8");
     htmlContent = htmlContent.replace(/{{{report_content}}}/g, reportContent);
 
-    // إعدادات المتصفح المحسنة للدوكر
-    const browser = await puppeteer.launch({
-      headless: true,
-      executablePath:
-        process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
-
-      // 1. أهم نقطة: إلغاء طباعة مدخلات ومخرجات كروم في الكونسول
-      dumpio: false,
-
-      // 2. إخفاء أخطاء DBus المزعجة
-      env: {
-        ...process.env,
-        // هذه تخدع المتصفح وتخبره أن عنوان الاتصال هو "لا شيء" فيتوقف عن البحث
-        DBUS_SESSION_BUS_ADDRESS: "autolaunch:",
-      },
-
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage", // ضروري جداً في الدوكر
-        "--disable-gpu",
-        "--font-render-hinting=none", // تحسين ظهور الخطوط
-        "--disable-web-security", // للسماح بتحميل الصور المحلية
-
-        // --- إضافات لمنع أخطاء Vulkan/GL ---
-        "--disable-software-rasterizer", // يمنع محاولة الرسم البرمجي للجرافيكس
-        "--disable-gl-drawing-for-tests",
-        "--use-gl=swiftshader", // يجبره على استخدام render برمجي خفيف جداً
-        "--mute-audio", // كتم الصوت (يقلل أخطاء Audio Service)
-        "--no-first-run",
-        "--disable-extensions",
-      ],
-    });
-
-    try {
-      const page = await browser.newPage();
-
-      // ضبط المتصفح ليعرض محتوى الطباعة
-      await page.emulateMediaType("print");
-
-      // هنا نمرر فقط المحتوى (الجدول) بدون هيدر وفوتر
-      await page.setContent(htmlContent, {
-        waitUntil: ["load", "networkidle0"], // انتظر حتى تحميل كل شيء بما فيه الصور
-        timeout: 60000, // زيادة الوقت لـ 60 ثانية احتياطاً
-      });
-
-      // 4. التوليد مع الهيدر والفوتر الأصليين (Native)
-      const pdfBuffer = await page.pdf({
-        format: "A4",
-        printBackground: true,
-        displayHeaderFooter: true, // تفعيل الخاصية
-        headerTemplate: headerTemplate, // تمرير الهيدر
-        footerTemplate: footerTemplate, // تمرير الفوتر
-        margin: {
-          top: "140px", // مساحة كافية للهيدر حتى لا يغطي المحتوى
-          bottom: "80px", // مساحة كافية للفوتر
-          right: "20px",
-          left: "20px",
-        },
-      });
-
-      // Verify PDF buffer is valid
-      if (!pdfBuffer || pdfBuffer.length === 0) {
-        throw new Error("Generated PDF buffer is empty or invalid");
-      }
-
-      // Check if buffer starts with PDF header
-      const pdfHeader = String.fromCharCode(
-        pdfBuffer[0],
-        pdfBuffer[1],
-        pdfBuffer[2],
-        pdfBuffer[3]
-      );
-      if (pdfHeader !== "%PDF") {
-        console.error("Invalid PDF format, header:", pdfHeader);
-        throw new Error("Generated PDF is not in valid PDF format");
-      }
-
-      return Buffer.from(pdfBuffer);
-    } catch (e) {
-      console.error("Puppeteer Error:", e);
-      throw e;
-    } finally {
-      // ضمان إغلاق المتصفح دائماً
-      if (browser) await browser.close();
-    }
+    return this.generatePdfFromHtml(htmlContent, headerTemplate, footerTemplate);
   }
 
   async generatePdfReport(
@@ -903,11 +842,136 @@ export class ReportsService {
     };
   }
 
+  private getPdfHeaderTemplate(logoBase64: string): string {
+    return `
+    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
+        <div style="text-align: right; width: 30%;">
+            <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
+            <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">جامعة الملك سعود</p>
+            <p style="margin: 0 0 2px 0; font-size: 10px; color: #0f5b7a;">نائب رئيس الجامعة للمشاريع</p>
+            <p style="margin: 0; font-size: 10px; color: #0f5b7a;">الإدارة العامة للصيانة</p>
+        </div>
+        <div style="text-align: center; width: 40%; display: flex; justify-content: center; align-items: center;">
+            <img src="${logoBase64}" style="max-width: 190px; height: auto;" />
+        </div>
+        <div style="text-align: left; width: 30%;">
+            <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: bold; color: #0f5b7a; line-height: 1.3;">إدارة التشغيل والصيانة</p>
+            <p style="margin: 0; font-size: 11px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">بكليات الجامعة - فرع المزاحمية</p>
+        </div>
+    </div>`;
+  }
+
+  private getPdfFooterTemplate(): string {
+    return `
+    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 8px; padding: 0 40px; border-top: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center; direction: rtl;">
+        <div style="text-align: right;">
+            <p style="margin: 1px 0;">المملكة العربية السعودية</p>
+            <p style="margin: 1px 0;">ص.ب 2454 الرياض 11451</p>
+        </div>
+
+        <div style="text-align: center;">
+            <p style="margin: 1px 0;">العنوان الوطني</p>
+            <p style="margin: 1px 0;">RGSA8707</p>
+        </div>
+
+        <div style="text-align: center;">
+             <p style="margin: 1px 0;">هاتف +966 11 4686275</p>
+        </div>
+
+        <div style="text-align: left; direction: ltr;">
+            <p style="margin: 1px 0;">www.ksu.edu.sa</p>
+            <p style="margin: 1px 0;">hm@ksu.edu.sa</p>
+        </div>
+    </div>`;
+  }
+
+  private async createPuppeteerBrowser(): Promise<Browser> {
+    return puppeteer.launch({
+      headless: true,
+      executablePath:
+        process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
+      dumpio: false,
+      env: {
+        ...process.env,
+        DBUS_SESSION_BUS_ADDRESS: "autolaunch:",
+      },
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--font-render-hinting=none",
+        "--disable-web-security",
+        "--disable-software-rasterizer",
+        "--disable-gl-drawing-for-tests",
+        "--use-gl=swiftshader",
+        "--mute-audio",
+        "--no-first-run",
+        "--disable-extensions",
+      ],
+    });
+  }
+
+  private async generatePdfFromHtml(
+    htmlContent: string,
+    headerTemplate: string,
+    footerTemplate: string,
+    browser?: Browser
+  ): Promise<Buffer> {
+    const ownedBrowser = browser || (await this.createPuppeteerBrowser());
+    const shouldCloseBrowser = !browser;
+
+    try {
+      const page = await ownedBrowser.newPage();
+      await page.emulateMediaType("print");
+
+      await page.setContent(htmlContent, {
+        waitUntil: ["load", "networkidle0"],
+        timeout: 60000,
+      });
+
+      const pdfBuffer = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        displayHeaderFooter: true,
+        headerTemplate,
+        footerTemplate,
+        margin: {
+          top: "140px",
+          bottom: "80px",
+          right: "20px",
+          left: "20px",
+        },
+      });
+
+      await page.close();
+
+      if (!pdfBuffer || pdfBuffer.length === 0) {
+        throw new Error("Generated PDF buffer is empty or invalid");
+      }
+
+      const pdfHeader = String.fromCharCode(
+        pdfBuffer[0],
+        pdfBuffer[1],
+        pdfBuffer[2],
+        pdfBuffer[3]
+      );
+      if (pdfHeader !== "%PDF") {
+        throw new Error("Generated PDF is not in valid PDF format");
+      }
+
+      return Buffer.from(pdfBuffer);
+    } finally {
+      if (shouldCloseBrowser) {
+        await ownedBrowser.close();
+      }
+    }
+  }
+
   private buildMatchStage(
     filter: ReportFilterDto
   ): FilterQuery<MaintenanceRequestDocument> {
     const matchStage: FilterQuery<MaintenanceRequestDocument> = {};
-    const Types = require('mongoose').Types;
 
     if (filter.engineerId) {
       // Support both String and ObjectId formats
@@ -973,7 +1037,9 @@ export class ReportsService {
         matchStage.createdAt.$gte = new Date(filter.fromDate);
       }
       if (filter.toDate) {
-        matchStage.createdAt.$lte = new Date(filter.toDate);
+        const endOfDay = new Date(filter.toDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        matchStage.createdAt.$lte = endOfDay;
       }
     }
 
@@ -1006,57 +1072,22 @@ export class ReportsService {
   }
 
   async generateSingleRequestPdfBuffer(
-    requestId: string
+    requestId: string,
+    browser?: Browser
   ): Promise<Buffer> {
     const request = await this.getSingleRequestDetails(requestId);
+    return this.generateSingleRequestPdfBufferFromRequest(request, browser);
+  }
 
-    // 1. تجهيز الصور والبيانات
+  private async generateSingleRequestPdfBufferFromRequest(
+    request: MaintenanceRequestDocument,
+    browser?: Browser
+  ): Promise<Buffer> {
     const logoBase64 = convertLogoToBase64();
     const reportContent = generateSingleRequestContent(request);
+    const headerTemplate = this.getPdfHeaderTemplate(logoBase64);
+    const footerTemplate = this.getPdfFooterTemplate();
 
-    // 2. تصميم الهيدر (HTML + CSS مدمج)
-    const headerTemplate = `
-    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
-        <div style="text-align: right; width: 30%;">
-            <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
-            <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">جامعة الملك سعود</p>
-            <p style="margin: 0 0 2px 0; font-size: 10px; color: #0f5b7a;">نائب رئيس الجامعة للمشاريع</p>
-            <p style="margin: 0; font-size: 10px; color: #0f5b7a;">الإدارة العامة للصيانة</p>
-        </div>
-        <div style="text-align: center; width: 40%; display: flex; justify-content: center; align-items: center;">
-            <img src="${logoBase64}" style="max-width: 190px; height: auto;" />
-        </div>
-        <div style="text-align: left; width: 30%;">
-            <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: bold; color: #0f5b7a; line-height: 1.3;">إدارة التشغيل والصيانة</p>
-            <p style="margin: 0; font-size: 11px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">بكليات الجامعة - فرع المزاحمية</p>
-        </div>
-    </div>`;
-
-    // 3. تصميم الفوتر (HTML + CSS مدمج)
-    const footerTemplate = `
-    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 8px; padding: 0 40px; border-top: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center; direction: rtl;">
-        
-        <div style="text-align: right;">
-            <p style="margin: 1px 0;">المملكة العربية السعودية</p>
-            <p style="margin: 1px 0;">ص.ب 2454 الرياض 11451</p>
-        </div>
-
-        <div style="text-align: center;">
-            <p style="margin: 1px 0;">العنوان الوطني</p>
-            <p style="margin: 1px 0;">RGSA8707</p>
-        </div>
-
-        <div style="text-align: center;">
-             <p style="margin: 1px 0;">هاتف +966 11 4686275</p>
-        </div>
-
-        <div style="text-align: left; direction: ltr;">
-            <p style="margin: 1px 0;">www.ksu.edu.sa</p>
-            <p style="margin: 1px 0;">hm@ksu.edu.sa</p>
-        </div>
-    </div>`;
-
-    // Read HTML template
     const templatePath = path.join(
       __dirname,
       "templates",
@@ -1068,130 +1099,19 @@ export class ReportsService {
     let htmlContent = fs.readFileSync(templatePath, "utf-8");
     htmlContent = htmlContent.replace(/{{{report_content}}}/g, reportContent);
 
-    // إعدادات المتصفح المحسنة للدوكر
-    const browser = await puppeteer.launch({
-      headless: true,
-      executablePath:
-        process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
-      dumpio: false,
-      env: {
-        ...process.env,
-        DBUS_SESSION_BUS_ADDRESS: "autolaunch:",
-      },
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--font-render-hinting=none",
-        "--disable-web-security",
-        "--disable-software-rasterizer",
-        "--disable-gl-drawing-for-tests",
-        "--use-gl=swiftshader",
-        "--mute-audio",
-        "--no-first-run",
-        "--disable-extensions",
-      ],
-    });
-
-    try {
-      const page = await browser.newPage();
-
-      // ضبط المتصفح ليعرض محتوى الطباعة
-      await page.emulateMediaType("print");
-
-      await page.setContent(htmlContent, {
-        waitUntil: ["load", "networkidle0"],
-        timeout: 60000,
-      });
-
-      // التوليد مع الهيدر والفوتر
-      const pdfBuffer = await page.pdf({
-        format: "A4",
-        printBackground: true,
-        displayHeaderFooter: true,
-        headerTemplate: headerTemplate,
-        footerTemplate: footerTemplate,
-        margin: {
-          top: "140px",
-          bottom: "80px",
-          right: "20px",
-          left: "20px",
-        },
-      });
-
-      // Verify PDF buffer is valid
-      if (!pdfBuffer || pdfBuffer.length === 0) {
-        throw new Error("Generated PDF buffer is empty or invalid");
-      }
-
-      // Check if buffer starts with PDF header
-      const pdfHeader = String.fromCharCode(
-        pdfBuffer[0],
-        pdfBuffer[1],
-        pdfBuffer[2],
-        pdfBuffer[3]
-      );
-      if (pdfHeader !== "%PDF") {
-        console.error("Invalid PDF format, header:", pdfHeader);
-        throw new Error("Generated PDF is not in valid PDF format");
-      }
-
-      return Buffer.from(pdfBuffer);
-    } catch (e) {
-      console.error("Puppeteer Error:", e);
-      throw e;
-    } finally {
-      if (browser) await browser.close();
-    }
+    return this.generatePdfFromHtml(
+      htmlContent,
+      headerTemplate,
+      footerTemplate,
+      browser
+    );
   }
 
   async generateEmptyRequestTemplatePdfBuffer(): Promise<Buffer> {
-    // 1. تجهيز الصور والبيانات
     const logoBase64 = convertLogoToBase64();
     const reportContent = generateEmptyRequestTemplateContent();
-
-    // 2. تصميم الهيدر (HTML + CSS مدمج)
-    const headerTemplate = `
-    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 10px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center; direction: rtl; border-bottom: 2px solid #0f5b7a; padding-bottom: 5px;">
-        <div style="text-align: right; width: 30%;">
-            <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">المملكة العربية السعودية</p>
-            <p style="margin: 0 0 2px 0; font-size: 11px; font-weight: bold; color: #0f5b7a;">جامعة الملك سعود</p>
-            <p style="margin: 0 0 2px 0; font-size: 10px; color: #0f5b7a;">نائب رئيس الجامعة للمشاريع</p>
-            <p style="margin: 0; font-size: 10px; color: #0f5b7a;">الإدارة العامة للصيانة</p>
-        </div>
-        <div style="text-align: center; width: 40%; display: flex; justify-content: center; align-items: center;">
-            <img src="${logoBase64}" style="max-width: 190px; height: auto;" />
-        </div>
-        <div style="text-align: left; width: 30%;">
-            <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: bold; color: #0f5b7a; line-height: 1.3;">إدارة التشغيل والصيانة</p>
-            <p style="margin: 0; font-size: 11px; font-weight: bold; color: #0f5b7a; line-height: 1.4;">بكليات الجامعة - فرع المزاحمية</p>
-        </div>
-    </div>`;
-
-    // 3. تصميم الفوتر (HTML + CSS مدمج)
-    const footerTemplate = `
-    <div style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', 'Arial', sans-serif; width: 100%; font-size: 8px; padding: 0 40px; border-top: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center; direction: rtl;">
-        
-        <div style="text-align: right;">
-            <p style="margin: 1px 0;">المملكة العربية السعودية</p>
-            <p style="margin: 1px 0;">ص.ب 2454 الرياض 11451</p>
-        </div>
-
-        <div style="text-align: center;">
-            <p style="margin: 1px 0;">العنوان الوطني</p>
-            <p style="margin: 1px 0;">RGSA8707</p>
-        </div>
-
-        <div style="text-align: center;">
-             <p style="margin: 1px 0;">هاتف +966 11 4686275</p>
-        </div>
-
-        <div style="text-align: left; direction: ltr;">
-            <p style="margin: 1px 0;">www.ksu.edu.sa</p>
-            <p style="margin: 1px 0;">hm@ksu.edu.sa</p>
-        </div>
-    </div>`;
+    const headerTemplate = this.getPdfHeaderTemplate(logoBase64);
+    const footerTemplate = this.getPdfFooterTemplate();
 
     // Read HTML template
     const templatePath = path.join(
@@ -1205,81 +1125,224 @@ export class ReportsService {
     let htmlContent = fs.readFileSync(templatePath, "utf-8");
     htmlContent = htmlContent.replace(/{{{report_content}}}/g, reportContent);
 
-    // إعدادات المتصفح المحسنة للدوكر
-    const browser = await puppeteer.launch({
-      headless: true,
-      executablePath:
-        process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
-      dumpio: false,
-      env: {
-        ...process.env,
-        DBUS_SESSION_BUS_ADDRESS: "autolaunch:",
-      },
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--font-render-hinting=none",
-        "--disable-web-security",
-        "--disable-software-rasterizer",
-        "--disable-gl-drawing-for-tests",
-        "--use-gl=swiftshader",
-        "--mute-audio",
-        "--no-first-run",
-        "--disable-extensions",
-      ],
+    return this.generatePdfFromHtml(htmlContent, headerTemplate, footerTemplate);
+  }
+
+  private normalizeSelectedRequestIds(requestIds: string[]): string[] {
+    const normalized = Array.from(
+      new Set((requestIds || []).map((id) => id?.trim()))
+    ).filter((id) => !!id && Types.ObjectId.isValid(id));
+
+    if (normalized.length === 0) {
+      throw new Error("Please select at least one valid request");
+    }
+
+    const maxBulkExportRequests = getMaxBulkExportRequests();
+    if (normalized.length > maxBulkExportRequests) {
+      throw new Error(`الحد الأقصى لتصدير الطلبات دفعة واحدة هو ${maxBulkExportRequests} طلب.`);
+    }
+
+    return normalized;
+  }
+
+  private applyUserScope(
+    matchStage: FilterQuery<MaintenanceRequestDocument>,
+    user?: CurrentUserData
+  ): FilterQuery<MaintenanceRequestDocument> {
+    if (user?.role === Role.ENGINEER && user.userId) {
+      return {
+        ...matchStage,
+        engineerId: {
+          $in: [
+            user.userId,
+            Types.ObjectId.isValid(user.userId)
+              ? new Types.ObjectId(user.userId)
+              : null,
+          ].filter(Boolean),
+        } as any,
+      };
+    }
+
+    return matchStage;
+  }
+
+  private async getRequestsForIds(
+    requestIds: string[],
+    user?: CurrentUserData
+  ): Promise<MaintenanceRequestDocument[]> {
+    const normalizedRequestIds = this.normalizeSelectedRequestIds(requestIds);
+    const baseMatchStage: FilterQuery<MaintenanceRequestDocument> = {
+      _id: { $in: normalizedRequestIds.map((id) => new Types.ObjectId(id)) },
+    };
+    const matchStage = this.applyUserScope(baseMatchStage, user);
+
+    const requests = await this.requestModel
+      .find(matchStage)
+      .populate("engineerId", "name email")
+      .populate("consultantId", "name email")
+      .populate("healthSafetySupervisorId", "name email")
+      .populate("locationId", "name")
+      .populate("departmentId", "name")
+      .populate("systemId", "name")
+      .populate("machineId", "name components description")
+      .populate({
+        path: "scheduledTaskId",
+        populate: { path: "createdBy", select: "name email" },
+      })
+      .sort({ createdAt: -1 })
+      .exec();
+
+    if (!requests.length) {
+      throw new Error("No matching requests found for export");
+    }
+
+    return requests as MaintenanceRequestDocument[];
+  }
+
+  private async getRequestsForFilter(
+    filter: ReportFilterDto,
+    user?: CurrentUserData
+  ): Promise<MaintenanceRequestDocument[]> {
+    const matchStage = this.applyUserScope(this.buildMatchStage(filter), user);
+    const requests = await this.requestModel
+      .find(matchStage)
+      .populate("engineerId", "name email")
+      .populate("consultantId", "name email")
+      .populate("healthSafetySupervisorId", "name email")
+      .populate("locationId", "name")
+      .populate("departmentId", "name")
+      .populate("systemId", "name")
+      .populate("machineId", "name components description")
+      .populate({
+        path: "scheduledTaskId",
+        populate: { path: "createdBy", select: "name email" },
+      })
+      .sort({ createdAt: -1 })
+      .exec();
+
+    if (!requests.length) {
+      throw new Error("No matching requests found for export");
+    }
+
+    const maxBulkExportRequests = getMaxBulkExportRequests();
+    if (requests.length > maxBulkExportRequests) {
+      throw new Error(`الحد الأقصى لتصدير الطلبات دفعة واحدة هو ${maxBulkExportRequests} طلب.`);
+    }
+
+    return requests as MaintenanceRequestDocument[];
+  }
+
+  private async createZipBuffer(
+    entries: Array<{ name: string; content: Buffer }>
+  ): Promise<Buffer> {
+    return new Promise<Buffer>(async (resolve, reject) => {
+      const zipArchive = archiver("zip", { zlib: { level: 9 } });
+      const chunks: Buffer[] = [];
+
+      zipArchive.on("data", (chunk: Buffer) => {
+        chunks.push(Buffer.from(chunk));
+      });
+      zipArchive.on("error", reject);
+      zipArchive.on("end", () => {
+        resolve(Buffer.concat(chunks));
+      });
+
+      try {
+        for (const entry of entries) {
+          zipArchive.append(entry.content, { name: entry.name });
+        }
+        await zipArchive.finalize();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  private buildMainBundleZipName(): string {
+    const date = new Date().toISOString().split("T")[0];
+    return `maintenance-requests-bundle-${date}.zip`;
+  }
+
+  private buildPartZipName(index: number): string {
+    return `maintenance-requests-part-${String(index).padStart(3, "0")}.zip`;
+  }
+
+  private buildPdfName(request: MaintenanceRequestDocument): string {
+    const requestCode =
+      request.requestCode || (request as any)?._id?.toString() || "request";
+    return `${sanitizeFilename(requestCode)}.pdf`;
+  }
+
+  async streamBulkRequestsZipByIds(
+    requestIds: string[],
+    res: Response,
+    user?: CurrentUserData
+  ): Promise<void> {
+    const requests = await this.getRequestsForIds(requestIds, user);
+    await this.streamBulkRequestsZip(requests, res);
+  }
+
+  async streamBulkRequestsZipByFilter(
+    filter: ReportFilterDto,
+    res: Response,
+    user?: CurrentUserData
+  ): Promise<void> {
+    const requests = await this.getRequestsForFilter(filter, user);
+    await this.streamBulkRequestsZip(requests, res);
+  }
+
+  private async streamBulkRequestsZip(
+    requests: MaintenanceRequestDocument[],
+    res: Response
+  ): Promise<void> {
+    const chunkSize = getBulkZipPartSize();
+    const chunks = chunkArray(requests, chunkSize);
+
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=${this.buildMainBundleZipName()}`
+    );
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    const outerArchive = archiver("zip", { zlib: { level: 9 } });
+    outerArchive.pipe(res);
+
+    const completed = new Promise<void>((resolve, reject) => {
+      res.on("finish", () => resolve());
+      res.on("error", reject);
+      outerArchive.on("error", reject);
     });
 
+    const browser = await this.createPuppeteerBrowser();
     try {
-      const page = await browser.newPage();
+      for (let index = 0; index < chunks.length; index += 1) {
+        const currentChunk = chunks[index];
+        const partEntries: Array<{ name: string; content: Buffer }> = [];
 
-      // ضبط المتصفح ليعرض محتوى الطباعة
-      await page.emulateMediaType("print");
+        for (const request of currentChunk) {
+          const pdfBuffer = await this.generateSingleRequestPdfBufferFromRequest(
+            request,
+            browser
+          );
+          partEntries.push({
+            name: this.buildPdfName(request),
+            content: pdfBuffer,
+          });
+        }
 
-      await page.setContent(htmlContent, {
-        waitUntil: ["load", "networkidle0"],
-        timeout: 60000,
-      });
-
-      // التوليد مع الهيدر والفوتر
-      const pdfBuffer = await page.pdf({
-        format: "A4",
-        printBackground: true,
-        displayHeaderFooter: true,
-        headerTemplate: headerTemplate,
-        footerTemplate: footerTemplate,
-        margin: {
-          top: "140px",
-          bottom: "80px",
-          right: "20px",
-          left: "20px",
-        },
-      });
-
-      // Verify PDF buffer is valid
-      if (!pdfBuffer || pdfBuffer.length === 0) {
-        throw new Error("Generated PDF buffer is empty or invalid");
+        const partZipBuffer = await this.createZipBuffer(partEntries);
+        outerArchive.append(partZipBuffer, {
+          name: this.buildPartZipName(index + 1),
+        });
       }
 
-      // Check if buffer starts with PDF header
-      const pdfHeader = String.fromCharCode(
-        pdfBuffer[0],
-        pdfBuffer[1],
-        pdfBuffer[2],
-        pdfBuffer[3]
-      );
-      if (pdfHeader !== "%PDF") {
-        console.error("Invalid PDF format, header:", pdfHeader);
-        throw new Error("Generated PDF is not in valid PDF format");
-      }
-
-      return Buffer.from(pdfBuffer);
-    } catch (e) {
-      console.error("Puppeteer Error:", e);
-      throw e;
+      await outerArchive.finalize();
+      await completed;
     } finally {
-      if (browser) await browser.close();
+      await browser.close();
     }
   }
 }
