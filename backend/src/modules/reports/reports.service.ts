@@ -313,10 +313,6 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
             <td style="${MULTI_LINE_STYLE}">${escapeHtml(request.requestNeeds)}</td>
           </tr>
           ` : ""}
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">ما تم تنفيذه</td>
-            <td style="${MULTI_LINE_STYLE}">${request.implementedWork ? escapeHtml(request.implementedWork) : "لا يوجد"}</td>
-          </tr>
         </table>
       </div>
 
@@ -459,14 +455,6 @@ function generateEmptyRequestTemplateContent(): string {
           </tr>
           <tr>
             <td style="font-weight: bold; background-color: #f8f9fa;">احتياجات الطلب</td>
-            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">ما تم تنفيذه</td>
-            <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">معلومات الإجراء المتخذ</td>
             <td style="border-bottom: 1px dashed #ccc; min-height: 20px;">&nbsp;</td>
           </tr>
         </table>

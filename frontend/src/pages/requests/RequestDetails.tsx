@@ -94,6 +94,8 @@ interface RequestsListState {
     maintenanceType: string;
     locationId: string;
     departmentId: string;
+    fromDate: string;
+    toDate: string;
   };
 }
 
@@ -106,6 +108,8 @@ function buildRequestsUrl(state: RequestsListState | null): string {
   if (f.maintenanceType) params.set("maintenanceType", f.maintenanceType);
   if (f.locationId) params.set("locationId", f.locationId);
   if (f.departmentId) params.set("departmentId", f.departmentId);
+  if (f.fromDate) params.set("fromDate", f.fromDate);
+  if (f.toDate) params.set("toDate", f.toDate);
   const query = params.toString();
   return query ? `/app/requests?${query}` : "/app/requests";
 }

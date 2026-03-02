@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
@@ -69,6 +70,8 @@ const defaultFilters = {
   maintenanceType: "",
   locationId: "",
   departmentId: "",
+  fromDate: "",
+  toDate: "",
 };
 
 function parseFiltersFromSearchParams(searchParams: URLSearchParams) {
@@ -80,6 +83,8 @@ function parseFiltersFromSearchParams(searchParams: URLSearchParams) {
     maintenanceType: searchParams.get("maintenanceType") ?? "",
     locationId: searchParams.get("locationId") ?? "",
     departmentId: searchParams.get("departmentId") ?? "",
+    fromDate: searchParams.get("fromDate") ?? "",
+    toDate: searchParams.get("toDate") ?? "",
   };
 }
 
@@ -128,6 +133,10 @@ export default function RequestsList() {
       if (nextFilters.departmentId)
         params.set("departmentId", nextFilters.departmentId);
       else params.delete("departmentId");
+      if (nextFilters.fromDate) params.set("fromDate", nextFilters.fromDate);
+      else params.delete("fromDate");
+      if (nextFilters.toDate) params.set("toDate", nextFilters.toDate);
+      else params.delete("toDate");
       setSearchParams(params, { replace: true });
       return nextFilters;
     });
@@ -148,6 +157,8 @@ export default function RequestsList() {
         maintenanceType?: string;
         locationId?: string;
         departmentId?: string;
+        fromDate?: string;
+        toDate?: string;
       } = {
         page: filters.page,
         limit: filters.limit,
@@ -167,6 +178,14 @@ export default function RequestsList() {
 
       if (filters.departmentId && filters.departmentId.trim() !== "") {
         cleanFilters.departmentId = filters.departmentId;
+      }
+
+      if (filters.fromDate && filters.fromDate.trim() !== "") {
+        cleanFilters.fromDate = filters.fromDate;
+      }
+
+      if (filters.toDate && filters.toDate.trim() !== "") {
+        cleanFilters.toDate = filters.toDate;
       }
 
       return requestsService.getAll(cleanFilters);
@@ -294,7 +313,7 @@ export default function RequestsList() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-6">
             <Select
               value={filters.status || "all"}
               onValueChange={(value) =>
@@ -385,6 +404,36 @@ export default function RequestsList() {
                 ))}
               </SelectContent>
             </Select>
+
+            <div className="space-y-1">
+              <label className="text-sm text-muted-foreground">من تاريخ الإنشاء</label>
+              <Input
+                type="date"
+                value={filters.fromDate}
+                onChange={(e) =>
+                  setFilters({
+                    ...filters,
+                    fromDate: e.target.value,
+                    page: 1,
+                  })
+                }
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm text-muted-foreground">إلى تاريخ الإنشاء</label>
+              <Input
+                type="date"
+                value={filters.toDate}
+                onChange={(e) =>
+                  setFilters({
+                    ...filters,
+                    toDate: e.target.value,
+                    page: 1,
+                  })
+                }
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

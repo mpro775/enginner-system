@@ -667,7 +667,9 @@ export class MaintenanceRequestsService {
         filter.createdAt.$gte = new Date(filterDto.fromDate);
       }
       if (filterDto.toDate) {
-        filter.createdAt.$lte = new Date(filterDto.toDate);
+        const toDate = new Date(filterDto.toDate);
+        toDate.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = toDate;
       }
     }
 
