@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -98,6 +98,8 @@ export default function RequestsList() {
   const isAdmin = user?.role === Role.ADMIN;
 
   const [now, setNow] = useState<Date>(new Date());
+  const fromDateInputRef = useRef<HTMLInputElement | null>(null);
+  const toDateInputRef = useRef<HTMLInputElement | null>(null);
   const [softDeleteDialog, setSoftDeleteDialog] =
     useState<MaintenanceRequest | null>(null);
   const [hardDeleteDialog, setHardDeleteDialog] =
@@ -407,32 +409,62 @@ export default function RequestsList() {
 
             <div className="space-y-1">
               <label className="text-sm text-muted-foreground">من تاريخ الإنشاء</label>
-              <Input
-                type="date"
-                value={filters.fromDate}
-                onChange={(e) =>
-                  setFilters({
-                    ...filters,
-                    fromDate: e.target.value,
-                    page: 1,
-                  })
-                }
-              />
+              <div
+                className="relative cursor-pointer"
+                onClick={() => {
+                  const input = fromDateInputRef.current;
+                  if (input) {
+                    input.focus();
+                    const showPicker = (input as HTMLInputElement & { showPicker?: () => void }).showPicker;
+                    if (typeof showPicker === "function") showPicker.call(input);
+                  }
+                }}
+              >
+                <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  ref={fromDateInputRef}
+                  type="date"
+                  className="pr-10 cursor-pointer"
+                  value={filters.fromDate}
+                  onChange={(e) =>
+                    setFilters({
+                      ...filters,
+                      fromDate: e.target.value,
+                      page: 1,
+                    })
+                  }
+                />
+              </div>
             </div>
 
             <div className="space-y-1">
               <label className="text-sm text-muted-foreground">إلى تاريخ الإنشاء</label>
-              <Input
-                type="date"
-                value={filters.toDate}
-                onChange={(e) =>
-                  setFilters({
-                    ...filters,
-                    toDate: e.target.value,
-                    page: 1,
-                  })
-                }
-              />
+              <div
+                className="relative cursor-pointer"
+                onClick={() => {
+                  const input = toDateInputRef.current;
+                  if (input) {
+                    input.focus();
+                    const showPicker = (input as HTMLInputElement & { showPicker?: () => void }).showPicker;
+                    if (typeof showPicker === "function") showPicker.call(input);
+                  }
+                }}
+              >
+                <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  ref={toDateInputRef}
+                  type="date"
+                  className="pr-10 cursor-pointer"
+                  value={filters.toDate}
+                  onChange={(e) =>
+                    setFilters({
+                      ...filters,
+                      toDate: e.target.value,
+                      page: 1,
+                    })
+                  }
+                />
+              </div>
             </div>
           </div>
         </CardContent>
