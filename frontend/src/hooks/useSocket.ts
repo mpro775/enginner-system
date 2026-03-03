@@ -5,6 +5,24 @@ import { useNotificationsStore } from '@/store/notifications';
 import { useToast } from '@/hooks/use-toast';
 import { Notification } from '@/types';
 
+export type BulkExportSocketPayload = {
+  id: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  mode: 'selected' | 'filtered';
+  totalRequests: number;
+  processedRequests: number;
+  totalParts: number;
+  processedParts: number;
+  chunkSize: number;
+  progressPercent: number;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  failedAt?: string;
+  error?: string;
+  downloadReady: boolean;
+};
+
 export function useSocket() {
   const socketRef = useRef<Socket | null>(null);
   const { accessToken, isAuthenticated } = useAuthStore();
@@ -85,6 +103,14 @@ export function useSocket() {
       });
     });
 
+    socket.on('bulk-export:progress', (payload: BulkExportSocketPayload) => {
+      window.dispatchEvent(
+        new CustomEvent('bulk-export:progress', {
+          detail: payload,
+        })
+      );
+    });
+
     socket.on('disconnect', (reason) => {
       // Only log if it's not a client-initiated disconnect
       if (reason !== 'io client disconnect') {
@@ -105,12 +131,12 @@ export function useSocket() {
       socket.off('notification');
       socket.off('disconnect');
       socket.off('connect_error');
+      socket.off('bulk-export:progress');
       socket.close();
     };
   }, [isAuthenticated, accessToken, addNotification, toast]);
 
   return socketRef.current;
 }
-
 
 

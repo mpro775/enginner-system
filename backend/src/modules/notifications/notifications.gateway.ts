@@ -13,6 +13,24 @@ import { MaintenanceRequestDocument } from "../maintenance-requests/schemas/main
 import { ScheduledTaskDocument } from "../scheduled-tasks/schemas/scheduled-task.schema";
 import { ComplaintDocument } from "../complaints/schemas/complaint.schema";
 
+interface BulkExportProgressPayload {
+  id: string;
+  status: "queued" | "processing" | "completed" | "failed";
+  mode: "selected" | "filtered";
+  totalRequests: number;
+  processedRequests: number;
+  totalParts: number;
+  processedParts: number;
+  chunkSize: number;
+  progressPercent: number;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  failedAt?: string;
+  error?: string;
+  downloadReady: boolean;
+}
+
 interface AuthenticatedSocket extends Socket {
   user?: {
     userId: string;
@@ -298,5 +316,9 @@ export class NotificationsGateway
     this.server.to("maintenance_safety_monitor").emit("notification", notification);
 
     this.logger.log(`Notified about resolved complaint: ${complaint.complaintCode}`);
+  }
+
+  notifyBulkExportProgress(userId: string, payload: BulkExportProgressPayload) {
+    this.server.to(`user:${userId}`).emit("bulk-export:progress", payload);
   }
 }

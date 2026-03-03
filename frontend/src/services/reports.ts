@@ -58,6 +58,24 @@ export interface ReportsConfig {
   maxBulkExportRequests: number;
 }
 
+export interface BulkExportJobSnapshot {
+  id: string;
+  status: "queued" | "processing" | "completed" | "failed";
+  mode: "selected" | "filtered";
+  totalRequests: number;
+  processedRequests: number;
+  totalParts: number;
+  processedParts: number;
+  chunkSize: number;
+  progressPercent: number;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  failedAt?: string;
+  error?: string;
+  downloadReady: boolean;
+}
+
 // Helper function to remove empty/undefined values from filter
 function cleanFilter(filter?: ReportFilter): ReportFilter | undefined {
   if (!filter) return undefined;
@@ -251,37 +269,43 @@ export const reportsService = {
     }
   },
 
-  async downloadBulkRequestsZip(requestIds: string[]): Promise<void> {
+  async startBulkRequestsZipJob(requestIds: string[]): Promise<BulkExportJobSnapshot> {
     const uniqueIds = Array.from(new Set((requestIds || []).filter(Boolean)));
     if (uniqueIds.length === 0) {
       throw new Error("يرجى تحديد طلب واحد على الأقل للتصدير");
     }
 
-    const response = await api.post(
-      "/reports/requests/bulk-export",
-      { requestIds: uniqueIds },
-      { responseType: "blob" }
+    const response = await api.post<ApiResponse<BulkExportJobSnapshot>>(
+      "/reports/requests/bulk-export/jobs",
+      { requestIds: uniqueIds }
     );
 
-    const blob = response.data;
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute(
-      "download",
-      `maintenance-requests-bundle-${new Date().toISOString().split("T")[0]}.zip`
-    );
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
+    return response.data.data;
   },
 
-  async downloadFilteredRequestsZip(filter: ReportFilter): Promise<void> {
+  async startFilteredRequestsZipJob(
+    filter: ReportFilter
+  ): Promise<BulkExportJobSnapshot> {
     const cleanedFilter = cleanFilter(filter) || {};
-    const response = await api.post(
-      "/reports/requests/bulk-export/filtered",
-      cleanedFilter,
+    const response = await api.post<ApiResponse<BulkExportJobSnapshot>>(
+      "/reports/requests/bulk-export/jobs/filtered",
+      cleanedFilter
+    );
+
+    return response.data.data;
+  },
+
+  async getBulkExportJob(jobId: string): Promise<BulkExportJobSnapshot> {
+    const response = await api.get<ApiResponse<BulkExportJobSnapshot>>(
+      `/reports/requests/bulk-export/jobs/${jobId}`
+    );
+
+    return response.data.data;
+  },
+
+  async downloadBulkExportJob(jobId: string): Promise<void> {
+    const response = await api.get(
+      `/reports/requests/bulk-export/jobs/${jobId}/download`,
       { responseType: "blob" }
     );
 

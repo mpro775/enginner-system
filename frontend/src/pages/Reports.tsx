@@ -20,8 +20,9 @@ import { usersService } from '@/services/users';
 import { useAuthStore } from '@/store/auth';
 import { formatDateTime } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import type { BulkExportSocketPayload } from '@/hooks/useSocket';
 import { RequestStatus, MaintenanceType, Role } from '@/types';
-import type { ReportFilter } from '@/services/reports';
+import type { ReportFilter, BulkExportJobSnapshot } from '@/services/reports';
 
 export default function Reports() {
   const { user } = useAuthStore();
@@ -35,6 +36,7 @@ export default function Reports() {
   const [downloadingSelectedZip, setDownloadingSelectedZip] = useState(false);
   const [downloadingFilteredZip, setDownloadingFilteredZip] = useState(false);
   const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set());
+  const [activeBulkJob, setActiveBulkJob] = useState<BulkExportJobSnapshot | null>(null);
   const fromDateInputRef = useRef<HTMLInputElement | null>(null);
   const toDateInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -64,6 +66,8 @@ export default function Reports() {
   const selectedZipPartsCount = selectedCount > 0 ? Math.ceil(selectedCount / bulkZipPartSize) : 0;
   const filteredZipPartsCount =
     currentResultsCount > 0 ? Math.ceil(currentResultsCount / bulkZipPartSize) : 0;
+  const isBulkJobRunning =
+    activeBulkJob?.status === 'queued' || activeBulkJob?.status === 'processing';
 
   const getZipPartsPreview = (count: number) => {
     if (count <= 0) return '';
@@ -90,6 +94,53 @@ export default function Reports() {
   useEffect(() => {
     setSelectedRequestIds(new Set());
   }, [rows]);
+
+  useEffect(() => {
+    const handleProgress = (event: Event) => {
+      const customEvent = event as CustomEvent<BulkExportSocketPayload>;
+      const payload = customEvent.detail;
+      if (!payload?.id) {
+        return;
+      }
+
+      setActiveBulkJob((current) => {
+        if (!current || current.id !== payload.id) {
+          return current;
+        }
+
+        return {
+          ...current,
+          ...payload,
+        };
+      });
+    };
+
+    window.addEventListener('bulk-export:progress', handleProgress as EventListener);
+    return () => {
+      window.removeEventListener('bulk-export:progress', handleProgress as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activeBulkJob) {
+      return;
+    }
+
+    if (activeBulkJob.status === 'completed') {
+      toast({
+        title: 'اكتمل تجهيز التصدير',
+        description: 'يمكنك الآن تنزيل ملف ZIP النهائي.',
+      });
+    }
+
+    if (activeBulkJob.status === 'failed') {
+      toast({
+        title: 'فشل تجهيز التصدير',
+        description: activeBulkJob.error || 'حدث خطأ أثناء تجهيز ملفات ZIP.',
+        variant: 'destructive',
+      });
+    }
+  }, [activeBulkJob?.status]);
 
   const { data: summaryReport, isLoading: loadingSummary } = useQuery({
     queryKey: ['summary-report', filters],
@@ -124,7 +175,7 @@ export default function Reports() {
 
   const handleDownload = async (format: 'excel' | 'pdf') => {
     // منع الضغط المتكرر
-    if (downloadingExcel || downloadingPdf || downloadingSelectedZip || downloadingFilteredZip) {
+    if (downloadingExcel || downloadingPdf || downloadingSelectedZip || downloadingFilteredZip || isBulkJobRunning) {
       return;
     }
 
@@ -177,7 +228,7 @@ export default function Reports() {
 
   const handleDownloadTemplate = async () => {
     // منع الضغط المتكرر
-    if (downloadingTemplate || downloadingExcel || downloadingPdf || downloadingSelectedZip || downloadingFilteredZip) {
+    if (downloadingTemplate || downloadingExcel || downloadingPdf || downloadingSelectedZip || downloadingFilteredZip || isBulkJobRunning) {
       return;
     }
 
@@ -246,10 +297,11 @@ export default function Reports() {
 
     try {
       setDownloadingSelectedZip(true);
-      await reportsService.downloadBulkRequestsZip(Array.from(selectedRequestIds));
+      const job = await reportsService.startBulkRequestsZipJob(Array.from(selectedRequestIds));
+      setActiveBulkJob(job);
       toast({
-        title: 'تم بدء التنزيل',
-        description: `جاري تنزيل حزمة ZIP للطلبات المحددة (${selectedCount}).`,
+        title: 'بدأ تجهيز التصدير',
+        description: `تم إنشاء مهمة تصدير للطلبات المحددة (${selectedCount}). سنعرض التقدم مباشرة.`,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'حدث خطأ أثناء تصدير الطلبات المحددة';
@@ -275,10 +327,11 @@ export default function Reports() {
 
     try {
       setDownloadingFilteredZip(true);
-      await reportsService.downloadFilteredRequestsZip(filters);
+      const job = await reportsService.startFilteredRequestsZipJob(filters);
+      setActiveBulkJob(job);
       toast({
-        title: 'تم بدء التنزيل',
-        description: `سيتم تقسيم الطلبات تلقائيًا إلى أجزاء ${bulkZipPartSize} داخل ZIP رئيسي واحد.`,
+        title: 'بدأ تجهيز التصدير',
+        description: `سيتم تقسيم الطلبات تلقائيًا إلى أجزاء ${bulkZipPartSize} داخل ZIP رئيسي واحد مع تتبع التقدم.`,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'حدث خطأ أثناء تصدير جميع نتائج الفلتر';
@@ -289,6 +342,27 @@ export default function Reports() {
       });
     } finally {
       setDownloadingFilteredZip(false);
+    }
+  };
+
+  const handleDownloadCompletedBulkJob = async () => {
+    if (!activeBulkJob) {
+      return;
+    }
+
+    try {
+      await reportsService.downloadBulkExportJob(activeBulkJob.id);
+      toast({
+        title: 'تم بدء التنزيل',
+        description: 'تم تجهيز الملف بنجاح وجارٍ تنزيله.',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'تعذر تنزيل ملف التصدير';
+      toast({
+        title: 'فشل التنزيل',
+        description: message,
+        variant: 'destructive',
+      });
     }
   };
 
@@ -506,7 +580,7 @@ export default function Reports() {
             <Button 
               variant="outline" 
               onClick={() => handleDownload('excel')}
-              disabled={downloadingExcel || downloadingPdf || downloadingTemplate || downloadingSelectedZip || downloadingFilteredZip}
+              disabled={downloadingExcel || downloadingPdf || downloadingTemplate || downloadingSelectedZip || downloadingFilteredZip || isBulkJobRunning}
             >
               {downloadingExcel ? (
                 <>
@@ -523,7 +597,7 @@ export default function Reports() {
             <Button 
               variant="outline" 
               onClick={() => handleDownload('pdf')}
-              disabled={downloadingExcel || downloadingPdf || downloadingTemplate || downloadingSelectedZip || downloadingFilteredZip}
+              disabled={downloadingExcel || downloadingPdf || downloadingTemplate || downloadingSelectedZip || downloadingFilteredZip || isBulkJobRunning}
             >
               {downloadingPdf ? (
                 <>
@@ -541,7 +615,7 @@ export default function Reports() {
               <Button 
                 variant="outline" 
                 onClick={handleDownloadTemplate}
-                disabled={downloadingExcel || downloadingPdf || downloadingTemplate || downloadingSelectedZip || downloadingFilteredZip}
+                disabled={downloadingExcel || downloadingPdf || downloadingTemplate || downloadingSelectedZip || downloadingFilteredZip || isBulkJobRunning}
               >
                 {downloadingTemplate ? (
                   <>
@@ -565,6 +639,7 @@ export default function Reports() {
                 downloadingExcel ||
                 downloadingPdf ||
                 downloadingTemplate ||
+                isBulkJobRunning ||
                 !hasAnySelection
               }
             >
@@ -589,6 +664,7 @@ export default function Reports() {
                 downloadingExcel ||
                 downloadingPdf ||
                 downloadingTemplate ||
+                isBulkJobRunning ||
                 currentResultsCount === 0
               }
             >
@@ -619,6 +695,56 @@ export default function Reports() {
               ? ` - كل نتائج الفلتر ستنتج ${getArabicPartsPhrase(filteredZipPartsCount)} (${getZipPartsPreview(currentResultsCount)}).`
               : ''}
           </div>
+          {activeBulkJob && (
+            <div className="mt-4 rounded-lg border p-3 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-foreground">
+                  حالة تجهيز ZIP: {activeBulkJob.status === 'completed'
+                    ? 'مكتمل'
+                    : activeBulkJob.status === 'failed'
+                      ? 'فشل'
+                      : 'قيد المعالجة'}
+                </span>
+                <span className="text-muted-foreground">
+                  {activeBulkJob.processedRequests}/{activeBulkJob.totalRequests} طلب
+                </span>
+              </div>
+              <div className="h-2 w-full rounded bg-muted overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all duration-500"
+                  style={{ width: `${activeBulkJob.progressPercent}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  الأجزاء: {activeBulkJob.processedParts}/{activeBulkJob.totalParts}
+                </span>
+                <span>{activeBulkJob.progressPercent}%</span>
+              </div>
+              {activeBulkJob.status === 'failed' && activeBulkJob.error && (
+                <div className="text-xs text-destructive">{activeBulkJob.error}</div>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadCompletedBulkJob}
+                  disabled={!activeBulkJob.downloadReady}
+                >
+                  <Archive className="ml-2 h-4 w-4" />
+                  تنزيل الملف الجاهز
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setActiveBulkJob(null)}
+                  disabled={isBulkJobRunning}
+                >
+                  إخفاء الحالة
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

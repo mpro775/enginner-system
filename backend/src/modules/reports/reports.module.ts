@@ -8,6 +8,7 @@ import {
 } from '../maintenance-requests/schemas/maintenance-request.schema';
 import { User, UserSchema } from '../users/schemas/user.schema';
 import { StatisticsModule } from '../statistics/statistics.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -16,13 +17,13 @@ import { StatisticsModule } from '../statistics/statistics.module';
       { name: User.name, schema: UserSchema },
     ]),
     StatisticsModule,
+    NotificationsModule,
   ],
   controllers: [ReportsController],
   providers: [ReportsService],
   exports: [ReportsService],
 })
 export class ReportsModule {}
-
 
 
 

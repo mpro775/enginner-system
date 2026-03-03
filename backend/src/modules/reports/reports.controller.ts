@@ -233,6 +233,69 @@ export class ReportsController {
     }
   }
 
+  @Post("requests/bulk-export/jobs")
+  async startBulkExportSelectedJob(
+    @Body() body: BulkExportSelectedDto,
+    @CurrentUser() user?: CurrentUserData
+  ) {
+    const job = await this.reportsService.startBulkExportJobByIds(
+      body.requestIds,
+      user
+    );
+
+    return {
+      data: job,
+      message: "Bulk export job started",
+    };
+  }
+
+  @Post("requests/bulk-export/jobs/filtered")
+  async startBulkExportFilteredJob(
+    @Body() filter: ReportFilterDto,
+    @CurrentUser() user?: CurrentUserData
+  ) {
+    const job = await this.reportsService.startBulkExportJobByFilter(
+      filter,
+      user
+    );
+
+    return {
+      data: job,
+      message: "Bulk export filtered job started",
+    };
+  }
+
+  @Get("requests/bulk-export/jobs/:jobId")
+  async getBulkExportJob(@Param("jobId") jobId: string) {
+    const job = this.reportsService.getBulkExportJob(jobId);
+    return {
+      data: job,
+      message: "Bulk export job status retrieved",
+    };
+  }
+
+  @Get("requests/bulk-export/jobs/:jobId/download")
+  async downloadBulkExportJob(
+    @Param("jobId") jobId: string,
+    @Res() res: Response
+  ) {
+    try {
+      await this.reportsService.downloadBulkExportJob(jobId, res);
+    } catch (error) {
+      if (!res.headersSent) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Failed to download export";
+        const statusCode =
+          errorMessage.includes("not found")
+            ? 404
+            : errorMessage.includes("not ready")
+              ? 409
+              : 400;
+        res.status(statusCode).json({ message: errorMessage });
+      }
+    }
+  }
+
   @Get("engineer/:id")
   async getEngineerReport(
     @Param("id") engineerId: string,

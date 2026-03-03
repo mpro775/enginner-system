@@ -9,6 +9,8 @@ import * as archiver from "archiver";
 import { Response } from "express";
 import * as path from "path";
 import * as fs from "fs";
+import * as os from "os";
+import { randomUUID } from "crypto";
 import {
   MaintenanceRequest,
   MaintenanceRequestDocument,
@@ -19,6 +21,7 @@ import { StatisticsService } from "../statistics/statistics.service";
 import { EntityNotFoundException } from "../../common/exceptions/business.exception";
 import { RequestStatus, MaintenanceType, Role } from "../../common/enums";
 import { CurrentUserData } from "../../common/decorators/current-user.decorator";
+import { NotificationsGateway } from "../notifications/notifications.gateway";
 
 // Convert logo to base64 for embedding in HTML
 function convertLogoToBase64(): string {
@@ -486,9 +489,49 @@ export interface RequestReportData {
   createdAt: Date;
 }
 
+export type BulkExportJobStatus = "queued" | "processing" | "completed" | "failed";
+
+interface BulkExportJob {
+  id: string;
+  status: BulkExportJobStatus;
+  mode: "selected" | "filtered";
+  totalRequests: number;
+  processedRequests: number;
+  totalParts: number;
+  processedParts: number;
+  chunkSize: number;
+  createdAt: Date;
+  startedAt?: Date;
+  completedAt?: Date;
+  failedAt?: Date;
+  error?: string;
+  filePath?: string;
+  fileName?: string;
+  ownerUserId?: string;
+}
+
+export interface BulkExportJobSnapshot {
+  id: string;
+  status: BulkExportJobStatus;
+  mode: "selected" | "filtered";
+  totalRequests: number;
+  processedRequests: number;
+  totalParts: number;
+  processedParts: number;
+  chunkSize: number;
+  progressPercent: number;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  failedAt?: string;
+  error?: string;
+  downloadReady: boolean;
+}
+
 const DEFAULT_MAX_PDF_EXPORT_ROWS = 5000;
 const DEFAULT_BULK_ZIP_PART_SIZE = 100;
 const DEFAULT_MAX_BULK_EXPORT_REQUESTS = 2000;
+const DEFAULT_BULK_JOB_RETENTION_MINUTES = 60;
 
 function getMaxPdfExportRows(): number {
   const rawValue = process.env.REPORTS_MAX_PDF_EXPORT_ROWS;
@@ -523,6 +566,17 @@ function getMaxBulkExportRequests(): number {
   return Math.floor(parsed);
 }
 
+function getBulkJobRetentionMinutes(): number {
+  const rawValue = process.env.REPORTS_BULK_JOB_RETENTION_MINUTES;
+  const parsed = Number(rawValue);
+
+  if (!rawValue || Number.isNaN(parsed) || parsed <= 0) {
+    return DEFAULT_BULK_JOB_RETENTION_MINUTES;
+  }
+
+  return Math.floor(parsed);
+}
+
 function chunkArray<T>(items: T[], chunkSize: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < items.length; i += chunkSize) {
@@ -537,13 +591,20 @@ function sanitizeFilename(name: string): string {
 
 @Injectable()
 export class ReportsService {
+  private bulkExportJobs = new Map<string, BulkExportJob>();
+
   constructor(
     @InjectModel(MaintenanceRequest.name)
     private requestModel: Model<MaintenanceRequestDocument>,
     @InjectModel(User.name)
     private userModel: Model<UserDocument>,
-    private statisticsService: StatisticsService
-  ) {}
+    private statisticsService: StatisticsService,
+    private notificationsGateway: NotificationsGateway
+  ) {
+    setInterval(() => {
+      void this.cleanupExpiredBulkJobs();
+    }, 10 * 60 * 1000);
+  }
 
   getReportsConfig(): {
     maxPdfExportRows: number;
@@ -555,6 +616,112 @@ export class ReportsService {
       bulkZipPartSize: getBulkZipPartSize(),
       maxBulkExportRequests: getMaxBulkExportRequests(),
     };
+  }
+
+  private toBulkJobSnapshot(job: BulkExportJob): BulkExportJobSnapshot {
+    const progressPercent =
+      job.totalRequests > 0
+        ? Math.min(
+            100,
+            Math.max(
+              0,
+              Math.round((job.processedRequests / job.totalRequests) * 100)
+            )
+          )
+        : 0;
+
+    return {
+      id: job.id,
+      status: job.status,
+      mode: job.mode,
+      totalRequests: job.totalRequests,
+      processedRequests: job.processedRequests,
+      totalParts: job.totalParts,
+      processedParts: job.processedParts,
+      chunkSize: job.chunkSize,
+      progressPercent,
+      createdAt: job.createdAt.toISOString(),
+      startedAt: job.startedAt?.toISOString(),
+      completedAt: job.completedAt?.toISOString(),
+      failedAt: job.failedAt?.toISOString(),
+      error: job.error,
+      downloadReady: !!job.filePath && job.status === "completed",
+    };
+  }
+
+  private async cleanupExpiredBulkJobs(): Promise<void> {
+    const retentionMs = getBulkJobRetentionMinutes() * 60 * 1000;
+    const now = Date.now();
+
+    for (const [jobId, job] of this.bulkExportJobs.entries()) {
+      const endedAt = job.completedAt || job.failedAt;
+      if (!endedAt) {
+        continue;
+      }
+
+      if (now - endedAt.getTime() < retentionMs) {
+        continue;
+      }
+
+      if (job.filePath) {
+        try {
+          await fs.promises.unlink(job.filePath);
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+
+      this.bulkExportJobs.delete(jobId);
+    }
+  }
+
+  getBulkExportJob(jobId: string): BulkExportJobSnapshot {
+    const job = this.bulkExportJobs.get(jobId);
+    if (!job) {
+      throw new Error("Bulk export job not found");
+    }
+
+    return this.toBulkJobSnapshot(job);
+  }
+
+  private emitBulkExportProgress(job: BulkExportJob): void {
+    if (!job.ownerUserId) {
+      return;
+    }
+
+    this.notificationsGateway.notifyBulkExportProgress(
+      job.ownerUserId,
+      this.toBulkJobSnapshot(job)
+    );
+  }
+
+  async downloadBulkExportJob(jobId: string, res: Response): Promise<void> {
+    const job = this.bulkExportJobs.get(jobId);
+    if (!job) {
+      throw new Error("Bulk export job not found");
+    }
+
+    if (job.status !== "completed" || !job.filePath || !job.fileName) {
+      throw new Error("Bulk export file is not ready yet");
+    }
+
+    const exists = fs.existsSync(job.filePath);
+    if (!exists) {
+      throw new Error("Export file is missing");
+    }
+
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename=${job.fileName}`);
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    await new Promise<void>((resolve, reject) => {
+      const stream = fs.createReadStream(job.filePath as string);
+      stream.on("error", reject);
+      stream.on("end", resolve);
+      stream.pipe(res);
+    });
   }
 
   async getRequestsReport(
@@ -1273,6 +1440,190 @@ export class ReportsService {
     return `${sanitizeFilename(requestCode)}.pdf`;
   }
 
+  private getBulkExportTempDirectory(): string {
+    const dir = path.join(os.tmpdir(), "maintenance-bulk-exports");
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    return dir;
+  }
+
+  private async appendRequestsAsPartZips(
+    requests: MaintenanceRequestDocument[],
+    outerArchive: any,
+    onRequestProcessed?: () => void,
+    onPartProcessed?: () => void
+  ): Promise<void> {
+    const chunkSize = getBulkZipPartSize();
+    const chunks = chunkArray(requests, chunkSize);
+    const browser = await this.createPuppeteerBrowser();
+
+    try {
+      for (let index = 0; index < chunks.length; index += 1) {
+        const currentChunk = chunks[index];
+        const partEntries: Array<{ name: string; content: Buffer }> = [];
+
+        for (const request of currentChunk) {
+          const pdfBuffer = await this.generateSingleRequestPdfBufferFromRequest(
+            request,
+            browser
+          );
+          partEntries.push({
+            name: this.buildPdfName(request),
+            content: pdfBuffer,
+          });
+          onRequestProcessed?.();
+        }
+
+        const partZipBuffer = await this.createZipBuffer(partEntries);
+        outerArchive.append(partZipBuffer, {
+          name: this.buildPartZipName(index + 1),
+        });
+        onPartProcessed?.();
+      }
+    } finally {
+      await browser.close();
+    }
+  }
+
+  private createBulkExportJob(
+    mode: "selected" | "filtered",
+    totalRequests: number,
+    chunkSize: number,
+    ownerUserId?: string
+  ): BulkExportJob {
+    const job: BulkExportJob = {
+      id: randomUUID(),
+      status: "queued",
+      mode,
+      totalRequests,
+      processedRequests: 0,
+      totalParts: Math.ceil(totalRequests / chunkSize),
+      processedParts: 0,
+      chunkSize,
+      createdAt: new Date(),
+      ownerUserId,
+    };
+
+    this.bulkExportJobs.set(job.id, job);
+    return job;
+  }
+
+  private async runBulkExportJob(
+    job: BulkExportJob,
+    requests: MaintenanceRequestDocument[]
+  ): Promise<void> {
+    job.status = "processing";
+    job.startedAt = new Date();
+    this.emitBulkExportProgress(job);
+
+    const fileName = this.buildMainBundleZipName();
+    const filePath = path.join(
+      this.getBulkExportTempDirectory(),
+      `${job.id}-${fileName}`
+    );
+
+    const output = fs.createWriteStream(filePath);
+    const outerArchive = archiver("zip", { zlib: { level: 9 } });
+    outerArchive.pipe(output);
+
+    try {
+      await this.appendRequestsAsPartZips(
+        requests,
+        outerArchive,
+        () => {
+          job.processedRequests += 1;
+          this.emitBulkExportProgress(job);
+        },
+        () => {
+          job.processedParts += 1;
+          this.emitBulkExportProgress(job);
+        }
+      );
+
+      await outerArchive.finalize();
+      await new Promise<void>((resolve, reject) => {
+        output.on("close", () => resolve());
+        output.on("error", reject);
+      });
+
+      job.status = "completed";
+      job.completedAt = new Date();
+      job.filePath = filePath;
+      job.fileName = fileName;
+      job.processedRequests = job.totalRequests;
+      job.processedParts = job.totalParts;
+      this.emitBulkExportProgress(job);
+    } catch (error) {
+      job.status = "failed";
+      job.failedAt = new Date();
+      job.error = error instanceof Error ? error.message : "Failed to build export";
+      this.emitBulkExportProgress(job);
+      if (fs.existsSync(filePath)) {
+        try {
+          await fs.promises.unlink(filePath);
+        } catch {
+          // ignore cleanup error
+        }
+      }
+      throw error;
+    }
+  }
+
+  async startBulkExportJobByIds(
+    requestIds: string[],
+    user?: CurrentUserData
+  ): Promise<BulkExportJobSnapshot> {
+    const chunkSize = getBulkZipPartSize();
+    const job = this.createBulkExportJob("selected", 0, chunkSize, user?.userId);
+    this.emitBulkExportProgress(job);
+
+    void (async () => {
+      try {
+        const requests = await this.getRequestsForIds(requestIds, user);
+        job.totalRequests = requests.length;
+        job.totalParts = Math.ceil(requests.length / chunkSize);
+        await this.runBulkExportJob(job, requests);
+      } catch (error) {
+        job.status = "failed";
+        job.failedAt = new Date();
+        job.error =
+          error instanceof Error ? error.message : "Failed to build export";
+        this.emitBulkExportProgress(job);
+        console.error("Bulk export selected job failed:", error);
+      }
+    })();
+
+    return this.toBulkJobSnapshot(job);
+  }
+
+  async startBulkExportJobByFilter(
+    filter: ReportFilterDto,
+    user?: CurrentUserData
+  ): Promise<BulkExportJobSnapshot> {
+    const chunkSize = getBulkZipPartSize();
+    const job = this.createBulkExportJob("filtered", 0, chunkSize, user?.userId);
+    this.emitBulkExportProgress(job);
+
+    void (async () => {
+      try {
+        const requests = await this.getRequestsForFilter(filter, user);
+        job.totalRequests = requests.length;
+        job.totalParts = Math.ceil(requests.length / chunkSize);
+        await this.runBulkExportJob(job, requests);
+      } catch (error) {
+        job.status = "failed";
+        job.failedAt = new Date();
+        job.error =
+          error instanceof Error ? error.message : "Failed to build export";
+        this.emitBulkExportProgress(job);
+        console.error("Bulk export filtered job failed:", error);
+      }
+    })();
+
+    return this.toBulkJobSnapshot(job);
+  }
+
   async streamBulkRequestsZipByIds(
     requestIds: string[],
     res: Response,
@@ -1295,9 +1646,6 @@ export class ReportsService {
     requests: MaintenanceRequestDocument[],
     res: Response
   ): Promise<void> {
-    const chunkSize = getBulkZipPartSize();
-    const chunks = chunkArray(requests, chunkSize);
-
     res.setHeader("Content-Type", "application/zip");
     res.setHeader(
       "Content-Disposition",
@@ -1316,33 +1664,8 @@ export class ReportsService {
       outerArchive.on("error", reject);
     });
 
-    const browser = await this.createPuppeteerBrowser();
-    try {
-      for (let index = 0; index < chunks.length; index += 1) {
-        const currentChunk = chunks[index];
-        const partEntries: Array<{ name: string; content: Buffer }> = [];
-
-        for (const request of currentChunk) {
-          const pdfBuffer = await this.generateSingleRequestPdfBufferFromRequest(
-            request,
-            browser
-          );
-          partEntries.push({
-            name: this.buildPdfName(request),
-            content: pdfBuffer,
-          });
-        }
-
-        const partZipBuffer = await this.createZipBuffer(partEntries);
-        outerArchive.append(partZipBuffer, {
-          name: this.buildPartZipName(index + 1),
-        });
-      }
-
-      await outerArchive.finalize();
-      await completed;
-    } finally {
-      await browser.close();
-    }
+    await this.appendRequestsAsPartZips(requests, outerArchive);
+    await outerArchive.finalize();
+    await completed;
   }
 }
