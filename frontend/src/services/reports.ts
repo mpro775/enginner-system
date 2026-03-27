@@ -303,10 +303,13 @@ export const reportsService = {
     return response.data.data;
   },
 
-  async downloadBulkExportJob(jobId: string): Promise<void> {
+  async downloadBulkExportJob(jobId: string, onDownloadProgress?: (progressEvent: any) => void): Promise<void> {
     const response = await api.get(
       `/reports/requests/bulk-export/jobs/${jobId}/download`,
-      { responseType: "blob" }
+      { 
+        responseType: "blob",
+        onDownloadProgress
+      }
     );
 
     const blob = response.data;

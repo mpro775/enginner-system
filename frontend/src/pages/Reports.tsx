@@ -37,6 +37,7 @@ export default function Reports() {
   const [downloadingFilteredZip, setDownloadingFilteredZip] = useState(false);
   const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set());
   const [activeBulkJob, setActiveBulkJob] = useState<BulkExportJobSnapshot | null>(null);
+  const [finalDownloadProgress, setFinalDownloadProgress] = useState<{ loaded: number; total: number | null; percent: number | null } | null>(null);
   const fromDateInputRef = useRef<HTMLInputElement | null>(null);
   const toDateInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -351,11 +352,18 @@ export default function Reports() {
     }
 
     try {
-      await reportsService.downloadBulkExportJob(activeBulkJob.id);
-      toast({
-        title: 'تم بدء التنزيل',
-        description: 'تم تجهيز الملف بنجاح وجارٍ تنزيله.',
+      setFinalDownloadProgress({ loaded: 0, total: null, percent: null });
+      await reportsService.downloadBulkExportJob(activeBulkJob.id, (progressEvent) => {
+        const loaded = progressEvent.loaded;
+        const total = progressEvent.total || null;
+        const percent = total ? Math.round((loaded / total) * 100) : null;
+        setFinalDownloadProgress({ loaded, total, percent });
       });
+      toast({
+        title: 'تم التنزيل بنجاح',
+        description: 'اكتمل تحميل ملف ZIP.',
+      });
+      setActiveBulkJob(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'تعذر تنزيل ملف التصدير';
       toast({
@@ -363,6 +371,8 @@ export default function Reports() {
         description: message,
         variant: 'destructive',
       });
+    } finally {
+      setFinalDownloadProgress(null);
     }
   };
 
@@ -724,21 +734,49 @@ export default function Reports() {
               {activeBulkJob.status === 'failed' && activeBulkJob.error && (
                 <div className="text-xs text-destructive">{activeBulkJob.error}</div>
               )}
+              {finalDownloadProgress && (
+                <div className="mt-3 p-3 rounded bg-muted/50 border border-muted space-y-2">
+                  <div className="flex justify-between text-sm font-medium">
+                    <span>تنزيل الملف النهائي إلى جهازك</span>
+                    {finalDownloadProgress.percent !== null && (
+                      <span>{finalDownloadProgress.percent}%</span>
+                    )}
+                  </div>
+                  {finalDownloadProgress.percent !== null && (
+                    <div className="h-2 w-full rounded bg-muted overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500 transition-all duration-300"
+                        style={{ width: `${finalDownloadProgress.percent}%` }}
+                      />
+                    </div>
+                  )}
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>
+                      {(finalDownloadProgress.loaded / 1024 / 1024).toFixed(2)} MB
+                      {finalDownloadProgress.total ? ` من ${(finalDownloadProgress.total / 1024 / 1024).toFixed(2)} MB` : ''}
+                    </span>
+                  </div>
+                </div>
+              )}
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleDownloadCompletedBulkJob}
-                  disabled={!activeBulkJob.downloadReady}
+                  disabled={!activeBulkJob.downloadReady || finalDownloadProgress !== null}
                 >
-                  <Archive className="ml-2 h-4 w-4" />
-                  تنزيل الملف الجاهز
+                  {finalDownloadProgress !== null ? (
+                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Archive className="ml-2 h-4 w-4" />
+                  )}
+                  {finalDownloadProgress !== null ? 'جاري التنزيل...' : 'تنزيل الملف الجاهز'}
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setActiveBulkJob(null)}
-                  disabled={isBulkJobRunning}
+                  disabled={isBulkJobRunning || finalDownloadProgress !== null}
                 >
                   إخفاء الحالة
                 </Button>

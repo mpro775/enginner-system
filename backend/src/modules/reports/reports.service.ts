@@ -710,8 +710,11 @@ export class ReportsService {
       throw new Error("Export file is missing");
     }
 
+    const stat = await fs.promises.stat(job.filePath);
+
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", `attachment; filename=${job.fileName}`);
+    res.setHeader("Content-Length", stat.size.toString());
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
