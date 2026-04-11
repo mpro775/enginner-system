@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { RequestMethod, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
@@ -26,8 +26,14 @@ async function bootstrap() {
 
   // Global prefix
   const apiPrefix = configService.get<string>('API_PREFIX', 'api/v1');
-  app.setGlobalPrefix(apiPrefix);
+  app.setGlobalPrefix(apiPrefix, {
+    exclude: [
+      { path: 'health/live', method: RequestMethod.GET },
+      { path: 'health/ready', method: RequestMethod.GET },
+    ],
+  });
 
+  
   // Global pipes
   app.useGlobalPipes(
     new ValidationPipe({
