@@ -29,6 +29,7 @@ import {
   Trash2,
   Eye,
   Download,
+  History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,7 +56,10 @@ import {
   MaintenanceTypeBadge,
 } from "@/components/shared/StatusBadge";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
+import { DetailSkeleton } from "@/components/shared/AdminSkeletons";
+import { Breadcrumbs } from "@/components/shared/Breadcrumbs";
 import { requestsService } from "@/services/requests";
+import { analyticsService } from "@/services/analytics";
 import { reportsService } from "@/services/reports";
 import {
   locationsService,
@@ -144,7 +148,7 @@ export default function RequestDetails() {
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [pdfIframeRef, setPdfIframeRef] = useState<HTMLIFrameElement | null>(
-    null
+    null,
   );
   const [expandedDescriptions, setExpandedDescriptions] = useState<
     Record<string, boolean>
@@ -249,7 +253,7 @@ export default function RequestDetails() {
     const ids = system.departmentIds || [];
     if (ids.length === 0) return true;
     return ids.some(
-      (d) => (typeof d === "object" && d ? d.id : d) === watchDepartmentId
+      (d) => (typeof d === "object" && d ? d.id : d) === watchDepartmentId,
     );
   });
 
@@ -406,6 +410,12 @@ export default function RequestDetails() {
   const isProjectManager = user?.role === Role.PROJECT_MANAGER;
   const isAdmin = user?.role === Role.ADMIN;
 
+  const { data: adminActivity, isLoading: isActivityLoading } = useQuery({
+    queryKey: ["request-activity", id],
+    queryFn: () => analyticsService.getRequestActivity(id!),
+    enabled: isAdmin && Boolean(id),
+  });
+
   // Open edit dialog if edit=true in URL - moved here to ensure consistent hook order
   useEffect(() => {
     const editParam = searchParams.get("edit");
@@ -438,7 +448,7 @@ export default function RequestDetails() {
   useEffect(() => {
     if (watchDepartmentId && watchSystemId && filteredSystems) {
       const currentSystemAvailable = filteredSystems.some(
-        (sys) => sys.id === watchSystemId
+        (sys) => sys.id === watchSystemId,
       );
       if (!currentSystemAvailable) {
         setValue("systemId", "");
@@ -448,7 +458,7 @@ export default function RequestDetails() {
   }, [watchDepartmentId, watchSystemId, filteredSystems, setValue]);
 
   if (isLoading) {
-    return <PageLoader />;
+    return isAdmin ? <DetailSkeleton /> : <PageLoader />;
   }
 
   if (!request) {
@@ -471,6 +481,18 @@ export default function RequestDetails() {
     request.status !== RequestStatus.STOPPED;
   const canAddProjectManagerNote =
     (isProjectManager || isAdmin) && request.status !== RequestStatus.STOPPED;
+  const requestAgeHours = Math.max(
+    0,
+    Math.floor(
+      ((request.closedAt ? new Date(request.closedAt) : new Date()).getTime() -
+        new Date(request.openedAt).getTime()) /
+        3_600_000,
+    ),
+  );
+  const requestAge =
+    requestAgeHours >= 24
+      ? `${Math.floor(requestAgeHours / 24)} يوم و${requestAgeHours % 24} ساعة`
+      : `${requestAgeHours} ساعة`;
 
   const handleStop = () => {
     setShowStopDialog(true);
@@ -656,6 +678,14 @@ export default function RequestDetails() {
 
   return (
     <div className="space-y-6 animate-in">
+      {isAdmin && (
+        <Breadcrumbs
+          items={[
+            { label: "طلبات الصيانة", href: "/app/requests" },
+            { label: request.requestCode },
+          ]}
+        />
+      )}
       {/* Header - Responsive */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
@@ -751,6 +781,58 @@ export default function RequestDetails() {
         </div>
       </div>
 
+      {isAdmin && (
+        <Card className="border-primary/25 bg-primary/[0.025]">
+          <CardContent className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="grid flex-1 gap-3 sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-muted-foreground">عمر الطلب</p>
+                <p className="font-semibold">{requestAge}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">المسؤول الحالي</p>
+                <p className="font-semibold">
+                  {request.engineerId?.name || "غير محدد"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">الآلة</p>
+                <p className="font-semibold">
+                  {request.machineId?.name || "غير محددة"}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {request.machineId?.id && (
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    navigate(`/app/admin/machines/${request.machineId.id}`)
+                  }
+                >
+                  ملف الآلة
+                </Button>
+              )}
+              {canAddNote && (
+                <Button variant="outline" onClick={handleAddNote}>
+                  إضافة ملاحظة
+                </Button>
+              )}
+              {canAddHealthSafetyNote && (
+                <Button variant="outline" onClick={handleAddHealthSafetyNote}>
+                  ملاحظة السلامة
+                </Button>
+              )}
+              {canAddProjectManagerNote && (
+                <Button variant="outline" onClick={handleAddProjectManagerNote}>
+                  ملاحظة الإدارة
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main Info */}
         <div className="lg:col-span-2 space-y-6">
@@ -805,7 +887,7 @@ export default function RequestDetails() {
                   </span>
                   {renderFormattedText(
                     request.machineId.description,
-                    "machine-description"
+                    "machine-description",
                   )}
                 </div>
               )}
@@ -861,7 +943,7 @@ export default function RequestDetails() {
               {request.consultantNotes &&
                 (() => {
                   const { text, author } = parseNoteWithAuthor(
-                    request.consultantNotes
+                    request.consultantNotes,
                   );
                   return (
                     <div className="space-y-2 pt-4 border-t">
@@ -881,7 +963,7 @@ export default function RequestDetails() {
               {request.healthSafetyNotes &&
                 (() => {
                   const { text, author } = parseNoteWithAuthor(
-                    request.healthSafetyNotes
+                    request.healthSafetyNotes,
                   );
                   return (
                     <div className="space-y-2 pt-4 border-t">
@@ -901,7 +983,7 @@ export default function RequestDetails() {
               {request.projectManagerNotes &&
                 (() => {
                   const { text, author } = parseNoteWithAuthor(
-                    request.projectManagerNotes
+                    request.projectManagerNotes,
                   );
                   return (
                     <div className="space-y-2 pt-4 border-t">
@@ -931,7 +1013,7 @@ export default function RequestDetails() {
                       {renderFormattedText(
                         request.stopReason,
                         "stop-reason",
-                        120
+                        120,
                       )}
                     </div>
                   </div>
@@ -946,7 +1028,7 @@ export default function RequestDetails() {
                     {renderFormattedText(
                       request.implementedWork,
                       "implemented-work",
-                      120
+                      120,
                     )}
                   </div>
                 )}
@@ -982,7 +1064,7 @@ export default function RequestDetails() {
                           typeof request.complaintId === "string"
                             ? request.complaintId
                             : (request.complaintId as any).id
-                        }`
+                        }`,
                       )
                     }
                   >
@@ -1160,6 +1242,45 @@ export default function RequestDetails() {
               )}
             </CardContent>
           </Card>
+
+          {isAdmin && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="h-5 w-5 text-primary" />
+                  سجل النشاط الإداري
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isActivityLoading ? (
+                  <div className="space-y-3" aria-label="جاري تحميل سجل النشاط">
+                    {[1, 2, 3].map((item) => (
+                      <div
+                        key={item}
+                        className="h-14 animate-pulse rounded-lg bg-muted"
+                      />
+                    ))}
+                  </div>
+                ) : adminActivity?.length ? (
+                  <ol className="relative space-y-4 border-r pr-5">
+                    {adminActivity.map((item) => (
+                      <li key={item.id} className="relative">
+                        <span className="absolute -right-[1.48rem] top-1.5 h-2.5 w-2.5 rounded-full bg-primary" />
+                        <p className="text-sm font-medium">{item.summary}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {item.actorName} · {formatDateTime(item.createdAt)}
+                        </p>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <div className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">
+                    لا يوجد نشاط إداري مسجل لهذا الطلب حتى الآن.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* People */}
           <Card>
@@ -1581,12 +1702,12 @@ export default function RequestDetails() {
                         !watchSystemId
                           ? "اختر النظام أولاً"
                           : isLoadingMachines
-                          ? "جاري التحميل..."
-                          : isMachinesError
-                          ? "حدث خطأ في التحميل"
-                          : machines && machines.length === 0
-                          ? "لا توجد آلات متاحة"
-                          : "اختر الآلة"
+                            ? "جاري التحميل..."
+                            : isMachinesError
+                              ? "حدث خطأ في التحميل"
+                              : machines && machines.length === 0
+                                ? "لا توجد آلات متاحة"
+                                : "اختر الآلة"
                       }
                     />
                   </SelectTrigger>

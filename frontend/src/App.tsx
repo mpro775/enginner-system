@@ -25,6 +25,9 @@ import NewComplaint from "@/pages/complaints/NewComplaint";
 import ComplaintsList from "@/pages/complaints/ComplaintsList";
 import ComplaintDetails from "@/pages/complaints/ComplaintDetails";
 import Trash from "@/pages/admin/Trash";
+import AnalyticsCenter from "@/pages/admin/AnalyticsCenter";
+import PreventiveCalendar from "@/pages/admin/PreventiveCalendar";
+import MachineProfile from "@/pages/admin/MachineProfile";
 import { Role } from "@/types";
 
 function App() {
@@ -110,6 +113,30 @@ function App() {
           />
 
           {/* Admin routes */}
+          <Route
+            path="admin/analytics"
+            element={
+              <ProtectedRoute allowedRoles={[Role.ADMIN]}>
+                <AnalyticsCenter />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin/preventive-calendar"
+            element={
+              <ProtectedRoute allowedRoles={[Role.ADMIN]}>
+                <PreventiveCalendar />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin/machines/:id"
+            element={
+              <ProtectedRoute allowedRoles={[Role.ADMIN]}>
+                <MachineProfile />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="admin/users"
             element={

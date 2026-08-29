@@ -61,6 +61,12 @@ const navItems: NavItem[] = [
     roles: [Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER],
   },
   {
+    icon: BarChart3,
+    label: "مركز التحليلات",
+    href: "/app/admin/analytics",
+    roles: [Role.ADMIN],
+  },
+  {
     icon: FileSpreadsheet,
     label: "التقارير",
     href: "/app/reports",
@@ -103,6 +109,12 @@ const navItems: NavItem[] = [
     roles: [Role.ADMIN, Role.CONSULTANT],
   },
   {
+    icon: Calendar,
+    label: "تقويم الصيانة الوقائية",
+    href: "/app/admin/preventive-calendar",
+    roles: [Role.ADMIN],
+  },
+  {
     icon: History,
     label: "سجل العمليات",
     href: "/app/admin/audit-logs",
@@ -132,8 +144,42 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [isMobile, setIsMobile] = useState(false);
 
   const filteredNavItems = navItems.filter(
-    (item) => !item.roles || (user && item.roles.includes(user.role))
+    (item) => !item.roles || (user && item.roles.includes(user.role)),
   );
+  const adminNavigationGroups = [
+    {
+      label: "مساحة العمل",
+      hrefs: [
+        "/app/dashboard",
+        "/app/requests",
+        "/app/complaints",
+        "/app/admin/scheduled-tasks",
+      ],
+    },
+    {
+      label: "التحليل والتخطيط",
+      hrefs: [
+        "/app/admin/analytics",
+        "/app/admin/preventive-calendar",
+        "/app/statistics",
+        "/app/reports",
+      ],
+    },
+    {
+      label: "إدارة البيانات",
+      hrefs: [
+        "/app/admin/users",
+        "/app/admin/locations",
+        "/app/admin/departments",
+        "/app/admin/systems",
+        "/app/admin/machines",
+      ],
+    },
+    {
+      label: "النظام",
+      hrefs: ["/app/admin/audit-logs", "/app/admin/trash"],
+    },
+  ];
 
   // Check if we're on mobile
   useEffect(() => {
@@ -141,8 +187,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       setIsMobile(window.innerWidth < 1024);
     };
     checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
   const handleLinkClick = () => {
@@ -155,13 +201,56 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   // Only hide from screen readers when closed on mobile
   const shouldHideFromScreenReader = !isOpen && isMobile;
 
+  const renderNavigationItem = (item: NavItem, key: string) => {
+    const isActive =
+      item.href &&
+      (location.pathname === item.href ||
+        location.pathname.startsWith(item.href + "/"));
+    const Icon = item.icon;
+
+    if (item.isAction) {
+      return (
+        <li key={key}>
+          <button
+            onClick={() => {
+              if (item.onClick) item.onClick();
+              else {
+                logout();
+                onClose();
+              }
+              handleLinkClick();
+            }}
+            className="sidebar-link w-full text-right"
+          >
+            <Icon className="h-5 w-5 flex-shrink-0" />
+            <span className="truncate">{item.label}</span>
+          </button>
+        </li>
+      );
+    }
+
+    return (
+      <li key={key}>
+        <Link
+          to={item.href!}
+          onClick={handleLinkClick}
+          className={cn("sidebar-link", isActive && "active")}
+          aria-current={isActive ? "page" : undefined}
+        >
+          <Icon className="h-5 w-5 flex-shrink-0" />
+          <span className="truncate">{item.label}</span>
+        </Link>
+      </li>
+    );
+  };
+
   return (
     <>
       {/* Overlay for mobile */}
       <div
         className={cn(
           "fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-300 lg:hidden",
-          isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+          isOpen ? "opacity-100" : "opacity-0 pointer-events-none",
         )}
         onClick={onClose}
         aria-hidden="true"
@@ -173,9 +262,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           "fixed right-0 top-0 z-50 h-screen w-72 border-l bg-card shadow-xl transition-transform duration-300 ease-in-out lg:w-64 lg:shadow-none",
           isOpen
             ? "translate-x-0"
-            : "translate-x-full lg:translate-x-0 pointer-events-none lg:pointer-events-auto"
+            : "translate-x-full lg:translate-x-0 pointer-events-none lg:pointer-events-auto",
         )}
-        {...(shouldHideFromScreenReader && { 'aria-hidden': 'true' })}
+        {...(shouldHideFromScreenReader && { "aria-hidden": "true" })}
       >
         <div className="flex h-full flex-col">
           {/* Logo & Close Button - KSU Brand */}
@@ -206,50 +295,47 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
-            <ul className="space-y-1">
-              {filteredNavItems.map((item, index) => {
-                const isActive =
-                  item.href &&
-                  (location.pathname === item.href ||
-                    location.pathname.startsWith(item.href + "/"));
-                const Icon = item.icon;
-
-                if (item.isAction) {
-                  return (
-                    <li key={`action-${index}`}>
-                      <button
-                        onClick={() => {
-                          if (item.onClick) {
-                            item.onClick();
-                          } else {
-                            logout();
-                            onClose();
-                          }
-                          handleLinkClick();
-                        }}
-                        className={cn("sidebar-link w-full text-right")}
-                      >
-                        <Icon className="h-5 w-5 flex-shrink-0" />
-                        <span className="truncate">{item.label}</span>
-                      </button>
-                    </li>
+            {user?.role === Role.ADMIN ? (
+              <div className="space-y-5">
+                {adminNavigationGroups.map((group) => {
+                  const items = filteredNavItems.filter(
+                    (item) => item.href && group.hrefs.includes(item.href),
                   );
-                }
-
-                return (
-                  <li key={item.href}>
-                    <Link
-                      to={item.href!}
-                      onClick={handleLinkClick}
-                      className={cn("sidebar-link", isActive && "active")}
+                  if (!items.length) return null;
+                  return (
+                    <section
+                      key={group.label}
+                      aria-labelledby={`nav-${group.label}`}
                     >
-                      <Icon className="h-5 w-5 flex-shrink-0" />
-                      <span className="truncate">{item.label}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+                      <h2
+                        id={`nav-${group.label}`}
+                        className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                      >
+                        {group.label}
+                      </h2>
+                      <ul className="space-y-1">
+                        {items.map((item) =>
+                          renderNavigationItem(item, item.href!),
+                        )}
+                      </ul>
+                    </section>
+                  );
+                })}
+                <ul className="space-y-1 border-t pt-3">
+                  {filteredNavItems
+                    .filter((item) => item.isAction)
+                    .map((item, index) =>
+                      renderNavigationItem(item, `action-${index}`),
+                    )}
+                </ul>
+              </div>
+            ) : (
+              <ul className="space-y-1">
+                {filteredNavItems.map((item, index) =>
+                  renderNavigationItem(item, item.href || `action-${index}`),
+                )}
+              </ul>
+            )}
           </nav>
 
           {/* User info */}

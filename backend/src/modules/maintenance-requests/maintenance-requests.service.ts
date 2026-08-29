@@ -52,12 +52,12 @@ export class MaintenanceRequestsService {
     @Inject(forwardRef(() => AuditLogsService))
     private auditLogsService: AuditLogsService,
     @Inject(forwardRef(() => ScheduledTasksService))
-    private scheduledTasksService: ScheduledTasksService
+    private scheduledTasksService: ScheduledTasksService,
   ) {}
 
   async create(
     createDto: CreateMaintenanceRequestDto,
-    user: { userId: string; name: string }
+    user: { userId: string; name: string },
   ): Promise<MaintenanceRequestDocument> {
     // Validate components if maintainAllComponents is false
     if (createDto.maintainAllComponents === false) {
@@ -66,7 +66,7 @@ export class MaintenanceRequestsService {
         createDto.selectedComponents.length === 0
       ) {
         throw new InvalidOperationException(
-          "Selected components are required when maintainAllComponents is false"
+          "Selected components are required when maintainAllComponents is false",
         );
       }
 
@@ -78,18 +78,18 @@ export class MaintenanceRequestsService {
 
       if (!machine.components || machine.components.length === 0) {
         throw new InvalidOperationException(
-          "The selected machine does not have any components"
+          "The selected machine does not have any components",
         );
       }
 
       // Check if all selected components exist in the machine
       const invalidComponents = createDto.selectedComponents.filter(
-        (component) => !machine.components?.includes(component)
+        (component) => !machine.components?.includes(component),
       );
 
       if (invalidComponents.length > 0) {
         throw new InvalidOperationException(
-          `The following components are not valid for this machine: ${invalidComponents.join(", ")}`
+          `The following components are not valid for this machine: ${invalidComponents.join(", ")}`,
         );
       }
     }
@@ -99,7 +99,7 @@ export class MaintenanceRequestsService {
 
     // Generate request code
     const requestCode = await this.generateRequestCode(
-      createDto.maintenanceType
+      createDto.maintenanceType,
     );
 
     // Ensure engineerId is converted to ObjectId for consistent storage and querying
@@ -123,7 +123,7 @@ export class MaintenanceRequestsService {
     if (createDto.scheduledTaskId) {
       await this.scheduledTasksService.markAsCompleted(
         createDto.scheduledTaskId,
-        saved._id.toString()
+        saved._id.toString(),
       );
     }
 
@@ -149,7 +149,7 @@ export class MaintenanceRequestsService {
 
   async findAll(
     filterDto: FilterRequestsDto,
-    user: { userId: string; role: string }
+    user: { userId: string; role: string },
   ): Promise<PaginatedResult<MaintenanceRequestDocument>> {
     const { skip, limit } = getSkipAndLimit(filterDto);
     const sortOptions = getSortOptions(filterDto);
@@ -182,7 +182,7 @@ export class MaintenanceRequestsService {
 
   async findOne(
     id: string,
-    user: { userId: string; role: string }
+    user: { userId: string; role: string },
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.populateRequest(id);
 
@@ -204,7 +204,7 @@ export class MaintenanceRequestsService {
   async update(
     id: string,
     updateDto: UpdateMaintenanceRequestDto,
-    user: { userId: string; name: string; role: string }
+    user: { userId: string; name: string; role: string },
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findById(id);
 
@@ -215,14 +215,14 @@ export class MaintenanceRequestsService {
     // Only the engineer who created the request can update it
     if (request.engineerId.toString() !== user.userId) {
       throw new ForbiddenAccessException(
-        "You can only update your own requests"
+        "You can only update your own requests",
       );
     }
 
     // Can only update requests in in_progress status
     if (request.status !== RequestStatus.IN_PROGRESS) {
       throw new InvalidOperationException(
-        "Can only update requests that are in progress"
+        "Can only update requests that are in progress",
       );
     }
 
@@ -262,7 +262,7 @@ export class MaintenanceRequestsService {
   async stop(
     id: string,
     stopDto: StopRequestDto,
-    user: { userId: string; name: string }
+    user: { userId: string; name: string },
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findById(id);
 
@@ -276,7 +276,7 @@ export class MaintenanceRequestsService {
 
     if (request.status !== RequestStatus.IN_PROGRESS) {
       throw new InvalidOperationException(
-        "Can only stop requests that are in progress"
+        "Can only stop requests that are in progress",
       );
     }
 
@@ -289,13 +289,13 @@ export class MaintenanceRequestsService {
         stopReason: stopDto.stopReason,
         stoppedAt: new Date(),
       },
-      { new: true }
+      { new: true },
     );
 
     // If request was linked to a scheduled task, mark it as pending again
     if (updatedRequest?.scheduledTaskId) {
       await this.scheduledTasksService.markAsPending(
-        updatedRequest.scheduledTaskId.toString()
+        updatedRequest.scheduledTaskId.toString(),
       );
     }
 
@@ -324,7 +324,7 @@ export class MaintenanceRequestsService {
   async addConsultantNote(
     id: string,
     noteDto: AddNoteDto,
-    user: { userId: string; name: string }
+    user: { userId: string; name: string },
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findById(id);
 
@@ -335,7 +335,7 @@ export class MaintenanceRequestsService {
     const previousNotes = request.consultantNotes;
     const formattedNote = this.formatNoteWithAuthor(
       noteDto.consultantNotes,
-      user.name
+      user.name,
     );
 
     await this.requestModel.findByIdAndUpdate(id, {
@@ -367,7 +367,7 @@ export class MaintenanceRequestsService {
   async addHealthSafetyNote(
     id: string,
     noteDto: AddHealthSafetyNoteDto,
-    user: { userId: string; name: string }
+    user: { userId: string; name: string },
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findById(id);
 
@@ -378,7 +378,7 @@ export class MaintenanceRequestsService {
     const previousNotes = request.healthSafetyNotes;
     const formattedNote = this.formatNoteWithAuthor(
       noteDto.healthSafetyNotes,
-      user.name
+      user.name,
     );
 
     await this.requestModel.findByIdAndUpdate(id, {
@@ -412,7 +412,7 @@ export class MaintenanceRequestsService {
   async addProjectManagerNote(
     id: string,
     noteDto: AddProjectManagerNoteDto,
-    user: { userId: string; name: string }
+    user: { userId: string; name: string },
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findById(id);
 
@@ -423,7 +423,7 @@ export class MaintenanceRequestsService {
     const previousNotes = request.projectManagerNotes;
     const formattedNote = this.formatNoteWithAuthor(
       noteDto.projectManagerNotes,
-      user.name
+      user.name,
     );
 
     await this.requestModel.findByIdAndUpdate(id, {
@@ -457,7 +457,7 @@ export class MaintenanceRequestsService {
   async complete(
     id: string,
     completeDto: CompleteRequestDto,
-    user: { userId: string; name: string }
+    user: { userId: string; name: string },
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findById(id);
 
@@ -467,13 +467,13 @@ export class MaintenanceRequestsService {
 
     if (request.engineerId.toString() !== user.userId) {
       throw new ForbiddenAccessException(
-        "You can only complete your own requests"
+        "You can only complete your own requests",
       );
     }
 
     if (request.status !== RequestStatus.IN_PROGRESS) {
       throw new InvalidOperationException(
-        "Can only complete requests that are in progress"
+        "Can only complete requests that are in progress",
       );
     }
 
@@ -515,7 +515,7 @@ export class MaintenanceRequestsService {
   }
 
   private async generateRequestCode(
-    maintenanceType: MaintenanceType
+    maintenanceType: MaintenanceType,
   ): Promise<string> {
     const date = new Date();
     const year = date.getFullYear();
@@ -546,7 +546,7 @@ export class MaintenanceRequestsService {
 
   private async buildFilter(
     filterDto: FilterRequestsDto,
-    user: { userId: string; role: string }
+    user: { userId: string; role: string },
   ): Promise<FilterQuery<MaintenanceRequestDocument>> {
     const filter: FilterQuery<MaintenanceRequestDocument> = {
       deletedAt: null, // استبعاد المحذوفين ناعماً
@@ -555,11 +555,13 @@ export class MaintenanceRequestsService {
     // Engineers can only see their own requests (always apply engineerId filter)
     if (user.role === Role.ENGINEER) {
       // Support both String and ObjectId formats
-      filter.engineerId = { 
+      filter.engineerId = {
         $in: [
           user.userId,
-          Types.ObjectId.isValid(user.userId) ? new Types.ObjectId(user.userId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(user.userId)
+            ? new Types.ObjectId(user.userId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 
@@ -568,7 +570,10 @@ export class MaintenanceRequestsService {
       const consultant = (await this.userModel
         .findById(user.userId)
         .select("departmentIds +departmentId")
-        .lean()) as { departmentIds?: unknown[]; departmentId?: unknown } | null;
+        .lean()) as {
+        departmentIds?: unknown[];
+        departmentId?: unknown;
+      } | null;
       // Support both departmentIds (array) and legacy departmentId (single)
       const deptIds = Array.isArray((consultant as any)?.departmentIds)
         ? (consultant as any).departmentIds
@@ -598,67 +603,88 @@ export class MaintenanceRequestsService {
     // Allow Admins and Consultants to filter by specific engineer
     if (filterDto.engineerId && user.role !== Role.ENGINEER) {
       // Support both String and ObjectId formats
-      filter.engineerId = { 
+      filter.engineerId = {
         $in: [
           filterDto.engineerId,
-          Types.ObjectId.isValid(filterDto.engineerId) ? new Types.ObjectId(filterDto.engineerId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(filterDto.engineerId)
+            ? new Types.ObjectId(filterDto.engineerId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 
     if (filterDto.consultantId) {
       // Support both String and ObjectId formats
-      filter.consultantId = { 
+      filter.consultantId = {
         $in: [
           filterDto.consultantId,
-          Types.ObjectId.isValid(filterDto.consultantId) ? new Types.ObjectId(filterDto.consultantId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(filterDto.consultantId)
+            ? new Types.ObjectId(filterDto.consultantId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 
     if (filterDto.locationId) {
       // Support both String and ObjectId formats
-      filter.locationId = { 
+      filter.locationId = {
         $in: [
           filterDto.locationId,
-          Types.ObjectId.isValid(filterDto.locationId) ? new Types.ObjectId(filterDto.locationId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(filterDto.locationId)
+            ? new Types.ObjectId(filterDto.locationId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 
     // Only allow manual departmentId filter for Admins (Consultants are auto-filtered by their department)
     if (filterDto.departmentId && user.role !== Role.CONSULTANT) {
       // Support both String and ObjectId formats
-      filter.departmentId = { 
+      filter.departmentId = {
         $in: [
           filterDto.departmentId,
-          Types.ObjectId.isValid(filterDto.departmentId) ? new Types.ObjectId(filterDto.departmentId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(filterDto.departmentId)
+            ? new Types.ObjectId(filterDto.departmentId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 
     if (filterDto.systemId) {
       // Support both String and ObjectId formats
-      filter.systemId = { 
+      filter.systemId = {
         $in: [
           filterDto.systemId,
-          Types.ObjectId.isValid(filterDto.systemId) ? new Types.ObjectId(filterDto.systemId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(filterDto.systemId)
+            ? new Types.ObjectId(filterDto.systemId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 
     if (filterDto.machineId) {
       // Support both String and ObjectId formats
-      filter.machineId = { 
+      filter.machineId = {
         $in: [
           filterDto.machineId,
-          Types.ObjectId.isValid(filterDto.machineId) ? new Types.ObjectId(filterDto.machineId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(filterDto.machineId)
+            ? new Types.ObjectId(filterDto.machineId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 
     if (filterDto.maintenanceType) {
       filter.maintenanceType = filterDto.maintenanceType;
+    }
+
+    if (filterDto.openedBefore) {
+      filter.openedAt = { $lt: new Date(filterDto.openedBefore) };
+      if (!filterDto.status) {
+        filter.status = {
+          $in: [RequestStatus.IN_PROGRESS, RequestStatus.STOPPED],
+        } as any;
+      }
     }
 
     if (filterDto.fromDate || filterDto.toDate) {
@@ -678,12 +704,12 @@ export class MaintenanceRequestsService {
 
   private formatNoteWithAuthor(note: string, authorName: string): string {
     // إزالة أي اسم موجود مسبقاً في نهاية الملاحظة
-    const cleanedNote = note.replace(/\s*\([^)]+\)\s*$/, '').trim();
+    const cleanedNote = note.replace(/\s*\([^)]+\)\s*$/, "").trim();
     return `${cleanedNote} (${authorName})`;
   }
 
   private async populateRequest(
-    id: string
+    id: string,
   ): Promise<MaintenanceRequestDocument> {
     return this.requestModel
       .findById(id)
@@ -723,7 +749,7 @@ export class MaintenanceRequestsService {
 
   async softDelete(
     id: string,
-    user: { userId: string; name: string }
+    user: { userId: string; name: string },
   ): Promise<void> {
     const request = await this.requestModel.findById(id);
     if (!request || request.deletedAt) {
@@ -748,7 +774,7 @@ export class MaintenanceRequestsService {
 
   async hardDelete(
     id: string,
-    user: { userId: string; name: string }
+    user: { userId: string; name: string },
   ): Promise<void> {
     const request = await this.requestModel.findById(id);
     if (!request) {
@@ -770,7 +796,7 @@ export class MaintenanceRequestsService {
 
   async restore(
     id: string,
-    user: { userId: string; name: string }
+    user: { userId: string; name: string },
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findById(id);
     if (!request || !request.deletedAt) {
@@ -780,7 +806,7 @@ export class MaintenanceRequestsService {
     const restored = await this.requestModel.findByIdAndUpdate(
       id,
       { $unset: { deletedAt: 1, deletedBy: 1 } },
-      { new: true }
+      { new: true },
     );
 
     if (!restored) {
@@ -803,7 +829,7 @@ export class MaintenanceRequestsService {
   }
 
   async findDeleted(
-    filterDto: FilterRequestsDto
+    filterDto: FilterRequestsDto,
   ): Promise<PaginatedResult<MaintenanceRequestDocument>> {
     const { skip, limit } = getSkipAndLimit(filterDto);
     const sortOptions = getSortOptions(filterDto);
@@ -818,61 +844,73 @@ export class MaintenanceRequestsService {
 
     if (filterDto.engineerId) {
       // Support both String and ObjectId formats
-      filter.engineerId = { 
+      filter.engineerId = {
         $in: [
           filterDto.engineerId,
-          Types.ObjectId.isValid(filterDto.engineerId) ? new Types.ObjectId(filterDto.engineerId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(filterDto.engineerId)
+            ? new Types.ObjectId(filterDto.engineerId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 
     if (filterDto.consultantId) {
       // Support both String and ObjectId formats
-      filter.consultantId = { 
+      filter.consultantId = {
         $in: [
           filterDto.consultantId,
-          Types.ObjectId.isValid(filterDto.consultantId) ? new Types.ObjectId(filterDto.consultantId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(filterDto.consultantId)
+            ? new Types.ObjectId(filterDto.consultantId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 
     if (filterDto.locationId) {
       // Support both String and ObjectId formats
-      filter.locationId = { 
+      filter.locationId = {
         $in: [
           filterDto.locationId,
-          Types.ObjectId.isValid(filterDto.locationId) ? new Types.ObjectId(filterDto.locationId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(filterDto.locationId)
+            ? new Types.ObjectId(filterDto.locationId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 
     if (filterDto.departmentId) {
       // Support both String and ObjectId formats
-      filter.departmentId = { 
+      filter.departmentId = {
         $in: [
           filterDto.departmentId,
-          Types.ObjectId.isValid(filterDto.departmentId) ? new Types.ObjectId(filterDto.departmentId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(filterDto.departmentId)
+            ? new Types.ObjectId(filterDto.departmentId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 
     if (filterDto.systemId) {
       // Support both String and ObjectId formats
-      filter.systemId = { 
+      filter.systemId = {
         $in: [
           filterDto.systemId,
-          Types.ObjectId.isValid(filterDto.systemId) ? new Types.ObjectId(filterDto.systemId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(filterDto.systemId)
+            ? new Types.ObjectId(filterDto.systemId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 
     if (filterDto.machineId) {
       // Support both String and ObjectId formats
-      filter.machineId = { 
+      filter.machineId = {
         $in: [
           filterDto.machineId,
-          Types.ObjectId.isValid(filterDto.machineId) ? new Types.ObjectId(filterDto.machineId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(filterDto.machineId)
+            ? new Types.ObjectId(filterDto.machineId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 

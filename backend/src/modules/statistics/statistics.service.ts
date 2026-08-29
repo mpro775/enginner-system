@@ -68,13 +68,13 @@ export class StatisticsService {
     private requestModel: Model<MaintenanceRequestDocument>,
     @InjectModel(User.name)
     private userModel: Model<UserDocument>,
-    @Inject(CACHE_MANAGER) private cacheManager: Cache
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   async getDashboardStatistics(
     filter: StatisticsFilterDto,
     userRole: string,
-    userId?: string
+    userId?: string,
   ): Promise<DashboardStatistics> {
     const cacheKey = `stats:dashboard:${JSON.stringify(filter)}:${userRole}:${userId}`;
     const cached = await this.cacheManager.get<DashboardStatistics>(cacheKey);
@@ -82,7 +82,8 @@ export class StatisticsService {
 
     const matchStage = await this.buildMatchStage(filter, userRole, userId);
     const now = new Date();
-    const todayStart = new Date(now.setHours(0, 0, 0, 0));
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
     const weekStart = new Date(now);
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     weekStart.setHours(0, 0, 0, 0);
@@ -142,11 +143,11 @@ export class StatisticsService {
 
     const statusMap = statusCounts.reduce(
       (acc, curr) => ({ ...acc, [curr._id]: curr.count }),
-      {}
+      {},
     );
     const typeMap = typeCounts.reduce(
       (acc, curr) => ({ ...acc, [curr._id]: curr.count }),
-      {}
+      {},
     );
 
     const result: DashboardStatistics = {
@@ -173,7 +174,7 @@ export class StatisticsService {
   }
 
   async getByEngineer(
-    filter: StatisticsFilterDto
+    filter: StatisticsFilterDto,
   ): Promise<EngineerStatistics[]> {
     const cacheKey = `stats:byEngineer:${JSON.stringify(filter)}`;
     const cached = await this.cacheManager.get<EngineerStatistics[]>(cacheKey);
@@ -250,7 +251,7 @@ export class StatisticsService {
 
     const result: EngineerStatistics[] = stats.map((stat) => {
       const completedWithTime = stat.completedRequests.filter(
-        (r: any) => r !== null
+        (r: any) => r !== null,
       );
       let avgTime = 0;
       if (completedWithTime.length > 0) {
@@ -258,7 +259,7 @@ export class StatisticsService {
           (acc: number, r: any) =>
             acc +
             (new Date(r.closedAt).getTime() - new Date(r.openedAt).getTime()),
-          0
+          0,
         );
         avgTime = totalTime / completedWithTime.length / (1000 * 60 * 60);
       }
@@ -285,7 +286,7 @@ export class StatisticsService {
   }
 
   async getByStatus(
-    filter: StatisticsFilterDto
+    filter: StatisticsFilterDto,
   ): Promise<Record<string, number>> {
     const matchStage = await this.buildMatchStage(filter);
     const stats = await this.requestModel.aggregate([
@@ -295,12 +296,12 @@ export class StatisticsService {
 
     return stats.reduce(
       (acc, curr) => ({ ...acc, [curr._id]: curr.count }),
-      {}
+      {},
     );
   }
 
   async getByMaintenanceType(
-    filter: StatisticsFilterDto
+    filter: StatisticsFilterDto,
   ): Promise<Record<string, number>> {
     const matchStage = await this.buildMatchStage(filter);
     const stats = await this.requestModel.aggregate([
@@ -310,7 +311,7 @@ export class StatisticsService {
 
     return stats.reduce(
       (acc, curr) => ({ ...acc, [curr._id]: curr.count }),
-      {}
+      {},
     );
   }
 
@@ -391,9 +392,10 @@ export class StatisticsService {
 
   async getTopFailingMachines(
     filter: StatisticsFilterDto,
-    limit: number = 10
+    limit: number = 10,
   ): Promise<TopFailingMachine[]> {
     const matchStage = await this.buildMatchStage(filter);
+    matchStage.maintenanceType = MaintenanceType.EMERGENCY;
     const stats = await this.requestModel.aggregate([
       { $match: matchStage },
       {
@@ -438,17 +440,7 @@ export class StatisticsService {
   }
 
   async getTrends(filter: TrendsFilterDto): Promise<TrendData[]> {
-    const matchStage: Record<string, any> = {};
-
-    if (filter.fromDate || filter.toDate) {
-      matchStage.createdAt = {};
-      if (filter.fromDate) {
-        matchStage.createdAt.$gte = new Date(filter.fromDate);
-      }
-      if (filter.toDate) {
-        matchStage.createdAt.$lte = new Date(filter.toDate);
-      }
-    }
+    const matchStage = await this.buildMatchStage(filter);
 
     let dateFormat: string;
     switch (filter.period) {
@@ -552,18 +544,18 @@ export class StatisticsService {
   private async buildMatchStage(
     filter: StatisticsFilterDto,
     userRole?: string,
-    userId?: string
+    userId?: string,
   ): Promise<Record<string, any>> {
-    const matchStage: Record<string, any> = {};
+    const matchStage: Record<string, any> = { deletedAt: null };
 
     // Engineers can only see their own statistics
     if (userRole === Role.ENGINEER && userId) {
       // Support both String and ObjectId formats
-      matchStage.engineerId = { 
+      matchStage.engineerId = {
         $in: [
           userId,
-          Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : null,
+        ].filter(Boolean),
       } as any;
     }
 
@@ -572,7 +564,10 @@ export class StatisticsService {
       const consultant = (await this.userModel
         .findById(userId)
         .select("departmentIds +departmentId")
-        .lean()) as { departmentIds?: unknown[]; departmentId?: unknown } | null;
+        .lean()) as {
+        departmentIds?: unknown[];
+        departmentId?: unknown;
+      } | null;
       const deptIds = Array.isArray(consultant?.departmentIds)
         ? consultant.departmentIds
         : consultant?.departmentId
@@ -596,41 +591,49 @@ export class StatisticsService {
 
     if (filter.engineerId) {
       // Support both String and ObjectId formats
-      matchStage.engineerId = { 
+      matchStage.engineerId = {
         $in: [
           filter.engineerId,
-          Types.ObjectId.isValid(filter.engineerId) ? new Types.ObjectId(filter.engineerId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(filter.engineerId)
+            ? new Types.ObjectId(filter.engineerId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 
     if (filter.locationId) {
       // Support both String and ObjectId formats
-      matchStage.locationId = { 
+      matchStage.locationId = {
         $in: [
           filter.locationId,
-          Types.ObjectId.isValid(filter.locationId) ? new Types.ObjectId(filter.locationId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(filter.locationId)
+            ? new Types.ObjectId(filter.locationId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 
     if (filter.departmentId) {
       // Support both String and ObjectId formats
-      matchStage.departmentId = { 
+      matchStage.departmentId = {
         $in: [
           filter.departmentId,
-          Types.ObjectId.isValid(filter.departmentId) ? new Types.ObjectId(filter.departmentId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(filter.departmentId)
+            ? new Types.ObjectId(filter.departmentId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 
     if (filter.systemId) {
       // Support both String and ObjectId formats
-      matchStage.systemId = { 
+      matchStage.systemId = {
         $in: [
           filter.systemId,
-          Types.ObjectId.isValid(filter.systemId) ? new Types.ObjectId(filter.systemId) : null
-        ].filter(Boolean)
+          Types.ObjectId.isValid(filter.systemId)
+            ? new Types.ObjectId(filter.systemId)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 

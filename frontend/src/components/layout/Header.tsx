@@ -5,6 +5,8 @@ import { getRoleLabel } from "@/lib/utils";
 import { useTheme } from "@/hooks/useTheme";
 import { NotificationDropdown } from "./NotificationDropdown";
 import { InstallButton } from "@/components/InstallButton";
+import { AdminCommandPalette } from "@/components/admin/AdminCommandPalette";
+import { Role } from "@/types";
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -51,8 +53,9 @@ export function Header({ onMenuClick }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
+        {user?.role === Role.ADMIN && <AdminCommandPalette />}
         <InstallButton />
-        
+
         <Button
           variant="ghost"
           size="icon"

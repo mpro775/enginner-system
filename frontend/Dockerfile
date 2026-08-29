@@ -19,10 +19,12 @@ COPY . .
 # Build arguments for environment variables
 ARG VITE_API_URL
 ARG VITE_SOCKET_URL
+ARG VITE_ANALYTICS_TIMEZONE
 
 # Set environment variables for build
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_SOCKET_URL=$VITE_SOCKET_URL
+ENV VITE_ANALYTICS_TIMEZONE=$VITE_ANALYTICS_TIMEZONE
 
 # Build the application
 RUN npm run build
@@ -57,4 +59,3 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]
-

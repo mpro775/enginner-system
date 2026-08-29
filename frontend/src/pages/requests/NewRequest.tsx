@@ -3,8 +3,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, ArrowRight } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Loader2, ArrowRight, RotateCcw, X } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +39,8 @@ import {
 } from "@/services/reference-data";
 import { scheduledTasksService } from "@/services/scheduled-tasks";
 import { MaintenanceType, ScheduledTask } from "@/types";
+import { useAuthStore } from "@/store/auth";
+import { useToast } from "@/hooks/use-toast";
 
 const requestSchema = z
   .object({
@@ -73,9 +75,20 @@ const requestSchema = z
 
 type RequestFormData = z.infer<typeof requestSchema>;
 
+interface RequestDraft {
+  version: 1;
+  savedAt: string;
+  values: Partial<RequestFormData>;
+}
+
 export default function NewRequest() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const { toast } = useToast();
+  const draftKey = user?.id
+    ? `maintenance:new-request:draft:v1:${user.id}`
+    : null;
 
   const {
     register,
@@ -95,6 +108,18 @@ export default function NewRequest() {
   const [selectedTask, setSelectedTask] = useState<ScheduledTask | null>(null);
   const [showAllTasksDialog, setShowAllTasksDialog] = useState(false);
   const [pendingMachineId, setPendingMachineId] = useState<string | null>(null);
+  const [pendingMachineSource, setPendingMachineSource] = useState<
+    "task" | "draft" | null
+  >(null);
+  const [pendingDraftMachineValues, setPendingDraftMachineValues] = useState<{
+    maintainAllComponents?: boolean;
+    selectedComponents?: string[];
+  } | null>(null);
+  const [pendingDraftCascade, setPendingDraftCascade] =
+    useState<Partial<RequestFormData> | null>(null);
+  const [storedDraft, setStoredDraft] = useState<RequestDraft | null>(null);
+  const [draftDecisionMade, setDraftDecisionMade] = useState(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: locations } = useQuery({
     queryKey: ["locations"],
@@ -106,7 +131,7 @@ export default function NewRequest() {
     queryFn: () => departmentsService.getAll(),
   });
 
-  const { data: systems } = useQuery({
+  const { data: systems, isFetching: isFetchingSystems } = useQuery({
     queryKey: ["systems", watchDepartmentId],
     queryFn: () =>
       watchDepartmentId
@@ -118,6 +143,7 @@ export default function NewRequest() {
   const {
     data: machines,
     isLoading: isLoadingMachines,
+    isFetching: isFetchingMachines,
     isError: isMachinesError,
   } = useQuery({
     queryKey: ["machines", watchSystemId],
@@ -137,11 +163,82 @@ export default function NewRequest() {
   const createMutation = useMutation({
     mutationFn: requestsService.create,
     onSuccess: (newRequest) => {
+      if (draftKey) localStorage.removeItem(draftKey);
       queryClient.invalidateQueries({ queryKey: ["requests"] });
       // Navigate to the newly created request details page
       navigate(`/app/requests/${newRequest.id}`);
     },
   });
+
+  useEffect(() => {
+    setStoredDraft(null);
+    setDraftDecisionMade(false);
+    if (!draftKey) return;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) {
+        setDraftDecisionMade(true);
+        return;
+      }
+      const parsed = JSON.parse(raw) as RequestDraft;
+      if (
+        parsed.version === 1 &&
+        parsed.savedAt &&
+        parsed.values &&
+        typeof parsed.values === "object"
+      ) {
+        setStoredDraft(parsed);
+      } else {
+        localStorage.removeItem(draftKey);
+        setDraftDecisionMade(true);
+      }
+    } catch {
+      localStorage.removeItem(draftKey);
+      setDraftDecisionMade(true);
+    }
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!draftKey || !draftDecisionMade) return;
+    const subscription = watch((rawValues) => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        const values = rawValues as Partial<RequestFormData>;
+        const safeValues: Partial<RequestFormData> = {
+          maintenanceType: values.maintenanceType,
+          locationId: values.locationId,
+          departmentId: values.departmentId,
+          systemId: values.systemId,
+          machineId: values.machineId,
+          reasonText: values.reasonText,
+          machineNumber: values.machineNumber,
+          engineerNotes: values.engineerNotes,
+          requestNeeds: values.requestNeeds,
+          maintainAllComponents: values.maintainAllComponents,
+          selectedComponents: values.selectedComponents,
+        };
+        const hasMeaningfulValue = Object.entries(safeValues).some(
+          ([key, value]) =>
+            key !== "maintainAllComponents" &&
+            (Array.isArray(value) ? value.length > 0 : Boolean(value)),
+        );
+        if (!hasMeaningfulValue) {
+          localStorage.removeItem(draftKey);
+          return;
+        }
+        const draft: RequestDraft = {
+          version: 1,
+          savedAt: new Date().toISOString(),
+          values: safeValues,
+        };
+        localStorage.setItem(draftKey, JSON.stringify(draft));
+      }, 750);
+    });
+    return () => {
+      subscription.unsubscribe();
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [draftDecisionMade, draftKey, watch]);
 
   const onSubmit = (data: RequestFormData) => {
     createMutation.mutate(data);
@@ -183,6 +280,7 @@ export default function NewRequest() {
     setValue("systemId", task.systemId.id);
     // Store machineId to set it after machines are loaded
     setPendingMachineId(task.machineId.id);
+    setPendingMachineSource("task");
     setValue("maintainAllComponents", task.maintainAllComponents);
     setValue("selectedComponents", task.selectedComponents || []);
     setValue("reasonText", task.description || task.title);
@@ -194,14 +292,123 @@ export default function NewRequest() {
 
   // Set machineId after machines are loaded
   useEffect(() => {
-    if (pendingMachineId && machines && machines.length > 0) {
+    if (pendingMachineId && machines && !isFetchingMachines) {
       const machineExists = machines.find((m) => m.id === pendingMachineId);
       if (machineExists) {
         setValue("machineId", pendingMachineId);
-        setPendingMachineId(null);
+        if (pendingMachineSource === "draft" && pendingDraftMachineValues) {
+          const availableComponents = new Set(machineExists.components || []);
+          const validComponents = (
+            pendingDraftMachineValues.selectedComponents || []
+          ).filter((component) => availableComponents.has(component));
+          const wantsSpecific =
+            pendingDraftMachineValues.maintainAllComponents === false;
+          if (wantsSpecific && validComponents.length > 0) {
+            setValue("maintainAllComponents", false);
+            setValue("selectedComponents", validComponents);
+          } else {
+            setValue("maintainAllComponents", true);
+            setValue("selectedComponents", []);
+            if (wantsSpecific) {
+              toast({
+                title: "تم تحديث مكونات المسودة",
+                description:
+                  "بعض المكونات المحفوظة لم تعد متاحة، لذا تم اختيار جميع المكونات.",
+              });
+            }
+          }
+        }
+      } else if (pendingMachineSource === "draft") {
+        setValue("machineId", "");
+        toast({
+          title: "تعذر استعادة الآلة",
+          description:
+            "الآلة المحفوظة لم تعد متاحة. اختر آلة صالحة قبل الإرسال.",
+          variant: "destructive",
+        });
       }
+      setPendingMachineId(null);
+      setPendingMachineSource(null);
+      setPendingDraftMachineValues(null);
     }
-  }, [machines, pendingMachineId, setValue]);
+  }, [
+    machines,
+    isFetchingMachines,
+    pendingDraftMachineValues,
+    pendingMachineId,
+    pendingMachineSource,
+    setValue,
+    toast,
+  ]);
+
+  useEffect(() => {
+    if (!pendingDraftCascade || !systems || isFetchingSystems) return;
+    const systemId = pendingDraftCascade.systemId;
+    const systemExists = systems.some((system) => system.id === systemId);
+    if (systemId && systemExists) {
+      setValue("systemId", systemId);
+      if (pendingDraftCascade.machineId) {
+        setPendingMachineId(pendingDraftCascade.machineId);
+        setPendingMachineSource("draft");
+        setPendingDraftMachineValues({
+          maintainAllComponents: pendingDraftCascade.maintainAllComponents,
+          selectedComponents: pendingDraftCascade.selectedComponents,
+        });
+      }
+    } else if (systemId) {
+      setValue("systemId", "");
+      setValue("machineId", "");
+      toast({
+        title: "تعذر استعادة النظام",
+        description:
+          "النظام المحفوظ لم يعد مرتبطاً بالقسم. اختر نظاماً وآلة صالحين.",
+        variant: "destructive",
+      });
+    }
+    setPendingDraftCascade(null);
+  }, [isFetchingSystems, pendingDraftCascade, setValue, systems, toast]);
+
+  const restoreDraft = () => {
+    if (!storedDraft || !locations || !departments) return;
+    const values = storedDraft.values;
+    const locationValid = locations.some(
+      (item) => item.id === values.locationId,
+    );
+    const departmentValid = departments.some(
+      (item) => item.id === values.departmentId,
+    );
+    reset({
+      maintenanceType: values.maintenanceType,
+      locationId: locationValid ? values.locationId : "",
+      departmentId: departmentValid ? values.departmentId : "",
+      systemId: "",
+      machineId: "",
+      reasonText: values.reasonText || "",
+      machineNumber: values.machineNumber || "",
+      engineerNotes: values.engineerNotes || "",
+      requestNeeds: values.requestNeeds || "",
+      maintainAllComponents: true,
+      selectedComponents: [],
+    });
+    if (departmentValid) setPendingDraftCascade(values);
+    if (!locationValid || !departmentValid) {
+      toast({
+        title: "استعيدت المسودة جزئياً",
+        description:
+          "بعض البيانات المرجعية لم تعد متاحة وتم مسحها حفاظاً على صحة الطلب.",
+        variant: "destructive",
+      });
+    }
+    setStoredDraft(null);
+    setDraftDecisionMade(true);
+  };
+
+  const ignoreDraft = () => {
+    if (draftKey) localStorage.removeItem(draftKey);
+    setStoredDraft(null);
+    setDraftDecisionMade(true);
+    reset();
+  };
 
   const handleClearTask = () => {
     setSelectedTask(null);
@@ -261,6 +468,37 @@ export default function NewRequest() {
           <p className="text-muted-foreground">إنشاء طلب صيانة جديد</p>
         </div>
       </div>
+
+      {storedDraft && (
+        <Card className="border-primary/40 bg-primary/[0.03]" role="status">
+          <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold">لديك طلب غير مكتمل محفوظ</p>
+              <p className="text-sm text-muted-foreground">
+                آخر حفظ:{" "}
+                {new Intl.DateTimeFormat("ar-SA", {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                }).format(new Date(storedDraft.savedAt))}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                onClick={restoreDraft}
+                disabled={!locations || !departments}
+              >
+                <RotateCcw className="ml-2 h-4 w-4" />
+                استكمال
+              </Button>
+              <Button type="button" variant="outline" onClick={ignoreDraft}>
+                <X className="ml-2 h-4 w-4" />
+                تجاهل
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Scheduled Tasks Section */}
       {pendingTasks && pendingTasks.length > 0 && !selectedTask && (

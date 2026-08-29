@@ -1,6 +1,12 @@
-import { IsOptional, IsEnum, IsMongoId, IsDateString } from 'class-validator';
-import { PaginationDto } from '../../../common/dto/pagination.dto';
-import { MaintenanceType, RequestStatus } from '../../../common/enums';
+import {
+  IsOptional,
+  IsEnum,
+  IsMongoId,
+  IsDateString,
+  IsIn,
+} from "class-validator";
+import { PaginationDto } from "../../../common/dto/pagination.dto";
+import { MaintenanceType, RequestStatus } from "../../../common/enums";
 
 export class FilterRequestsDto extends PaginationDto {
   @IsOptional()
@@ -42,10 +48,16 @@ export class FilterRequestsDto extends PaginationDto {
   @IsOptional()
   @IsDateString()
   toDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  openedBefore?: string;
+
+  @IsOptional()
+  @IsIn(["createdAt", "openedAt", "requestCode", "status", "maintenanceType"])
+  sortBy?: string = "createdAt";
+
+  @IsOptional()
+  @IsIn(["asc", "desc"])
+  sortOrder?: "asc" | "desc" = "desc";
 }
-
-
-
-
-
-

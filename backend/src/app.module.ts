@@ -20,6 +20,8 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
 import { AuditLogsModule } from "./modules/audit-logs/audit-logs.module";
 import { HealthModule } from "./modules/health/health.module";
 import { ComplaintsModule } from "./modules/complaints/complaints.module";
+import { AnalyticsModule } from "./modules/analytics/analytics.module";
+import { AdminSearchModule } from "./modules/admin-search/admin-search.module";
 
 @Module({
   imports: [
@@ -55,9 +57,15 @@ import { ComplaintsModule } from "./modules/complaints/complaints.module";
       isGlobal: true,
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
-        const cacheTtl = parseInt(configService.get<string>("CACHE_TTL") || "300", 10);
-        const cacheMax = parseInt(configService.get<string>("CACHE_MAX") || "100", 10);
-        
+        const cacheTtl = parseInt(
+          configService.get<string>("CACHE_TTL") || "300",
+          10,
+        );
+        const cacheMax = parseInt(
+          configService.get<string>("CACHE_MAX") || "100",
+          10,
+        );
+
         return {
           ttl: (cacheTtl > 0 ? cacheTtl : 300) * 1000,
           max: cacheMax > 0 ? cacheMax : 100,
@@ -84,6 +92,8 @@ import { ComplaintsModule } from "./modules/complaints/complaints.module";
     AuditLogsModule,
     HealthModule,
     ComplaintsModule,
+    AnalyticsModule,
+    AdminSearchModule,
   ],
 })
 export class AppModule {}

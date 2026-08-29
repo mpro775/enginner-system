@@ -108,6 +108,7 @@ export function MachinesPage() {
         queryKey: "systems",
         fieldName: "systemId",
       }}
+      detailsHref={(item) => `/app/admin/machines/${String(item.id)}`}
     />
   );
 }

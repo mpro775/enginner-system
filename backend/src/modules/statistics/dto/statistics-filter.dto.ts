@@ -1,6 +1,14 @@
-import { IsOptional, IsDateString, IsMongoId, IsEnum, IsNumber, Min } from 'class-validator';
-import { Type } from 'class-transformer';
-import { MaintenanceType } from '../../../common/enums';
+import {
+  IsOptional,
+  IsDateString,
+  IsMongoId,
+  IsEnum,
+  IsNumber,
+  IsIn,
+  Min,
+} from "class-validator";
+import { Type } from "class-transformer";
+import { MaintenanceType } from "../../../common/enums";
 
 export class StatisticsFilterDto {
   @IsOptional()
@@ -40,18 +48,8 @@ export class TopFailingMachinesFilterDto extends StatisticsFilterDto {
   limit?: number;
 }
 
-export class TrendsFilterDto {
+export class TrendsFilterDto extends StatisticsFilterDto {
   @IsOptional()
-  @IsDateString()
-  fromDate?: string;
-
-  @IsOptional()
-  @IsDateString()
-  toDate?: string;
-
-  @IsOptional()
-  period?: 'daily' | 'weekly' | 'monthly' = 'monthly';
+  @IsIn(["daily", "weekly", "monthly"])
+  period?: "daily" | "weekly" | "monthly" = "monthly";
 }
-
-
-

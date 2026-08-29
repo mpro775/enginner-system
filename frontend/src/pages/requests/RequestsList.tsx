@@ -16,6 +16,9 @@ import {
   MoreVertical,
   AlertTriangle,
   Loader2,
+  Columns3,
+  Save,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +36,8 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
@@ -48,6 +53,8 @@ import {
 } from "@/components/shared/StatusBadge";
 import { Pagination } from "@/components/shared/Pagination";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
+import { TableSkeleton } from "@/components/shared/AdminSkeletons";
+import { Breadcrumbs } from "@/components/shared/Breadcrumbs";
 import { requestsService } from "@/services/requests";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -72,9 +79,43 @@ const defaultFilters = {
   departmentId: "",
   fromDate: "",
   toDate: "",
+  openedBefore: "",
+  sortBy: "createdAt",
+  sortOrder: "desc" as "asc" | "desc",
 };
 
-function parseFiltersFromSearchParams(searchParams: URLSearchParams) {
+type RequestFiltersState = typeof defaultFilters;
+type ColumnKey =
+  | "requestCode"
+  | "maintenanceType"
+  | "status"
+  | "location"
+  | "department"
+  | "engineer"
+  | "createdAt"
+  | "duration";
+
+const DEFAULT_COLUMNS: Record<ColumnKey, boolean> = {
+  requestCode: true,
+  maintenanceType: true,
+  status: true,
+  location: true,
+  department: true,
+  engineer: true,
+  createdAt: true,
+  duration: true,
+};
+
+interface SavedRequestView {
+  id: string;
+  name: string;
+  filters: RequestFiltersState;
+  visibleColumns: Record<ColumnKey, boolean>;
+}
+
+function parseFiltersFromSearchParams(
+  searchParams: URLSearchParams,
+): RequestFiltersState {
   const page = searchParams.get("page");
   return {
     ...defaultFilters,
@@ -85,6 +126,9 @@ function parseFiltersFromSearchParams(searchParams: URLSearchParams) {
     departmentId: searchParams.get("departmentId") ?? "",
     fromDate: searchParams.get("fromDate") ?? "",
     toDate: searchParams.get("toDate") ?? "",
+    openedBefore: searchParams.get("openedBefore") ?? "",
+    sortBy: searchParams.get("sortBy") ?? "createdAt",
+    sortOrder: searchParams.get("sortOrder") === "asc" ? "asc" : "desc",
   };
 }
 
@@ -96,7 +140,6 @@ export default function RequestsList() {
   const { toast } = useToast();
   const isEngineer = user?.role === Role.ENGINEER;
   const isAdmin = user?.role === Role.ADMIN;
-
   const [now, setNow] = useState<Date>(new Date());
   const fromDateInputRef = useRef<HTMLInputElement | null>(null);
   const toDateInputRef = useRef<HTMLInputElement | null>(null);
@@ -107,17 +150,17 @@ export default function RequestsList() {
 
   const filtersFromUrl = useMemo(
     () => parseFiltersFromSearchParams(searchParams),
-    [searchParams]
+    [searchParams],
   );
 
   const [filters, setFiltersState] = useState(() =>
-    parseFiltersFromSearchParams(new URLSearchParams(window.location.search))
+    parseFiltersFromSearchParams(new URLSearchParams(window.location.search)),
   );
 
   const setFilters = (
     next:
-      | typeof defaultFilters
-      | ((prev: typeof defaultFilters) => typeof defaultFilters)
+      | RequestFiltersState
+      | ((prev: RequestFiltersState) => RequestFiltersState),
   ) => {
     setFiltersState((prev) => {
       const nextFilters = typeof next === "function" ? next(prev) : next;
@@ -139,6 +182,15 @@ export default function RequestsList() {
       else params.delete("fromDate");
       if (nextFilters.toDate) params.set("toDate", nextFilters.toDate);
       else params.delete("toDate");
+      if (nextFilters.openedBefore)
+        params.set("openedBefore", nextFilters.openedBefore);
+      else params.delete("openedBefore");
+      if (nextFilters.sortBy !== "createdAt")
+        params.set("sortBy", nextFilters.sortBy);
+      else params.delete("sortBy");
+      if (nextFilters.sortOrder !== "desc")
+        params.set("sortOrder", nextFilters.sortOrder);
+      else params.delete("sortOrder");
       setSearchParams(params, { replace: true });
       return nextFilters;
     });
@@ -147,6 +199,102 @@ export default function RequestsList() {
   useEffect(() => {
     setFiltersState(filtersFromUrl);
   }, [filtersFromUrl]);
+
+  const [quickPeekRequest, setQuickPeekRequest] =
+    useState<MaintenanceRequest | null>(null);
+  const [visibleColumns, setVisibleColumns] =
+    useState<Record<ColumnKey, boolean>>(DEFAULT_COLUMNS);
+  const [savedViews, setSavedViews] = useState<SavedRequestView[]>([]);
+  const [savedViewName, setSavedViewName] = useState("");
+  const savedViewsKey = user?.id
+    ? `maintenance:admin-request-views:v1:${user.id}`
+    : null;
+
+  useEffect(() => {
+    if (!isAdmin || !savedViewsKey) return;
+    try {
+      const stored = localStorage.getItem(savedViewsKey);
+      setSavedViews(stored ? (JSON.parse(stored) as SavedRequestView[]) : []);
+    } catch {
+      setSavedViews([]);
+    }
+  }, [isAdmin, savedViewsKey]);
+
+  const persistViews = (views: SavedRequestView[]) => {
+    setSavedViews(views);
+    if (savedViewsKey)
+      localStorage.setItem(savedViewsKey, JSON.stringify(views));
+  };
+
+  const saveCurrentView = () => {
+    const name = savedViewName.trim();
+    if (!name) return;
+    persistViews([
+      ...savedViews.filter((view) => view.name !== name),
+      { id: crypto.randomUUID(), name, filters, visibleColumns },
+    ]);
+    setSavedViewName("");
+    toast({ title: "تم حفظ العرض محليًا" });
+  };
+
+  const applySavedView = (viewId: string) => {
+    const view = savedViews.find((item) => item.id === viewId);
+    if (!view) return;
+    setVisibleColumns(view.visibleColumns);
+    setFilters({ ...view.filters, page: 1 });
+  };
+
+  const toDateInput = (date: Date) => {
+    const offset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+  };
+
+  const applyQuickFilter = (
+    key:
+      | "all"
+      | "emergency"
+      | "inProgress"
+      | "stopped"
+      | "today"
+      | "week"
+      | "over24",
+  ) => {
+    const current = new Date();
+    const base = {
+      ...defaultFilters,
+      sortBy: filters.sortBy,
+      sortOrder: filters.sortOrder,
+    };
+    if (key === "emergency") base.maintenanceType = MaintenanceType.EMERGENCY;
+    if (key === "inProgress") base.status = RequestStatus.IN_PROGRESS;
+    if (key === "stopped") base.status = RequestStatus.STOPPED;
+    if (key === "today") base.fromDate = toDateInput(current);
+    if (key === "week") {
+      const start = new Date(current);
+      start.setDate(start.getDate() - start.getDay());
+      base.fromDate = toDateInput(start);
+    }
+    if (key === "over24")
+      base.openedBefore = new Date(
+        current.getTime() - 24 * 60 * 60 * 1000,
+      ).toISOString();
+    setFilters(base);
+  };
+
+  const activeFilterCount = [
+    filters.status,
+    filters.maintenanceType,
+    filters.locationId,
+    filters.departmentId,
+    filters.fromDate,
+    filters.toDate,
+    filters.openedBefore,
+  ].filter(Boolean).length;
+
+  const visibleTableColumnCount =
+    Object.entries(visibleColumns).filter(
+      ([key, visible]) => visible && (key !== "engineer" || !isEngineer),
+    ).length + 1;
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["requests", filters],
@@ -161,6 +309,9 @@ export default function RequestsList() {
         departmentId?: string;
         fromDate?: string;
         toDate?: string;
+        openedBefore?: string;
+        sortBy?: string;
+        sortOrder?: "asc" | "desc";
       } = {
         page: filters.page,
         limit: filters.limit,
@@ -189,6 +340,11 @@ export default function RequestsList() {
       if (filters.toDate && filters.toDate.trim() !== "") {
         cleanFilters.toDate = filters.toDate;
       }
+
+      if (filters.openedBefore)
+        cleanFilters.openedBefore = filters.openedBefore;
+      cleanFilters.sortBy = filters.sortBy;
+      cleanFilters.sortOrder = filters.sortOrder;
 
       return requestsService.getAll(cleanFilters);
     },
@@ -246,7 +402,7 @@ export default function RequestsList() {
   };
 
   if (isLoading) {
-    return <PageLoader />;
+    return isAdmin ? <TableSkeleton rows={8} /> : <PageLoader />;
   }
 
   if (isError) {
@@ -284,6 +440,7 @@ export default function RequestsList() {
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-in px-2 sm:px-0">
+      {isAdmin && <Breadcrumbs items={[{ label: "طلبات الصيانة" }]} />}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -306,12 +463,170 @@ export default function RequestsList() {
         )}
       </div>
 
+      {isAdmin && (
+        <Card className="border-primary/20 bg-primary/[0.02]">
+          <CardContent className="space-y-4 p-4">
+            <div className="flex flex-wrap gap-2" aria-label="فلاتر سريعة">
+              {(
+                [
+                  ["all", "الكل"],
+                  ["emergency", "طارئة"],
+                  ["inProgress", "قيد التنفيذ"],
+                  ["stopped", "متوقفة"],
+                  ["today", "اليوم"],
+                  ["week", "هذا الأسبوع"],
+                  ["over24", "أكثر من 24 ساعة"],
+                ] as const
+              ).map(([key, label]) => (
+                <Button
+                  key={key}
+                  size="sm"
+                  variant="outline"
+                  onClick={() => applyQuickFilter(key)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <Select onValueChange={applySavedView}>
+                <SelectTrigger>
+                  <SelectValue placeholder="العروض المحفوظة" />
+                </SelectTrigger>
+                <SelectContent>
+                  {savedViews.length ? (
+                    savedViews.map((view) => (
+                      <SelectItem key={view.id} value={view.id}>
+                        {view.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="none" disabled>
+                      لا توجد عروض محفوظة
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              <div className="flex gap-2">
+                <Input
+                  value={savedViewName}
+                  onChange={(event) => setSavedViewName(event.target.value)}
+                  placeholder="اسم العرض"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={saveCurrentView}
+                  disabled={!savedViewName.trim()}
+                  aria-label="حفظ العرض الحالي"
+                >
+                  <Save className="h-4 w-4" />
+                </Button>
+              </div>
+              <Select
+                value={filters.sortBy}
+                onValueChange={(sortBy) =>
+                  setFilters({ ...filters, sortBy, page: 1 })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="ترتيب حسب" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="createdAt">تاريخ الإنشاء</SelectItem>
+                  <SelectItem value="openedAt">تاريخ الفتح</SelectItem>
+                  <SelectItem value="requestCode">رقم الطلب</SelectItem>
+                  <SelectItem value="status">الحالة</SelectItem>
+                  <SelectItem value="maintenanceType">النوع</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex gap-2">
+                <Select
+                  value={filters.sortOrder}
+                  onValueChange={(sortOrder) =>
+                    setFilters({
+                      ...filters,
+                      sortOrder: sortOrder as "asc" | "desc",
+                      page: 1,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="desc">تنازلي</SelectItem>
+                    <SelectItem value="asc">تصاعدي</SelectItem>
+                  </SelectContent>
+                </Select>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label="اختيار الأعمدة"
+                    >
+                      <Columns3 className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>الأعمدة الظاهرة</DropdownMenuLabel>
+                    {(
+                      [
+                        ["requestCode", "رقم الطلب"],
+                        ["maintenanceType", "النوع"],
+                        ["status", "الحالة"],
+                        ["location", "الموقع"],
+                        ["department", "القسم"],
+                        ["engineer", "المهندس"],
+                        ["createdAt", "تاريخ الإنشاء"],
+                        ["duration", "المدة"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <DropdownMenuCheckboxItem
+                        key={key}
+                        checked={visibleColumns[key]}
+                        onCheckedChange={(checked) =>
+                          setVisibleColumns((current) => ({
+                            ...current,
+                            [key]: Boolean(checked),
+                          }))
+                        }
+                      >
+                        {label}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Filters */}
       <Card className="dark:border-border/50">
         <CardHeader className="pb-3 sm:pb-6">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <Filter className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             تصفية النتائج
+            {isAdmin && activeFilterCount > 0 && (
+              <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+                {activeFilterCount}
+              </span>
+            )}
+            {isAdmin && activeFilterCount > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="mr-auto"
+                onClick={() => applyQuickFilter("all")}
+              >
+                <X className="ml-1 h-3.5 w-3.5" />
+                مسح الكل
+              </Button>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -408,15 +723,20 @@ export default function RequestsList() {
             </Select>
 
             <div className="space-y-1">
-              <label className="text-sm text-muted-foreground">من تاريخ الإنشاء</label>
+              <label className="text-sm text-muted-foreground">
+                من تاريخ الإنشاء
+              </label>
               <div
                 className="relative cursor-pointer"
                 onClick={() => {
                   const input = fromDateInputRef.current;
                   if (input) {
                     input.focus();
-                    const showPicker = (input as HTMLInputElement & { showPicker?: () => void }).showPicker;
-                    if (typeof showPicker === "function") showPicker.call(input);
+                    const showPicker = (
+                      input as HTMLInputElement & { showPicker?: () => void }
+                    ).showPicker;
+                    if (typeof showPicker === "function")
+                      showPicker.call(input);
                   }
                 }}
               >
@@ -438,15 +758,20 @@ export default function RequestsList() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-sm text-muted-foreground">إلى تاريخ الإنشاء</label>
+              <label className="text-sm text-muted-foreground">
+                إلى تاريخ الإنشاء
+              </label>
               <div
                 className="relative cursor-pointer"
                 onClick={() => {
                   const input = toDateInputRef.current;
                   if (input) {
                     input.focus();
-                    const showPicker = (input as HTMLInputElement & { showPicker?: () => void }).showPicker;
-                    if (typeof showPicker === "function") showPicker.call(input);
+                    const showPicker = (
+                      input as HTMLInputElement & { showPicker?: () => void }
+                    ).showPicker;
+                    if (typeof showPicker === "function")
+                      showPicker.call(input);
                   }
                 }}
               >
@@ -547,6 +872,19 @@ export default function RequestsList() {
                     <Eye className="h-4 w-4 ml-2" />
                     عرض
                   </Button>
+                  {isAdmin && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 justify-center"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setQuickPeekRequest(request);
+                      }}
+                    >
+                      معاينة
+                    </Button>
+                  )}
                   {isEngineer &&
                     request.engineerId?.id === user?.id &&
                     request.status === RequestStatus.IN_PROGRESS && (
@@ -612,18 +950,32 @@ export default function RequestsList() {
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="data-table">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-background shadow-sm">
                 <tr className="bg-muted/50 dark:bg-muted/20">
-                  <th className="text-foreground/80">رقم الطلب</th>
-                  <th className="text-foreground/80">النوع</th>
-                  <th className="text-foreground/80">الحالة</th>
-                  <th className="text-foreground/80">الموقع</th>
-                  <th className="text-foreground/80">القسم</th>
-                  {!isEngineer && (
+                  {visibleColumns.requestCode && (
+                    <th className="text-foreground/80">رقم الطلب</th>
+                  )}
+                  {visibleColumns.maintenanceType && (
+                    <th className="text-foreground/80">النوع</th>
+                  )}
+                  {visibleColumns.status && (
+                    <th className="text-foreground/80">الحالة</th>
+                  )}
+                  {visibleColumns.location && (
+                    <th className="text-foreground/80">الموقع</th>
+                  )}
+                  {visibleColumns.department && (
+                    <th className="text-foreground/80">القسم</th>
+                  )}
+                  {!isEngineer && visibleColumns.engineer && (
                     <th className="text-foreground/80">المهندس</th>
                   )}
-                  <th className="text-foreground/80">تاريخ الإنشاء</th>
-                  <th className="text-foreground/80">المدة</th>
+                  {visibleColumns.createdAt && (
+                    <th className="text-foreground/80">تاريخ الإنشاء</th>
+                  )}
+                  {visibleColumns.duration && (
+                    <th className="text-foreground/80">المدة</th>
+                  )}
                   <th className="text-foreground/80">الإجراءات</th>
                 </tr>
               </thead>
@@ -631,7 +983,7 @@ export default function RequestsList() {
                 {!data || !data.data || data.data.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={isEngineer ? 8 : 9}
+                      colSpan={visibleTableColumnCount}
                       className="text-center py-12 text-muted-foreground"
                     >
                       <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
@@ -649,32 +1001,48 @@ export default function RequestsList() {
                         })
                       }
                     >
-                      <td className="font-medium text-foreground">
-                        {request.requestCode}
-                      </td>
-                      <td>
-                        <MaintenanceTypeBadge type={request.maintenanceType} />
-                      </td>
-                      <td>
-                        <StatusBadge status={request.status} />
-                      </td>
-                      <td className="text-foreground/80">
-                        {request.locationId?.name || "—"}
-                      </td>
-                      <td className="text-foreground/80">
-                        {request.departmentId?.name || "—"}
-                      </td>
-                      {!isEngineer && (
+                      {visibleColumns.requestCode && (
+                        <td className="font-medium text-foreground">
+                          {request.requestCode}
+                        </td>
+                      )}
+                      {visibleColumns.maintenanceType && (
+                        <td>
+                          <MaintenanceTypeBadge
+                            type={request.maintenanceType}
+                          />
+                        </td>
+                      )}
+                      {visibleColumns.status && (
+                        <td>
+                          <StatusBadge status={request.status} />
+                        </td>
+                      )}
+                      {visibleColumns.location && (
+                        <td className="text-foreground/80">
+                          {request.locationId?.name || "—"}
+                        </td>
+                      )}
+                      {visibleColumns.department && (
+                        <td className="text-foreground/80">
+                          {request.departmentId?.name || "—"}
+                        </td>
+                      )}
+                      {!isEngineer && visibleColumns.engineer && (
                         <td className="text-foreground/80">
                           {request.engineerId?.name || "—"}
                         </td>
                       )}
-                      <td className="text-foreground/70">
-                        {formatDate(request.createdAt)}
-                      </td>
-                      <td className="text-foreground/70">
-                        {getRequestDuration(request)}
-                      </td>
+                      {visibleColumns.createdAt && (
+                        <td className="text-foreground/70">
+                          {formatDate(request.createdAt)}
+                        </td>
+                      )}
+                      {visibleColumns.duration && (
+                        <td className="text-foreground/70">
+                          {getRequestDuration(request)}
+                        </td>
+                      )}
                       <td>
                         <div className="flex items-center gap-2">
                           <Button
@@ -691,6 +1059,18 @@ export default function RequestsList() {
                             <Eye className="h-4 w-4 ml-1" />
                             عرض
                           </Button>
+                          {isAdmin && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setQuickPeekRequest(request);
+                              }}
+                            >
+                              معاينة
+                            </Button>
+                          )}
                           {isEngineer &&
                             request.engineerId?.id === user?.id &&
                             request.status === RequestStatus.IN_PROGRESS && (
@@ -702,7 +1082,7 @@ export default function RequestsList() {
                                   e.stopPropagation();
                                   navigate(
                                     `/app/requests/${request.id}?edit=true`,
-                                    { state: returnState }
+                                    { state: returnState },
                                   );
                                 }}
                               >
@@ -775,6 +1155,86 @@ export default function RequestsList() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog
+        open={!!quickPeekRequest}
+        onOpenChange={(open) => !open && setQuickPeekRequest(null)}
+      >
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              معاينة الطلب {quickPeekRequest?.requestCode}
+            </DialogTitle>
+            <DialogDescription>
+              ملخص سريع للقراءة فقط دون مغادرة قائمة الطلبات.
+            </DialogDescription>
+          </DialogHeader>
+          {quickPeekRequest && (
+            <div className="grid gap-4 text-sm sm:grid-cols-2">
+              <div>
+                <span className="text-muted-foreground">الحالة:</span>{" "}
+                <StatusBadge status={quickPeekRequest.status} />
+              </div>
+              <div>
+                <span className="text-muted-foreground">النوع:</span>{" "}
+                <MaintenanceTypeBadge type={quickPeekRequest.maintenanceType} />
+              </div>
+              <div>
+                <span className="text-muted-foreground">الآلة:</span>{" "}
+                {quickPeekRequest.machineId?.name || "—"}
+              </div>
+              <div>
+                <span className="text-muted-foreground">الموقع:</span>{" "}
+                {quickPeekRequest.locationId?.name || "—"}
+              </div>
+              <div>
+                <span className="text-muted-foreground">المهندس:</span>{" "}
+                {quickPeekRequest.engineerId?.name || "—"}
+              </div>
+              <div>
+                <span className="text-muted-foreground">العمر:</span>{" "}
+                {getRequestDuration(quickPeekRequest)}
+              </div>
+              <div className="sm:col-span-2 rounded-lg border bg-muted/30 p-3">
+                <p className="mb-1 text-muted-foreground">سبب الطلب</p>
+                <p>{quickPeekRequest.reasonText || "لم يُسجل سبب"}</p>
+              </div>
+              {(quickPeekRequest.engineerNotes ||
+                quickPeekRequest.consultantNotes ||
+                quickPeekRequest.projectManagerNotes ||
+                quickPeekRequest.healthSafetyNotes) && (
+                <div className="sm:col-span-2 rounded-lg border p-3">
+                  <p className="mb-1 text-muted-foreground">
+                    أحدث ملاحظة متاحة
+                  </p>
+                  <p>
+                    {quickPeekRequest.projectManagerNotes ||
+                      quickPeekRequest.healthSafetyNotes ||
+                      quickPeekRequest.consultantNotes ||
+                      quickPeekRequest.engineerNotes}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setQuickPeekRequest(null)}>
+              إغلاق
+            </Button>
+            {quickPeekRequest && (
+              <Button
+                onClick={() =>
+                  navigate(`/app/requests/${quickPeekRequest.id}`, {
+                    state: returnState,
+                  })
+                }
+              >
+                فتح التفاصيل
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Soft Delete Dialog */}
       <Dialog

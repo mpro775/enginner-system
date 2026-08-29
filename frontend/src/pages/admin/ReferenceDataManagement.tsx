@@ -9,6 +9,7 @@ import {
   UserX,
   MoreVertical,
   AlertTriangle,
+  Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +44,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { PageLoader } from "@/components/shared/LoadingSpinner";
 import { useAuthStore } from "@/store/auth";
 import { Role } from "@/types";
+import { Link } from "react-router-dom";
 
 interface ReferenceDataProps {
   title: string;
@@ -70,6 +72,7 @@ interface ReferenceDataProps {
     queryKey: string;
     fieldName: string;
   };
+  detailsHref?: (item: Record<string, unknown>) => string;
 }
 
 export default function ReferenceDataManagement({
@@ -80,6 +83,7 @@ export default function ReferenceDataManagement({
   fields,
   columns,
   relatedService,
+  detailsHref,
 }: ReferenceDataProps) {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
@@ -201,7 +205,7 @@ export default function ReferenceDataManagement({
         initialData[field.name] = Array.isArray(value) ? value : [];
       } else if (field.type === "multiselect" && Array.isArray(value)) {
         initialData[field.name] = value.map((v: { id?: string } | string) =>
-          typeof v === "object" && v?.id ? v.id : String(v)
+          typeof v === "object" && v?.id ? v.id : String(v),
         );
       } else if (typeof value === "object" && value !== null && "id" in value) {
         initialData[field.name] = (value as { id: string }).id;
@@ -289,7 +293,7 @@ export default function ReferenceDataManagement({
                                   >
                                     {component}
                                   </Badge>
-                                )
+                                ),
                               )
                             ) : (
                               <span className="text-muted-foreground">-</span>
@@ -323,9 +327,20 @@ export default function ReferenceDataManagement({
                     </td>
                     <td>
                       <div className="flex items-center gap-1">
+                        {detailsHref && (
+                          <Button asChild variant="ghost" size="icon">
+                            <Link
+                              to={detailsHref(item)}
+                              aria-label={`عرض ملف ${(item.name as string) || "العنصر"}`}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
+                          aria-label={`تعديل ${(item.name as string) || "العنصر"}`}
                           onClick={() => openEditDialog(item)}
                         >
                           <Edit className="h-4 w-4" />
@@ -341,6 +356,7 @@ export default function ReferenceDataManagement({
                               })
                             }
                             disabled={toggleStatusMutation.isPending}
+                            aria-label={`${item.isActive ? "تعطيل" : "تفعيل"} ${(item.name as string) || "العنصر"}`}
                           >
                             {(item.isActive as boolean) ? (
                               <UserX className="h-4 w-4 text-destructive" />
@@ -354,6 +370,9 @@ export default function ReferenceDataManagement({
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon">
                                 <MoreVertical className="h-4 w-4" />
+                                <span className="sr-only">
+                                  المزيد من الإجراءات
+                                </span>
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">

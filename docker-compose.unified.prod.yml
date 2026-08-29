@@ -20,6 +20,7 @@ services:
       CACHE_MAX: ${CACHE_MAX:-100}
       THROTTLE_TTL: ${THROTTLE_TTL:-60}
       THROTTLE_LIMIT: ${THROTTLE_LIMIT:-100}
+      ANALYTICS_TIMEZONE: ${ANALYTICS_TIMEZONE:-Asia/Riyadh}
     expose:
       - "${APP_PORT:-3000}"
     healthcheck:
@@ -47,6 +48,7 @@ services:
       args:
         VITE_API_URL: ${VITE_API_URL}
         VITE_SOCKET_URL: ${VITE_SOCKET_URL}
+        VITE_ANALYTICS_TIMEZONE: ${ANALYTICS_TIMEZONE:-Asia/Riyadh}
     restart: unless-stopped
     expose:
       - "80"
