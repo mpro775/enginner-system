@@ -24,10 +24,11 @@ export class MachinesService {
   ) {}
 
   async create(createMachineDto: CreateMachineDto): Promise<MachineDocument> {
+    const systemId = new Types.ObjectId(createMachineDto.systemId);
     // Check for duplicate name within the same system
     const existing = await this.machineModel.findOne({
       name: { $regex: new RegExp(`^${createMachineDto.name}$`, "i") },
-      systemId: createMachineDto.systemId,
+      systemId,
     });
 
     if (existing) {
@@ -38,7 +39,7 @@ export class MachinesService {
       );
     }
 
-    const machine = new this.machineModel(createMachineDto);
+    const machine = new this.machineModel({ ...createMachineDto, systemId });
     const saved = await machine.save();
 
     // Invalidate cache
@@ -122,7 +123,9 @@ export class MachinesService {
 
     // Check for duplicate name within the same system
     if (updateMachineDto.name || updateMachineDto.systemId) {
-      const systemId = updateMachineDto.systemId || machine.systemId.toString();
+      const systemId = updateMachineDto.systemId
+        ? new Types.ObjectId(updateMachineDto.systemId)
+        : machine.systemId;
       const name = updateMachineDto.name || machine.name;
 
       const existing = await this.machineModel.findOne({
@@ -140,8 +143,14 @@ export class MachinesService {
       }
     }
 
+    const normalizedUpdate = {
+      ...updateMachineDto,
+      ...(updateMachineDto.systemId
+        ? { systemId: new Types.ObjectId(updateMachineDto.systemId) }
+        : {}),
+    };
     const updated = await this.machineModel
-      .findByIdAndUpdate(id, updateMachineDto, { new: true })
+      .findByIdAndUpdate(id, normalizedUpdate, { new: true })
       .populate("systemId", "name");
 
     // Invalidate cache

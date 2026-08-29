@@ -30,6 +30,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { analyticsService, PeriodComparison } from "@/services/analytics";
 
+const formatNumber = (value: number, options?: Intl.NumberFormatOptions) =>
+  new Intl.NumberFormat("en-US", options).format(value);
+
 function DashboardSkeleton() {
   return (
     <div
@@ -80,7 +83,7 @@ function KpiCard({
             <p className="text-sm text-muted-foreground">{title}</p>
             <p className="mt-2 text-3xl font-bold">
               {typeof value === "number"
-                ? value.toLocaleString("ar-SA")
+                ? formatNumber(value, { maximumFractionDigits: 1 })
                 : value}
               {suffix}
             </p>
@@ -108,8 +111,10 @@ function KpiCard({
               ) : (
                 <ArrowDownLeft className="h-3.5 w-3.5" />
               )}
-              {Math.abs(comparison.percentChange || 0).toLocaleString("ar-SA")}%
-              عن الفترة السابقة
+              {formatNumber(Math.abs(comparison.percentChange || 0), {
+                maximumFractionDigits: 1,
+              })}
+              % عن الفترة السابقة
             </span>
           )}
         </div>
@@ -300,7 +305,7 @@ export default function AdminOperationsDashboard() {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-2xl font-bold">
-                    {value.toLocaleString("ar-SA")}
+                    {formatNumber(value)}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {item.label}
@@ -333,8 +338,11 @@ export default function AdminOperationsDashboard() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="period" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
+                  <YAxis
+                    allowDecimals={false}
+                    tickFormatter={(value) => formatNumber(Number(value))}
+                  />
+                  <Tooltip formatter={(value) => formatNumber(Number(value))} />
                   <Area
                     type="monotone"
                     dataKey="total"
@@ -373,9 +381,13 @@ export default function AdminOperationsDashboard() {
                   margin={{ right: 15, left: 15 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" allowDecimals={false} />
+                  <XAxis
+                    type="number"
+                    allowDecimals={false}
+                    tickFormatter={(value) => formatNumber(Number(value))}
+                  />
                   <YAxis type="category" dataKey="name" width={75} />
-                  <Tooltip />
+                  <Tooltip formatter={(value) => formatNumber(Number(value))} />
                   <Bar dataKey="value" name="الطلبات" radius={[0, 6, 6, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -404,7 +416,7 @@ export default function AdminOperationsDashboard() {
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{machine.machineName}</span>
                     <span className="rounded-full bg-red-500/10 px-2 py-1 text-xs font-bold text-red-600">
-                      {machine.failureCount} أعطال
+                      {formatNumber(machine.failureCount)} أعطال
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">

@@ -45,6 +45,7 @@ import {
   resolveAnalyticsPeriod,
   startOfZonedDay,
 } from "./utils/date-period.util";
+import { normalizedReferenceIdExpression } from "../../common/utils/reference-id.util";
 
 const CACHE_TTL = 60000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -324,9 +325,16 @@ export class AnalyticsService {
         { $sort: { openedAt: 1 } },
         { $limit: 10 },
         {
+          $set: {
+            normalizedMachineId: normalizedReferenceIdExpression("$machineId"),
+            normalizedLocationId:
+              normalizedReferenceIdExpression("$locationId"),
+          },
+        },
+        {
           $lookup: {
             from: "machines",
-            localField: "machineId",
+            localField: "normalizedMachineId",
             foreignField: "_id",
             as: "machine",
           },
@@ -334,7 +342,7 @@ export class AnalyticsService {
         {
           $lookup: {
             from: "locations",
-            localField: "locationId",
+            localField: "normalizedLocationId",
             foreignField: "_id",
             as: "location",
           },
@@ -352,8 +360,12 @@ export class AnalyticsService {
               ],
             },
             status: 1,
-            machine: { $ifNull: [{ $first: "$machine.name" }, "-"] },
-            location: { $ifNull: [{ $first: "$location.name" }, "-"] },
+            machine: {
+              $ifNull: [{ $first: "$machine.name" }, "مرجع غير متاح"],
+            },
+            location: {
+              $ifNull: [{ $first: "$location.name" }, "مرجع غير متاح"],
+            },
           },
         },
       ]),
@@ -465,8 +477,17 @@ export class AnalyticsService {
         }),
       },
       {
+        $set: {
+          normalizedLocationId: normalizedReferenceIdExpression("$locationId"),
+          normalizedSystemId: normalizedReferenceIdExpression("$systemId"),
+        },
+      },
+      {
         $group: {
-          _id: { locationId: "$locationId", systemId: "$systemId" },
+          _id: {
+            locationId: "$normalizedLocationId",
+            systemId: "$normalizedSystemId",
+          },
           count: { $sum: 1 },
         },
       },
@@ -490,9 +511,13 @@ export class AnalyticsService {
         $project: {
           _id: 0,
           locationId: { $toString: "$_id.locationId" },
-          locationName: { $ifNull: [{ $first: "$location.name" }, "-"] },
+          locationName: {
+            $ifNull: [{ $first: "$location.name" }, "مرجع غير متاح"],
+          },
           systemId: { $toString: "$_id.systemId" },
-          systemName: { $ifNull: [{ $first: "$system.name" }, "-"] },
+          systemName: {
+            $ifNull: [{ $first: "$system.name" }, "مرجع غير متاح"],
+          },
           count: 1,
         },
       },
@@ -639,9 +664,17 @@ export class AnalyticsService {
           { $sort: { openedAt: -1 } },
           { $limit: 1 },
           {
+            $set: {
+              normalizedLocationId:
+                normalizedReferenceIdExpression("$locationId"),
+              normalizedDepartmentId:
+                normalizedReferenceIdExpression("$departmentId"),
+            },
+          },
+          {
             $lookup: {
               from: "locations",
-              localField: "locationId",
+              localField: "normalizedLocationId",
               foreignField: "_id",
               as: "location",
             },
@@ -649,7 +682,7 @@ export class AnalyticsService {
           {
             $lookup: {
               from: "departments",
-              localField: "departmentId",
+              localField: "normalizedDepartmentId",
               foreignField: "_id",
               as: "department",
             },
@@ -657,8 +690,12 @@ export class AnalyticsService {
           {
             $project: {
               _id: 0,
-              location: { $first: "$location.name" },
-              department: { $first: "$department.name" },
+              location: {
+                $ifNull: [{ $first: "$location.name" }, "مرجع غير متاح"],
+              },
+              department: {
+                $ifNull: [{ $first: "$department.name" }, "مرجع غير متاح"],
+              },
             },
           },
         ]),
@@ -736,8 +773,13 @@ export class AnalyticsService {
     const rows = await this.requestModel.aggregate([
       { $match: match },
       {
+        $set: {
+          normalizedMachineId: normalizedReferenceIdExpression("$machineId"),
+        },
+      },
+      {
         $group: {
-          _id: "$machineId",
+          _id: "$normalizedMachineId",
           currentCount: {
             $sum: {
               $cond: [{ $gte: ["$openedAt", currentFrom] }, 1, 0],
@@ -761,9 +803,16 @@ export class AnalyticsService {
         },
       },
       {
+        $set: {
+          normalizedMachineSystemId: normalizedReferenceIdExpression({
+            $first: "$machine.systemId",
+          }),
+        },
+      },
+      {
         $lookup: {
           from: "systems",
-          localField: "machine.systemId",
+          localField: "normalizedMachineSystemId",
           foreignField: "_id",
           as: "system",
         },
@@ -774,8 +823,12 @@ export class AnalyticsService {
         $project: {
           _id: 0,
           machineId: { $toString: "$_id" },
-          machineName: { $ifNull: [{ $first: "$machine.name" }, "-"] },
-          systemName: { $ifNull: [{ $first: "$system.name" }, "-"] },
+          machineName: {
+            $ifNull: [{ $first: "$machine.name" }, "مرجع غير متاح"],
+          },
+          systemName: {
+            $ifNull: [{ $first: "$system.name" }, "مرجع غير متاح"],
+          },
           currentCount: 1,
           previousCount: 1,
           lastFailureAt: 1,
@@ -1269,8 +1322,13 @@ export class AnalyticsService {
     const machines = await this.requestModel.aggregate([
       { $match: match },
       {
+        $set: {
+          normalizedMachineId: normalizedReferenceIdExpression("$machineId"),
+        },
+      },
+      {
         $group: {
-          _id: "$machineId",
+          _id: "$normalizedMachineId",
           failureCount: { $sum: 1 },
           lastFailure: { $max: "$openedAt" },
         },
@@ -1285,9 +1343,16 @@ export class AnalyticsService {
         },
       },
       {
+        $set: {
+          normalizedMachineSystemId: normalizedReferenceIdExpression({
+            $first: "$machine.systemId",
+          }),
+        },
+      },
+      {
         $lookup: {
           from: "systems",
-          localField: "machine.systemId",
+          localField: "normalizedMachineSystemId",
           foreignField: "_id",
           as: "system",
         },
@@ -1296,8 +1361,12 @@ export class AnalyticsService {
         $project: {
           _id: 0,
           machineId: { $toString: "$_id" },
-          machineName: { $ifNull: [{ $first: "$machine.name" }, "-"] },
-          systemName: { $ifNull: [{ $first: "$system.name" }, "-"] },
+          machineName: {
+            $ifNull: [{ $first: "$machine.name" }, "مرجع غير متاح"],
+          },
+          systemName: {
+            $ifNull: [{ $first: "$system.name" }, "مرجع غير متاح"],
+          },
           failureCount: 1,
           lastFailure: 1,
         },
@@ -1415,7 +1484,12 @@ export class AnalyticsService {
   ) {
     return this.requestModel.aggregate([
       { $match: this.requestMatch(filter, range) },
-      { $group: { _id: `$${field}`, count: { $sum: 1 } } },
+      {
+        $set: {
+          normalizedReferenceId: normalizedReferenceIdExpression(`$${field}`),
+        },
+      },
+      { $group: { _id: "$normalizedReferenceId", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 },
       {
