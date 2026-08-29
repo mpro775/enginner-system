@@ -28,6 +28,7 @@ WORKDIR /app
 
 # 1. تثبيت المتطلبات أولاً
 RUN apk add --no-cache \
+    curl \
     chromium \
     nss \
     freetype \
