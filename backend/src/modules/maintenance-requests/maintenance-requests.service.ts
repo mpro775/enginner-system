@@ -108,8 +108,16 @@ export class MaintenanceRequestsService {
       ? new Types.ObjectId(user.userId)
       : user.userId;
 
+    const referenceIds = {
+      locationId: new Types.ObjectId(createDto.locationId),
+      departmentId: new Types.ObjectId(createDto.departmentId),
+      systemId: new Types.ObjectId(createDto.systemId),
+      machineId: new Types.ObjectId(createDto.machineId),
+    };
+
     const request = new this.requestModel({
       ...createDto,
+      ...referenceIds,
       maintainAllComponents,
       requestCode,
       engineerId,
@@ -239,7 +247,19 @@ export class MaintenanceRequestsService {
       previousValues.implementedWork = request.implementedWork;
     }
 
-    await this.requestModel.findByIdAndUpdate(id, updateDto);
+    const normalizedUpdate: Record<string, unknown> = { ...updateDto };
+    for (const field of [
+      "locationId",
+      "departmentId",
+      "systemId",
+      "machineId",
+    ] as const) {
+      if (updateDto[field]) {
+        normalizedUpdate[field] = new Types.ObjectId(updateDto[field]);
+      }
+    }
+
+    await this.requestModel.findByIdAndUpdate(id, normalizedUpdate);
 
     // Log the action
     await this.auditLogsService.create({

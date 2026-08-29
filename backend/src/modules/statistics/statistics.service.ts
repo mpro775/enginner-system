@@ -13,6 +13,7 @@ import {
   TrendsFilterDto,
 } from "./dto/statistics-filter.dto";
 import { RequestStatus, MaintenanceType, Role } from "../../common/enums";
+import { normalizedReferenceIdExpression } from "../../common/utils/reference-id.util";
 
 const CACHE_TTL = 60000; // 1 minute
 
@@ -245,7 +246,12 @@ export class StatisticsService {
           as: "engineer",
         },
       },
-      { $unwind: "$engineer" },
+      {
+        $unwind: {
+          path: "$engineer",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
       { $sort: { total: -1 } },
     ]);
 
@@ -266,7 +272,7 @@ export class StatisticsService {
 
       return {
         engineerId: stat._id.toString(),
-        engineerName: stat.engineer.name,
+        engineerName: stat.engineer?.name || "مرجع غير متاح",
         totalRequests: stat.total,
         byStatus: {
           inProgress: stat.inProgress,
@@ -319,7 +325,12 @@ export class StatisticsService {
     const matchStage = await this.buildMatchStage(filter);
     return this.requestModel.aggregate([
       { $match: matchStage },
-      { $group: { _id: "$locationId", count: { $sum: 1 } } },
+      {
+        $set: {
+          normalizedLocationId: normalizedReferenceIdExpression("$locationId"),
+        },
+      },
+      { $group: { _id: "$normalizedLocationId", count: { $sum: 1 } } },
       {
         $lookup: {
           from: "locations",
@@ -328,11 +339,16 @@ export class StatisticsService {
           as: "location",
         },
       },
-      { $unwind: "$location" },
+      {
+        $unwind: {
+          path: "$location",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
       {
         $project: {
           locationId: "$_id",
-          locationName: "$location.name",
+          locationName: { $ifNull: ["$location.name", "مرجع غير متاح"] },
           count: 1,
         },
       },
@@ -344,7 +360,13 @@ export class StatisticsService {
     const matchStage = await this.buildMatchStage(filter);
     return this.requestModel.aggregate([
       { $match: matchStage },
-      { $group: { _id: "$departmentId", count: { $sum: 1 } } },
+      {
+        $set: {
+          normalizedDepartmentId:
+            normalizedReferenceIdExpression("$departmentId"),
+        },
+      },
+      { $group: { _id: "$normalizedDepartmentId", count: { $sum: 1 } } },
       {
         $lookup: {
           from: "departments",
@@ -353,11 +375,18 @@ export class StatisticsService {
           as: "department",
         },
       },
-      { $unwind: "$department" },
+      {
+        $unwind: {
+          path: "$department",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
       {
         $project: {
           departmentId: "$_id",
-          departmentName: "$department.name",
+          departmentName: {
+            $ifNull: ["$department.name", "مرجع غير متاح"],
+          },
           count: 1,
         },
       },
@@ -369,7 +398,12 @@ export class StatisticsService {
     const matchStage = await this.buildMatchStage(filter);
     return this.requestModel.aggregate([
       { $match: matchStage },
-      { $group: { _id: "$systemId", count: { $sum: 1 } } },
+      {
+        $set: {
+          normalizedSystemId: normalizedReferenceIdExpression("$systemId"),
+        },
+      },
+      { $group: { _id: "$normalizedSystemId", count: { $sum: 1 } } },
       {
         $lookup: {
           from: "systems",
@@ -378,11 +412,16 @@ export class StatisticsService {
           as: "system",
         },
       },
-      { $unwind: "$system" },
+      {
+        $unwind: {
+          path: "$system",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
       {
         $project: {
           systemId: "$_id",
-          systemName: "$system.name",
+          systemName: { $ifNull: ["$system.name", "مرجع غير متاح"] },
           count: 1,
         },
       },
@@ -399,8 +438,13 @@ export class StatisticsService {
     const stats = await this.requestModel.aggregate([
       { $match: matchStage },
       {
+        $set: {
+          normalizedMachineId: normalizedReferenceIdExpression("$machineId"),
+        },
+      },
+      {
         $group: {
-          _id: "$machineId",
+          _id: "$normalizedMachineId",
           failureCount: { $sum: 1 },
           lastFailure: { $max: "$createdAt" },
         },
@@ -413,21 +457,37 @@ export class StatisticsService {
           as: "machine",
         },
       },
-      { $unwind: "$machine" },
+      {
+        $unwind: {
+          path: "$machine",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $set: {
+          normalizedMachineSystemId:
+            normalizedReferenceIdExpression("$machine.systemId"),
+        },
+      },
       {
         $lookup: {
           from: "systems",
-          localField: "machine.systemId",
+          localField: "normalizedMachineSystemId",
           foreignField: "_id",
           as: "system",
         },
       },
-      { $unwind: "$system" },
+      {
+        $unwind: {
+          path: "$system",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
       {
         $project: {
           machineId: "$_id",
-          machineName: "$machine.name",
-          systemName: "$system.name",
+          machineName: { $ifNull: ["$machine.name", "مرجع غير متاح"] },
+          systemName: { $ifNull: ["$system.name", "مرجع غير متاح"] },
           failureCount: 1,
           lastFailure: 1,
         },
