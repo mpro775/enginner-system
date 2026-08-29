@@ -3,8 +3,14 @@
   "collection": "@nestjs/schematics",
   "sourceRoot": "src",
   "compilerOptions": {
+    "tsConfigPath": "tsconfig.build.json",
     "deleteOutDir": true,
-    "assets": ["**/*.html", "**/*.hbs", "**/*.png", "**/*.jpg"],
+    "assets": [
+      "**/*.html",
+      "**/*.hbs",
+      "**/*.png",
+      "**/*.jpg"
+    ],
     "watchAssets": true
   }
 }
