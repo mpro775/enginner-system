@@ -123,6 +123,19 @@ function Metric({
   );
 }
 
+const formatChartLabel = (value: string) => {
+  if (!value) return "";
+  const parts = value
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const arabic =
+    parts.find((part) => /[\u0600-\u06FF]/.test(part)) ?? parts[0] ?? value;
+
+  return arabic.length > 24 ? `${arabic.slice(0, 22)}…` : arabic;
+};
+
 function RankingChart({
   title,
   data,
@@ -135,27 +148,46 @@ function RankingChart({
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
-      <CardContent className="h-72">
+      <CardContent className="h-80">
         {data.length ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} layout="vertical" margin={{ left: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-              <XAxis type="number" allowDecimals={false} />
-              <YAxis
-                type="category"
-                dataKey="name"
-                width={90}
-                tick={{ fontSize: 11 }}
-              />
-              <Tooltip />
-              <Bar
-                dataKey="count"
-                name="الطلبات"
-                fill="#0099B7"
-                radius={[0, 5, 5, 0]}
-              />
-            </BarChart>
-          </ResponsiveContainer>
+          <div dir="ltr" className="h-full w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={data}
+                layout="vertical"
+                margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" allowDecimals={false} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={160}
+                  interval={0}
+                  tickMargin={8}
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={formatChartLabel}
+                />
+                <Tooltip
+                  formatter={(value: any) => [value, "الطلبات"]}
+                  labelFormatter={(label: any) => label}
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--popover))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
+                    direction: "rtl",
+                    textAlign: "right",
+                  }}
+                />
+                <Bar
+                  dataKey="count"
+                  name="الطلبات"
+                  fill="#0099B7"
+                  radius={[0, 5, 5, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         ) : (
           <Empty text="لا توجد بيانات تصنيف في الفترة المحددة." />
         )}
@@ -417,36 +449,49 @@ export default function AnalyticsCenter() {
                 </CardHeader>
                 <CardContent className="h-80">
                   {data.trends.length ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={data.trends}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="period" tick={{ fontSize: 10 }} />
-                        <YAxis allowDecimals={false} />
-                        <Tooltip />
-                        <Legend />
-                        <Line
-                          type="monotone"
-                          dataKey="total"
-                          name="الإجمالي"
-                          stroke="#0099B7"
-                          strokeWidth={2}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="completed"
-                          name="المكتمل"
-                          stroke="#22c55e"
-                          strokeWidth={2}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="emergency"
-                          name="الطارئ"
-                          stroke="#ef4444"
-                          strokeWidth={2}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    <div dir="ltr" className="h-full w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={data.trends}
+                          margin={{ top: 10, right: 20, left: 10, bottom: 10 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="period" tick={{ fontSize: 10 }} />
+                          <YAxis allowDecimals={false} />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "hsl(var(--popover))",
+                              border: "1px solid hsl(var(--border))",
+                              borderRadius: "8px",
+                              direction: "rtl",
+                              textAlign: "right",
+                            }}
+                          />
+                          <Legend />
+                          <Line
+                            type="monotone"
+                            dataKey="total"
+                            name="الإجمالي"
+                            stroke="#0099B7"
+                            strokeWidth={2}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="completed"
+                            name="المكتمل"
+                            stroke="#22c55e"
+                            strokeWidth={2}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="emergency"
+                            name="الطارئ"
+                            stroke="#ef4444"
+                            strokeWidth={2}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
                   ) : (
                     <Empty text="لا توجد بيانات اتجاهات للفترة المحددة." />
                   )}
@@ -663,29 +708,39 @@ export default function AnalyticsCenter() {
                   <CardTitle>تركيب أنواع الصيانة</CardTitle>
                 </CardHeader>
                 <CardContent className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={[
-                          { name: "طارئة", value: data.kpis.emergencyRequests },
-                          {
-                            name: "وقائية",
-                            value: data.kpis.preventiveRequests,
-                          },
-                        ]}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={60}
-                        outerRadius={95}
-                      >
-                        {[0, 1].map((index) => (
-                          <Cell key={index} fill={COLORS[index]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <div dir="ltr" className="h-full w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: "طارئة", value: data.kpis.emergencyRequests },
+                            {
+                              name: "وقائية",
+                              value: data.kpis.preventiveRequests,
+                            },
+                          ]}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius={60}
+                          outerRadius={95}
+                        >
+                          {[0, 1].map((index) => (
+                            <Cell key={index} fill={COLORS[index]} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--popover))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "8px",
+                            direction: "rtl",
+                            textAlign: "right",
+                          }}
+                        />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
                 </CardContent>
               </Card>
               <Card>

@@ -228,60 +228,25 @@
   animation-delay: 0.4s;
 }
 
-/* Recharts text visibility fixes */
-.recharts-wrapper {
-  position: relative;
-}
-
-.recharts-wrapper svg {
-  overflow: visible;
-}
-
-.recharts-text {
-  fill: hsl(var(--foreground)) !important;
-  font-size: 12px;
-  pointer-events: none;
-}
-
+/* Recharts theme only — don't override Recharts geometry */
+.recharts-text,
 .recharts-cartesian-axis-tick text {
   fill: hsl(var(--foreground)) !important;
   font-size: 12px;
-  pointer-events: none;
 }
 
 .recharts-legend-wrapper {
-  position: relative !important;
-  z-index: 10 !important;
+  z-index: 10;
 }
 
 .recharts-tooltip-wrapper {
-  z-index: 1000 !important;
-  position: relative !important;
+  z-index: 1000;
 }
 
-.recharts-active-dot,
-.recharts-dot {
-  pointer-events: auto;
-}
-
-/* Ensure pie chart labels are visible */
 .recharts-pie-label-text {
   fill: white !important;
   font-weight: 600;
   font-size: 12px;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  pointer-events: none;
-}
-
-/* Bar chart Y-axis text visibility */
-.recharts-cartesian-axis.yAxis text {
-  fill: hsl(var(--foreground)) !important;
-  font-size: 12px;
-  text-anchor: end;
-  dominant-baseline: middle;
-}
-
-/* Ensure all chart text is visible */
-.recharts-layer text {
   pointer-events: none;
 }

@@ -324,43 +324,54 @@ export default function AdminOperationsDashboard() {
           </CardHeader>
           <CardContent className="h-80">
             {data.trends.length ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data.trends}>
-                  <defs>
-                    <linearGradient id="opsTrend" x1="0" y1="0" x2="0" y2="1">
-                      <stop
-                        offset="5%"
-                        stopColor="#0099B7"
-                        stopOpacity={0.35}
-                      />
-                      <stop offset="95%" stopColor="#0099B7" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="period" tick={{ fontSize: 11 }} />
-                  <YAxis
-                    allowDecimals={false}
-                    tickFormatter={(value) => formatNumber(Number(value))}
-                  />
-                  <Tooltip formatter={(value) => formatNumber(Number(value))} />
-                  <Area
-                    type="monotone"
-                    dataKey="total"
-                    name="الطلبات"
-                    stroke="#0099B7"
-                    fill="url(#opsTrend)"
-                    strokeWidth={2}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="emergency"
-                    name="الطارئة"
-                    stroke="#ef4444"
-                    fill="transparent"
-                    strokeWidth={2}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div dir="ltr" className="h-full w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={data.trends}>
+                    <defs>
+                      <linearGradient id="opsTrend" x1="0" y1="0" x2="0" y2="1">
+                        <stop
+                          offset="5%"
+                          stopColor="#0099B7"
+                          stopOpacity={0.35}
+                        />
+                        <stop offset="95%" stopColor="#0099B7" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+                    <YAxis
+                      allowDecimals={false}
+                      tickFormatter={(value) => formatNumber(Number(value))}
+                    />
+                    <Tooltip
+                      formatter={(value) => formatNumber(Number(value))}
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--popover))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                        direction: "rtl",
+                        textAlign: "right",
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="total"
+                      name="الطلبات"
+                      stroke="#0099B7"
+                      fill="url(#opsTrend)"
+                      strokeWidth={2}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="emergency"
+                      name="الطارئة"
+                      stroke="#ef4444"
+                      fill="transparent"
+                      strokeWidth={2}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 لا توجد بيانات طلبات في الفترة الحالية.
@@ -374,23 +385,34 @@ export default function AdminOperationsDashboard() {
           </CardHeader>
           <CardContent className="h-80">
             {agingData.some((item) => item.value) ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={agingData}
-                  layout="vertical"
-                  margin={{ right: 15, left: 15 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis
-                    type="number"
-                    allowDecimals={false}
-                    tickFormatter={(value) => formatNumber(Number(value))}
-                  />
-                  <YAxis type="category" dataKey="name" width={75} />
-                  <Tooltip formatter={(value) => formatNumber(Number(value))} />
-                  <Bar dataKey="value" name="الطلبات" radius={[0, 6, 6, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <div dir="ltr" className="h-full w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={agingData}
+                    layout="vertical"
+                    margin={{ right: 15, left: 15 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis
+                      type="number"
+                      allowDecimals={false}
+                      tickFormatter={(value) => formatNumber(Number(value))}
+                    />
+                    <YAxis type="category" dataKey="name" width={75} />
+                    <Tooltip
+                      formatter={(value) => formatNumber(Number(value))}
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--popover))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                        direction: "rtl",
+                        textAlign: "right",
+                      }}
+                    />
+                    <Bar dataKey="value" name="الطلبات" radius={[0, 6, 6, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 لا توجد طلبات مفتوحة.
