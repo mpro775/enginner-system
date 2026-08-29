@@ -403,7 +403,11 @@ export default function AnalyticsCenter() {
                 />
                 <Metric
                   title="الالتزام الوقائي"
-                  value={`${data.kpis.preventiveCompliance}%`}
+                  value={
+                    data.kpis.preventiveCompliance === null
+                      ? "لا توجد مهام مستحقة"
+                      : `${data.kpis.preventiveCompliance}%`
+                  }
                   hint="المهام الوقائية المكتملة من المستحقة، مع استبعاد الملغاة"
                 />
               </div>
@@ -698,12 +702,9 @@ export default function AnalyticsCenter() {
                         {
                           {
                             totalRequests: "إجمالي الطلبات",
-                            openRequests: "الطلبات المفتوحة",
-                            stoppedRequests: "الطلبات المتوقفة",
                             emergencyRequests: "الطوارئ",
                             avgCompletionTime: "متوسط الإنجاز",
                             preventiveCompliance: "الالتزام الوقائي",
-                            overduePreventive: "المتأخر الوقائي",
                             repeatFailures: "الأعطال المتكررة",
                           }[key]
                         }

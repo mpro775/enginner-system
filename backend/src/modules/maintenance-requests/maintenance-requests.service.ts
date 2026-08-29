@@ -26,6 +26,7 @@ import {
   Role,
   AuditAction,
   MaintenanceType,
+  OPEN_REQUEST_STATUSES,
 } from "../../common/enums";
 import {
   createPaginationMeta,
@@ -596,7 +597,9 @@ export class MaintenanceRequestsService {
       }
     }
 
-    if (filterDto.status) {
+    if (filterDto.openOnly) {
+      filter.status = { $in: [...OPEN_REQUEST_STATUSES] } as any;
+    } else if (filterDto.status) {
       filter.status = filterDto.status;
     }
 

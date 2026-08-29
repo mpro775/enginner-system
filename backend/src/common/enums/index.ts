@@ -18,6 +18,11 @@ export enum RequestStatus {
   STOPPED = "stopped",
 }
 
+export const OPEN_REQUEST_STATUSES = [
+  RequestStatus.IN_PROGRESS,
+  RequestStatus.STOPPED,
+] as const;
+
 export enum AuditAction {
   CREATE = "create",
   UPDATE = "update",

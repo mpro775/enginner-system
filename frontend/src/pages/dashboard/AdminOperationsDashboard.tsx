@@ -59,15 +59,18 @@ function KpiCard({
   lowerIsBetter = false,
 }: {
   title: string;
-  value: number;
+  value: number | string;
   suffix?: string;
   icon: typeof FileText;
-  comparison: PeriodComparison;
+  comparison?: PeriodComparison;
   lowerIsBetter?: boolean;
 }) {
-  const changed =
-    comparison.percentChange !== null && comparison.percentChange !== 0;
-  const increasing = (comparison.percentChange || 0) > 0;
+  const changed = Boolean(
+    comparison &&
+    comparison.percentChange !== null &&
+    comparison.percentChange !== 0,
+  );
+  const increasing = (comparison?.percentChange || 0) > 0;
   const favourable = changed && (lowerIsBetter ? !increasing : increasing);
   return (
     <Card className="overflow-hidden">
@@ -76,7 +79,9 @@ function KpiCard({
           <div>
             <p className="text-sm text-muted-foreground">{title}</p>
             <p className="mt-2 text-3xl font-bold">
-              {value.toLocaleString("ar-SA")}
+              {typeof value === "number"
+                ? value.toLocaleString("ar-SA")
+                : value}
               {suffix}
             </p>
           </div>
@@ -85,7 +90,9 @@ function KpiCard({
           </span>
         </div>
         <div className="mt-4 flex items-center gap-2 text-xs">
-          {!comparison.comparable ? (
+          {!comparison ? (
+            <span className="text-muted-foreground">لقطة الحالة الحالية</span>
+          ) : !comparison.comparable ? (
             <span className="text-muted-foreground">
               لا توجد بيانات كافية للمقارنة
             </span>
@@ -116,7 +123,7 @@ const attentionLinks = [
     key: "emergency",
     label: "طوارئ مفتوحة",
     icon: ShieldAlert,
-    href: "/app/requests?maintenanceType=emergency&status=in_progress",
+    href: "/app/requests?maintenanceType=emergency&openOnly=true",
     tone: "text-red-600 bg-red-500/10",
   },
   {
@@ -214,7 +221,8 @@ export default function AdminOperationsDashboard() {
             مركز عمليات الصيانة
           </h1>
           <p className="text-sm text-muted-foreground">
-            صورة تشغيلية موحدة لآخر 30 يومًا — التوقيت {data.timezone}
+            الحالة التشغيلية الآن واتجاهات آخر 30 يومًا — التوقيت{" "}
+            {data.timezone}
           </p>
         </div>
         <div className="flex gap-2">
@@ -245,22 +253,16 @@ export default function AdminOperationsDashboard() {
           title="الطلبات المفتوحة"
           value={data.openRequests}
           icon={Wrench}
-          comparison={data.comparisons.openRequests}
-          lowerIsBetter
         />
         <KpiCard
           title="الطارئة المفتوحة"
           value={data.emergencyOpen}
           icon={ShieldAlert}
-          comparison={data.comparisons.emergencyRequests}
-          lowerIsBetter
         />
         <KpiCard
           title="الطلبات المتوقفة"
           value={data.stoppedRequests}
           icon={PauseCircle}
-          comparison={data.comparisons.stoppedRequests}
-          lowerIsBetter
         />
         <KpiCard
           title="متوسط زمن إنجاز الطلب"
@@ -272,8 +274,8 @@ export default function AdminOperationsDashboard() {
         />
         <KpiCard
           title="الالتزام بالصيانة الوقائية"
-          value={data.preventiveCompliance}
-          suffix="%"
+          value={data.preventiveCompliance ?? "لا توجد مهام مستحقة"}
+          suffix={data.preventiveCompliance === null ? undefined : "%"}
           icon={CheckCircle2}
           comparison={data.comparisons.preventiveCompliance}
         />

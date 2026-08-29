@@ -8,7 +8,6 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDashed,
-  Clock3,
   ExternalLink,
   XCircle,
 } from "lucide-react";
@@ -168,8 +167,8 @@ export default function PreventiveCalendar() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <SummaryCard
-          title="المستحقة"
-          value={summary?.scheduledDue || 0}
+          title="المجدولة في الفترة"
+          value={summary?.scheduled || 0}
           icon={CalendarDays}
         />
         <SummaryCard
@@ -185,14 +184,18 @@ export default function PreventiveCalendar() {
           tone="text-red-600"
         />
         <SummaryCard
-          title="القادمة خلال 7 أيام"
-          value={summary?.upcoming || 0}
-          icon={Clock3}
-          tone="text-blue-600"
+          title="الملغاة"
+          value={summary?.cancelled || 0}
+          icon={XCircle}
+          tone="text-gray-600"
         />
         <SummaryCard
           title="نسبة الالتزام"
-          value={`${summary?.compliancePercent || 0}%`}
+          value={
+            summary?.compliancePercent === null
+              ? "لا توجد مهام مستحقة"
+              : `${summary?.compliancePercent ?? 0}%`
+          }
           icon={CheckCircle2}
           tone="text-primary"
         />

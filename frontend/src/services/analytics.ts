@@ -67,12 +67,12 @@ export interface LocationSystemPoint {
 }
 
 export interface PreventiveSummary {
+  scheduled: number;
   scheduledDue: number;
   completed: number;
   overdue: number;
   cancelled: number;
-  upcoming: number;
-  compliancePercent: number;
+  compliancePercent: number | null;
 }
 
 export interface PreventiveCalendarItem {
@@ -170,7 +170,7 @@ export interface OperationsDashboard {
   unresolvedComplaints: number;
   repeatFailureMachines: number;
   avgCompletionTimeHours: number;
-  preventiveCompliance: number;
+  preventiveCompliance: number | null;
   aging: AgingAnalytics["buckets"];
   trends: TrendPoint[];
   statusDistribution: Array<{ key: string; count: number }>;
@@ -184,12 +184,9 @@ export interface OperationsDashboard {
   }>;
   comparisons: {
     totalRequests: PeriodComparison;
-    openRequests: PeriodComparison;
-    stoppedRequests: PeriodComparison;
     emergencyRequests: PeriodComparison;
     avgCompletionTime: PeriodComparison;
     preventiveCompliance: PeriodComparison;
-    overduePreventive: PeriodComparison;
     repeatFailures: PeriodComparison;
   };
 }
@@ -211,7 +208,7 @@ export interface AnalyticsOverview {
     completionRate: number;
     stopRate: number;
     emergencyPreventiveRatio: number | null;
-    preventiveCompliance: number;
+    preventiveCompliance: number | null;
     overduePreventiveTasks: number;
   };
   preventive: PreventiveSummary;

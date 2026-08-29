@@ -74,6 +74,7 @@ const defaultFilters = {
   page: 1,
   limit: 10,
   status: "",
+  openOnly: false,
   maintenanceType: "",
   locationId: "",
   departmentId: "",
@@ -121,6 +122,7 @@ function parseFiltersFromSearchParams(
     ...defaultFilters,
     page: page ? Math.max(1, parseInt(page, 10) || 1) : 1,
     status: searchParams.get("status") ?? "",
+    openOnly: searchParams.get("openOnly") === "true",
     maintenanceType: searchParams.get("maintenanceType") ?? "",
     locationId: searchParams.get("locationId") ?? "",
     departmentId: searchParams.get("departmentId") ?? "",
@@ -169,6 +171,8 @@ export default function RequestsList() {
       else params.delete("page");
       if (nextFilters.status) params.set("status", nextFilters.status);
       else params.delete("status");
+      if (nextFilters.openOnly) params.set("openOnly", "true");
+      else params.delete("openOnly");
       if (nextFilters.maintenanceType)
         params.set("maintenanceType", nextFilters.maintenanceType);
       else params.delete("maintenanceType");
@@ -283,6 +287,7 @@ export default function RequestsList() {
 
   const activeFilterCount = [
     filters.status,
+    filters.openOnly,
     filters.maintenanceType,
     filters.locationId,
     filters.departmentId,
@@ -304,6 +309,7 @@ export default function RequestsList() {
         page: number;
         limit: number;
         status?: string;
+        openOnly?: boolean;
         maintenanceType?: string;
         locationId?: string;
         departmentId?: string;
@@ -320,6 +326,8 @@ export default function RequestsList() {
       if (filters.status && filters.status.trim() !== "") {
         cleanFilters.status = filters.status;
       }
+
+      if (filters.openOnly) cleanFilters.openOnly = true;
 
       if (filters.maintenanceType && filters.maintenanceType.trim() !== "") {
         cleanFilters.maintenanceType = filters.maintenanceType;
@@ -637,6 +645,7 @@ export default function RequestsList() {
                 setFilters({
                   ...filters,
                   status: value === "all" ? "" : value,
+                  openOnly: false,
                   page: 1,
                 })
               }

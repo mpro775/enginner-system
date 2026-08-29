@@ -4,7 +4,9 @@ import {
   IsMongoId,
   IsDateString,
   IsIn,
+  IsBoolean,
 } from "class-validator";
+import { Transform } from "class-transformer";
 import { PaginationDto } from "../../../common/dto/pagination.dto";
 import { MaintenanceType, RequestStatus } from "../../../common/enums";
 
@@ -12,6 +14,11 @@ export class FilterRequestsDto extends PaginationDto {
   @IsOptional()
   @IsEnum(RequestStatus)
   status?: RequestStatus;
+
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === "true")
+  @IsBoolean()
+  openOnly?: boolean;
 
   @IsOptional()
   @IsMongoId()

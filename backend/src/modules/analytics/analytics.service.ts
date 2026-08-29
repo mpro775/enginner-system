@@ -12,6 +12,7 @@ import { Model, Types } from "mongoose";
 import {
   ComplaintStatus,
   MaintenanceType,
+  OPEN_REQUEST_STATUSES,
   RequestStatus,
   TaskStatus,
 } from "../../common/enums";
@@ -74,12 +75,19 @@ export interface RequestMetrics {
 }
 
 export interface PreventiveSummary {
+  scheduled: number;
   scheduledDue: number;
   completed: number;
   overdue: number;
   cancelled: number;
-  upcoming: number;
-  compliancePercent: number;
+  compliancePercent: number | null;
+}
+
+interface CurrentRequestSnapshot {
+  openRequests: number;
+  emergencyOpen: number;
+  stoppedRequests: number;
+  openRequestAverageAgeHours: number;
 }
 
 @Injectable()
@@ -124,8 +132,11 @@ export class AnalyticsService {
       const [
         current,
         previous,
+        requestSnapshot,
         preventive,
         previousPreventive,
+        overduePreventive,
+        upcomingPreventive7Days,
         aging,
         unresolvedComplaints,
         repeatFailures,
@@ -136,10 +147,13 @@ export class AnalyticsService {
       ] = await Promise.all([
         this.getRequestMetrics(filter, currentRange),
         this.getRequestMetrics(filter, previousRange),
+        this.getCurrentRequestSnapshot(filter),
         this.getPreventiveSummaryForRange(filter, currentRange),
         this.getPreventiveSummaryForRange(filter, previousRange),
+        this.countCurrentOverduePreventive(filter),
+        this.countUpcomingPreventive(filter),
         this.getAging(filter),
-        this.countUnresolvedComplaints(filter, currentRange),
+        this.countUnresolvedComplaints(filter),
         this.getRepeatFailures(filter, currentRange, 5),
         this.getRepeatFailures(filter, previousRange, 1),
         this.getTrends(filter, "daily"),
@@ -151,11 +165,11 @@ export class AnalyticsService {
         timezone: this.timeZone,
         period: this.serialisePeriod(period),
         totalRequests: current.totalRequests,
-        openRequests: current.openRequests,
-        emergencyOpen: current.emergencyOpen,
-        stoppedRequests: current.stoppedRequests,
-        overduePreventive: preventive.overdue,
-        upcomingPreventive7Days: preventive.upcoming,
+        openRequests: requestSnapshot.openRequests,
+        emergencyOpen: requestSnapshot.emergencyOpen,
+        stoppedRequests: requestSnapshot.stoppedRequests,
+        overduePreventive,
+        upcomingPreventive7Days,
         unresolvedComplaints,
         repeatFailureMachines: repeatFailures.totalMachines,
         avgCompletionTimeHours: current.avgCompletionTimeHours,
@@ -170,14 +184,6 @@ export class AnalyticsService {
             current.totalRequests,
             previous.totalRequests,
           ),
-          openRequests: this.comparison(
-            current.openRequests,
-            previous.openRequests,
-          ),
-          stoppedRequests: this.comparison(
-            current.stoppedRequests,
-            previous.stoppedRequests,
-          ),
           emergencyRequests: this.comparison(
             current.emergencyRequests,
             previous.emergencyRequests,
@@ -189,10 +195,6 @@ export class AnalyticsService {
           preventiveCompliance: this.comparison(
             preventive.compliancePercent,
             previousPreventive.compliancePercent,
-          ),
-          overduePreventive: this.comparison(
-            preventive.overdue,
-            previousPreventive.overdue,
           ),
           repeatFailures: this.comparison(
             repeatFailures.totalMachines,
@@ -209,6 +211,7 @@ export class AnalyticsService {
       const range = { from: period.from, to: period.toExclusive };
       const [
         metrics,
+        requestSnapshot,
         preventive,
         comparisons,
         aging,
@@ -222,6 +225,7 @@ export class AnalyticsService {
         locationSystemHeatmap,
       ] = await Promise.all([
         this.getRequestMetrics(filter, range),
+        this.getCurrentRequestSnapshot(filter),
         this.getPreventiveSummaryForRange(filter, range),
         this.getComparisons(filter),
         this.getAging(filter),
@@ -240,6 +244,7 @@ export class AnalyticsService {
         period: this.serialisePeriod(period),
         kpis: {
           ...metrics,
+          ...requestSnapshot,
           preventiveCompliance: preventive.compliancePercent,
           overduePreventiveTasks: preventive.overdue,
         },
@@ -264,12 +269,8 @@ export class AnalyticsService {
 
   async getAging(filter: AnalyticsFilterDto) {
     const now = new Date();
-    const period = this.period(filter);
-    const match = this.requestMatch(filter, {
-      from: period.from,
-      to: period.toExclusive,
-    });
-    match.status = { $in: [RequestStatus.IN_PROGRESS, RequestStatus.STOPPED] };
+    const match = this.requestMatch(filter);
+    match.status = { $in: [...OPEN_REQUEST_STATUSES] };
 
     const [bucketRows, oldestOpenRequests] = await Promise.all([
       this.requestModel.aggregate([
@@ -399,14 +400,6 @@ export class AnalyticsService {
         current.totalRequests,
         previous.totalRequests,
       ),
-      openRequests: this.comparison(
-        current.openRequests,
-        previous.openRequests,
-      ),
-      stoppedRequests: this.comparison(
-        current.stoppedRequests,
-        previous.stoppedRequests,
-      ),
       emergencyRequests: this.comparison(
         current.emergencyRequests,
         previous.emergencyRequests,
@@ -418,10 +411,6 @@ export class AnalyticsService {
       preventiveCompliance: this.comparison(
         preventive.compliancePercent,
         previousPreventive.compliancePercent,
-      ),
-      overduePreventive: this.comparison(
-        preventive.overdue,
-        previousPreventive.overdue,
       ),
       repeatFailures: this.comparison(
         repeat.totalMachines,
@@ -1018,12 +1007,55 @@ export class AnalyticsService {
     };
   }
 
+  private async getCurrentRequestSnapshot(
+    filter: AnalyticsFilterDto,
+  ): Promise<CurrentRequestSnapshot> {
+    const now = new Date();
+    const match = this.requestMatch(filter);
+    match.status = { $in: [...OPEN_REQUEST_STATUSES] };
+    const rows = await this.requestModel.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: null,
+          openRequests: { $sum: 1 },
+          emergencyOpen: {
+            $sum: {
+              $cond: [
+                { $eq: ["$maintenanceType", MaintenanceType.EMERGENCY] },
+                1,
+                0,
+              ],
+            },
+          },
+          stoppedRequests: {
+            $sum: {
+              $cond: [{ $eq: ["$status", RequestStatus.STOPPED] }, 1, 0],
+            },
+          },
+          avgOpenAgeMs: {
+            $avg: { $subtract: [now, "$openedAt"] },
+          },
+        },
+      },
+    ]);
+    const row = rows[0] || {};
+    return {
+      openRequests: row.openRequests || 0,
+      emergencyOpen: row.emergencyOpen || 0,
+      stoppedRequests: row.stoppedRequests || 0,
+      openRequestAverageAgeHours: this.toHours(row.avgOpenAgeMs),
+    };
+  }
+
   private async getPreventiveSummaryForRange(
     filter: AnalyticsFilterDto,
     range: { from: Date; to: Date },
   ): Promise<PreventiveSummary> {
     const now = new Date();
     const todayStart = startOfZonedDay(now, this.timeZone);
+    const tomorrowStart = addZonedDays(todayStart, 1, this.timeZone);
+    const dueCutoff = range.to < tomorrowStart ? range.to : tomorrowStart;
     const rows = await this.taskModel.aggregate([
       { $match: this.taskMatch(filter) },
       { $addFields: { scheduledDate: this.scheduledDateExpression() } },
@@ -1031,18 +1063,44 @@ export class AnalyticsService {
       {
         $group: {
           _id: null,
+          scheduled: { $sum: 1 },
           scheduledDue: {
-            $sum: { $cond: [{ $ne: ["$status", TaskStatus.CANCELLED] }, 1, 0] },
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $ne: ["$status", TaskStatus.CANCELLED] },
+                    { $lt: ["$scheduledDate", dueCutoff] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
           },
           completed: {
             $sum: { $cond: [{ $eq: ["$status", TaskStatus.COMPLETED] }, 1, 0] },
+          },
+          completedDue: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ["$status", TaskStatus.COMPLETED] },
+                    { $lt: ["$scheduledDate", dueCutoff] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
           },
           overdue: {
             $sum: {
               $cond: [
                 {
                   $and: [
-                    { $lt: ["$scheduledDate", todayStart] },
+                    { $lt: ["$scheduledDate", dueCutoff] },
                     {
                       $not: [
                         {
@@ -1066,32 +1124,50 @@ export class AnalyticsService {
         },
       },
     ]);
-    const upcomingRange = {
-      from: todayStart,
-      to: addZonedDays(todayStart, 7, this.timeZone),
-    };
-    const upcomingRows = await this.taskModel.aggregate([
-      { $match: { ...this.taskMatch(filter), status: TaskStatus.PENDING } },
-      { $addFields: { scheduledDate: this.scheduledDateExpression() } },
-      {
-        $match: {
-          scheduledDate: { $gte: upcomingRange.from, $lt: upcomingRange.to },
-        },
-      },
-      { $count: "count" },
-    ]);
     const row = rows[0] || {};
     return {
+      scheduled: row.scheduled || 0,
       scheduledDue: row.scheduledDue || 0,
       completed: row.completed || 0,
       overdue: row.overdue || 0,
       cancelled: row.cancelled || 0,
-      upcoming: upcomingRows[0]?.count || 0,
-      compliancePercent: this.percent(
-        row.completed || 0,
-        row.scheduledDue || 0,
-      ),
+      compliancePercent:
+        row.scheduledDue > 0
+          ? this.percent(row.completedDue || 0, row.scheduledDue)
+          : null,
     };
+  }
+
+  private async countCurrentOverduePreventive(filter: AnalyticsFilterDto) {
+    const tomorrowStart = addZonedDays(
+      startOfZonedDay(new Date(), this.timeZone),
+      1,
+      this.timeZone,
+    );
+    const rows = await this.taskModel.aggregate([
+      { $match: this.taskMatch(filter) },
+      { $addFields: { scheduledDate: this.scheduledDateExpression() } },
+      {
+        $match: {
+          scheduledDate: { $lt: tomorrowStart },
+          status: { $nin: [TaskStatus.COMPLETED, TaskStatus.CANCELLED] },
+        },
+      },
+      { $count: "count" },
+    ]);
+    return rows[0]?.count || 0;
+  }
+
+  private async countUpcomingPreventive(filter: AnalyticsFilterDto) {
+    const from = startOfZonedDay(new Date(), this.timeZone);
+    const to = addZonedDays(from, 7, this.timeZone);
+    const rows = await this.taskModel.aggregate([
+      { $match: { ...this.taskMatch(filter), status: TaskStatus.PENDING } },
+      { $addFields: { scheduledDate: this.scheduledDateExpression() } },
+      { $match: { scheduledDate: { $gte: from, $lt: to } } },
+      { $count: "count" },
+    ]);
+    return rows[0]?.count || 0;
   }
 
   private async getCalendarRows(
@@ -1101,7 +1177,11 @@ export class AnalyticsService {
     limit = 100,
   ) {
     const now = new Date();
-    const todayStart = startOfZonedDay(now, this.timeZone);
+    const dueCutoff = addZonedDays(
+      startOfZonedDay(now, this.timeZone),
+      1,
+      this.timeZone,
+    );
     const match = this.taskMatch(filter);
     if (statuses) match.status = { $in: statuses };
     return this.taskModel.aggregate([
@@ -1162,7 +1242,7 @@ export class AnalyticsService {
               {
                 $and: [
                   { $eq: ["$status", TaskStatus.PENDING] },
-                  { $lt: ["$scheduledDate", todayStart] },
+                  { $lt: ["$scheduledDate", dueCutoff] },
                 ],
               },
               TaskStatus.OVERDUE,
@@ -1230,15 +1310,11 @@ export class AnalyticsService {
     };
   }
 
-  private async countUnresolvedComplaints(
-    filter: AnalyticsFilterDto,
-    range: { from: Date; to: Date },
-  ) {
-    // Complaint schema has textual locations, so only the shared period can be applied safely.
+  private async countUnresolvedComplaints(filter: AnalyticsFilterDto) {
+    // Complaint schema has textual locations, so only its compatible engineer filter is applied.
     return this.complaintModel.countDocuments({
       deletedAt: null,
       status: { $in: [ComplaintStatus.NEW, ComplaintStatus.IN_PROGRESS] },
-      createdAt: { $gte: range.from, $lt: range.to },
       ...(filter.engineerId
         ? { assignedEngineerId: new Types.ObjectId(filter.engineerId) }
         : {}),
@@ -1421,7 +1497,19 @@ export class AnalyticsService {
     };
   }
 
-  private comparison(current: number, previous: number): PeriodComparison {
+  private comparison(
+    current: number | null,
+    previous: number | null,
+  ): PeriodComparison {
+    if (current === null || previous === null) {
+      return {
+        current: current ?? 0,
+        previous: previous ?? 0,
+        absoluteChange: 0,
+        percentChange: null,
+        comparable: false,
+      };
+    }
     return {
       current: this.round(current),
       previous: this.round(previous),

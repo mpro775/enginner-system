@@ -20,6 +20,7 @@ interface RequestFilters {
   page?: number;
   limit?: number;
   status?: string;
+  openOnly?: boolean;
   engineerId?: string;
   locationId?: string;
   departmentId?: string;
