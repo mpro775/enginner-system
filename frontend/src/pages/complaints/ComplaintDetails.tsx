@@ -119,12 +119,6 @@ export default function ComplaintDetails() {
     enabled: showCreateRequestDialog,
   });
 
-  const { data: allSystems } = useQuery({
-    queryKey: ["systems"],
-    queryFn: () => systemsService.getAll(),
-    enabled: showCreateRequestDialog,
-  });
-
   const assignMutation = useMutation({
     mutationFn: (engineerId: string) =>
       complaintsService.assign(id!, engineerId),
@@ -271,6 +265,14 @@ export default function ComplaintDetails() {
     reasonText: complaint?.descriptionAr || complaint?.descriptionEn || "",
     maintainAllComponents: true,
     selectedComponents: [] as string[],
+  });
+
+  const { data: systems } = useQuery({
+    queryKey: ["systems", createRequestForm.departmentId],
+    queryFn: () =>
+      systemsService.getByDepartment(createRequestForm.departmentId),
+    enabled:
+      showCreateRequestDialog && !!createRequestForm.departmentId,
   });
 
   const { data: machines } = useQuery({
@@ -884,6 +886,10 @@ export default function ComplaintDetails() {
                     setCreateRequestForm({
                       ...createRequestForm,
                       departmentId: value,
+                      systemId: "",
+                      machineId: "",
+                      maintainAllComponents: true,
+                      selectedComponents: [],
                     })
                   }
                 >
@@ -903,6 +909,7 @@ export default function ComplaintDetails() {
                 <Label>النظام</Label>
                 <Select
                   value={createRequestForm.systemId}
+                  disabled={!createRequestForm.departmentId}
                   onValueChange={(value) =>
                     setCreateRequestForm({
                       ...createRequestForm,
@@ -914,10 +921,16 @@ export default function ComplaintDetails() {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="اختر النظام" />
+                    <SelectValue
+                      placeholder={
+                        createRequestForm.departmentId
+                          ? "اختر النظام"
+                          : "اختر القسم أولاً"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {allSystems?.map((system) => (
+                    {systems?.map((system) => (
                       <SelectItem key={system.id} value={system.id}>
                         {system.name}
                       </SelectItem>
