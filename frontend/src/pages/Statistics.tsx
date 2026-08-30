@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart,
@@ -25,12 +26,60 @@ const COLORS = [
   "#0099B7", // KSU Teal (Primary)
   "#22c55e", // Green
   "#007A94", // KSU Teal Dark
+  "#f59e0b", // Amber
   "#ef4444", // Red
+  "#8b5cf6", // Purple
   "#00B8DB", // KSU Teal Light
   "#f97316", // Orange
+  "#06b6d4", // Cyan
+  "#ec4899", // Pink
 ];
 
-// Custom label for pie chart - only show percentage inside
+// Helper to format bilingual/long labels
+const formatLabel = (value: string) => {
+  if (!value) return "";
+  const parts = value
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const arabic =
+    parts.find((part) => /[\u0600-\u06FF]/.test(part)) ?? parts[0] ?? value;
+  return arabic.length > 24 ? `${arabic.slice(0, 22)}…` : arabic;
+};
+
+// Process pie chart data: sort descending and aggregate tail into "أخرى" if too many items
+function processPieData(
+  data: Array<{ name: string; value: number }>,
+  maxItems = 6,
+) {
+  if (!data || data.length === 0) return [];
+  const sorted = [...data].sort((a, b) => b.value - a.value);
+  if (sorted.length <= maxItems) {
+    return sorted.map((item, index) => ({
+      ...item,
+      color: COLORS[index % COLORS.length],
+    }));
+  }
+  const top = sorted.slice(0, maxItems);
+  const rest = sorted.slice(maxItems);
+  const otherSum = rest.reduce((acc, curr) => acc + curr.value, 0);
+
+  const result = top.map((item, index) => ({
+    ...item,
+    color: COLORS[index % COLORS.length],
+  }));
+
+  if (otherSum > 0) {
+    result.push({
+      name: "أخرى",
+      value: otherSum,
+      color: "#94a3b8",
+    });
+  }
+  return result;
+}
+
+// Custom label for pie chart - only show percentage inside if large enough
 const renderCustomLabel = ({
   cx,
   cy,
@@ -39,7 +88,7 @@ const renderCustomLabel = ({
   outerRadius,
   percent,
 }: any) => {
-  if (percent === 0 || percent < 0.05) return null; // Hide labels for very small slices
+  if (percent === 0 || percent < 0.06) return null; // Hide labels for very small slices
 
   const RADIAN = Math.PI / 180;
   const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
@@ -53,7 +102,7 @@ const renderCustomLabel = ({
       fill="white"
       textAnchor="middle"
       dominantBaseline="central"
-      className="text-xs font-semibold"
+      className="text-xs font-semibold pointer-events-none"
       style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
     >
       {`${(percent * 100).toFixed(0)}%`}
@@ -61,24 +110,49 @@ const renderCustomLabel = ({
   );
 };
 
-// Custom legend component for pie charts
-const CustomLegend = ({ payload }: any) => {
+// External scrollable legend component outside SVG
+const ExternalLegend = ({
+  data,
+}: {
+  data: Array<{
+    name: string;
+    value: number;
+    color: string;
+    completed?: number;
+    pending?: number;
+  }>;
+}) => {
+  if (!data || data.length === 0) return null;
+
   return (
-    <div className="flex flex-wrap justify-center gap-3 pb-2">
-      {payload?.map((entry: any, index: number) => (
-        <div key={`legend-${index}`} className="flex items-center gap-2">
+    <div
+      dir="rtl"
+      className="max-h-36 overflow-y-auto px-1 pt-3 border-t border-border/40"
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+        {data.map((entry, index) => (
           <div
-            className="w-3 h-3 rounded-full flex-shrink-0"
-            style={{ backgroundColor: entry.color }}
-          />
-          <span className="text-xs sm:text-sm text-foreground/80">
-            {entry.value}:{" "}
-            <span className="font-semibold text-foreground">
-              {entry.payload?.value || 0}
+            key={`legend-${index}`}
+            className="flex items-center justify-between gap-2 p-1.5 rounded-md hover:bg-muted/40 transition-colors"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <div
+                className="w-3 h-3 rounded-full flex-shrink-0"
+                style={{ backgroundColor: entry.color }}
+              />
+              <span
+                className="truncate text-foreground/90 font-medium"
+                title={entry.name}
+              >
+                {formatLabel(entry.name)}
+              </span>
+            </div>
+            <span className="font-semibold text-foreground flex-shrink-0">
+              {entry.value}
             </span>
-          </span>
-        </div>
-      ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
@@ -123,35 +197,52 @@ export default function Statistics() {
     loadingMachines ||
     loadingTrends;
 
-  if (isLoading) {
-    return <PageLoader />;
-  }
+  const engineerChartData = useMemo(
+    () =>
+      engineerStats?.map((stat, index) => ({
+        name: stat.engineerName,
+        value: stat.totalRequests,
+        completed: stat.byStatus.completed,
+        pending: stat.byStatus.inProgress,
+        color: COLORS[index % COLORS.length],
+      })) || [],
+    [engineerStats],
+  );
 
-  const engineerChartData =
-    engineerStats?.map((stat, index) => ({
-      name: stat.engineerName,
-      value: stat.totalRequests,
-      completed: stat.byStatus.completed,
-      pending: stat.byStatus.inProgress,
-      color: COLORS[index % COLORS.length],
-    })) || [];
+  const rawLocationData = useMemo(
+    () =>
+      locationStats?.map((stat) => ({
+        name: stat.locationName,
+        value: stat.count,
+      })) || [],
+    [locationStats],
+  );
 
-  const locationChartData =
-    locationStats?.map((stat, index) => ({
-      name: stat.locationName,
-      value: stat.count,
-      color: COLORS[index % COLORS.length],
-    })) || [];
+  const rawSystemData = useMemo(
+    () =>
+      systemStats?.map((stat) => ({
+        name: stat.systemName,
+        value: stat.count,
+      })) || [],
+    [systemStats],
+  );
 
-  const systemChartData =
-    systemStats?.map((stat, index) => ({
-      name: stat.systemName,
-      value: stat.count,
-      color: COLORS[index % COLORS.length],
-    })) || [];
+  const locationChartData = useMemo(
+    () => processPieData(rawLocationData, 6),
+    [rawLocationData],
+  );
+
+  const systemChartData = useMemo(
+    () => processPieData(rawSystemData, 6),
+    [rawSystemData],
+  );
 
   const trendsChartData = trends || [];
   const isFewTrendPoints = trendsChartData.length <= 2;
+
+  if (isLoading) {
+    return <PageLoader />;
+  }
 
   return (
     <div className="space-y-6 animate-in">
@@ -166,56 +257,61 @@ export default function Statistics() {
           <CardTitle>إحصائيات المهندسين</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-[360px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={engineerChartData}
-                  cx="50%"
-                  cy="45%"
-                  innerRadius={70}
-                  outerRadius={120}
-                  paddingAngle={3}
-                  dataKey="value"
-                  nameKey="name"
-                  labelLine={false}
-                  label={renderCustomLabel}
-                >
-                  {engineerChartData.map((entry, index) => (
-                    <Cell
-                      key={`engineer-${index}`}
-                      fill={entry.color}
-                      className="transition-opacity hover:opacity-80"
+          {engineerChartData.length > 0 ? (
+            <div className="space-y-3">
+              <div className="h-[240px]" dir="ltr">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={engineerChartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={65}
+                      outerRadius={105}
+                      paddingAngle={3}
+                      dataKey="value"
+                      nameKey="name"
+                      labelLine={false}
+                      label={renderCustomLabel}
+                    >
+                      {engineerChartData.map((entry, index) => (
+                        <Cell
+                          key={`engineer-${index}`}
+                          fill={entry.color}
+                          className="transition-opacity hover:opacity-80"
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: number, _name, props: any) => {
+                        const { payload } = props || {};
+                        return [
+                          value,
+                          `إجمالي (${payload?.completed || 0} مكتمل / ${
+                            payload?.pending || 0
+                          } قيد التنفيذ)`,
+                        ];
+                      }}
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--popover))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                        direction: "rtl",
+                        textAlign: "right",
+                      }}
                     />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value: number, _name, props: any) => {
-                    const { payload } = props || {};
-                    return [
-                      value,
-                      `إجمالي (${payload?.completed || 0} مكتمل / ${
-                        payload?.pending || 0
-                      } قيد التنفيذ)`,
-                    ];
-                  }}
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--popover))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                  }}
-                />
-                <Legend
-                  wrapperStyle={{ paddingTop: 8, paddingBottom: 0 }}
-                  formatter={(value, entry: any) => (
-                    <span className="text-xs sm:text-sm text-foreground">
-                      {value}: {entry?.payload?.value || 0}
-                    </span>
-                  )}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <ExternalLegend data={engineerChartData} />
+            </div>
+          ) : (
+            <div className="h-[240px] flex items-center justify-center">
+              <p className="text-muted-foreground text-sm">
+                لا توجد بيانات للعرض
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -228,41 +324,46 @@ export default function Statistics() {
             </CardHeader>
             <CardContent>
               {locationChartData.length > 0 ? (
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={locationChartData}
-                        cx="50%"
-                        cy="40%"
-                        innerRadius={50}
-                        outerRadius={90}
-                        paddingAngle={3}
-                        dataKey="value"
-                        labelLine={false}
-                        label={renderCustomLabel}
-                      >
-                        {locationChartData.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={entry.color}
-                            className="transition-opacity hover:opacity-80"
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--popover))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                        }}
-                      />
-                      <Legend content={<CustomLegend />} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                <div className="space-y-3">
+                  <div className="h-[220px]" dir="ltr">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={locationChartData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50}
+                          outerRadius={85}
+                          paddingAngle={3}
+                          dataKey="value"
+                          nameKey="name"
+                          labelLine={false}
+                          label={renderCustomLabel}
+                        >
+                          {locationChartData.map((entry, index) => (
+                            <Cell
+                              key={`location-cell-${index}`}
+                              fill={entry.color}
+                              className="transition-opacity hover:opacity-80"
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--popover))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "8px",
+                            direction: "rtl",
+                            textAlign: "right",
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <ExternalLegend data={locationChartData} />
                 </div>
               ) : (
-                <div className="h-[300px] flex items-center justify-center">
+                <div className="h-[280px] flex items-center justify-center">
                   <p className="text-muted-foreground text-sm">
                     لا توجد بيانات للعرض
                   </p>
@@ -278,41 +379,46 @@ export default function Statistics() {
             </CardHeader>
             <CardContent>
               {systemChartData.length > 0 ? (
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={systemChartData}
-                        cx="50%"
-                        cy="40%"
-                        innerRadius={50}
-                        outerRadius={90}
-                        paddingAngle={3}
-                        dataKey="value"
-                        labelLine={false}
-                        label={renderCustomLabel}
-                      >
-                        {systemChartData.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={entry.color}
-                            className="transition-opacity hover:opacity-80"
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--popover))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                        }}
-                      />
-                      <Legend content={<CustomLegend />} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                <div className="space-y-3">
+                  <div className="h-[220px]" dir="ltr">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={systemChartData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50}
+                          outerRadius={85}
+                          paddingAngle={3}
+                          dataKey="value"
+                          nameKey="name"
+                          labelLine={false}
+                          label={renderCustomLabel}
+                        >
+                          {systemChartData.map((entry, index) => (
+                            <Cell
+                              key={`system-cell-${index}`}
+                              fill={entry.color}
+                              className="transition-opacity hover:opacity-80"
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--popover))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "8px",
+                            direction: "rtl",
+                            textAlign: "right",
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <ExternalLegend data={systemChartData} />
                 </div>
               ) : (
-                <div className="h-[300px] flex items-center justify-center">
+                <div className="h-[280px] flex items-center justify-center">
                   <p className="text-muted-foreground text-sm">
                     لا توجد بيانات للعرض
                   </p>
@@ -330,14 +436,17 @@ export default function Statistics() {
             <CardTitle>الاتجاهات الشهرية</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[350px]">
+            <div className="h-[350px]" dir="ltr">
               <ResponsiveContainer width="100%" height="100%">
                 {isFewTrendPoints ? (
                   <BarChart
                     data={trendsChartData}
-                    margin={{ top: 10, right: 30, left: 0, bottom: 20 }}
+                    margin={{ top: 10, right: 30, left: 10, bottom: 20 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      className="stroke-border/50"
+                    />
                     <XAxis
                       dataKey="period"
                       tick={{ fontSize: 11 }}
@@ -356,6 +465,8 @@ export default function Statistics() {
                         backgroundColor: "hsl(var(--popover))",
                         border: "1px solid hsl(var(--border))",
                         borderRadius: "8px",
+                        direction: "rtl",
+                        textAlign: "right",
                       }}
                       labelStyle={{ color: "hsl(var(--foreground))" }}
                     />
@@ -367,14 +478,29 @@ export default function Statistics() {
                         </span>
                       )}
                     />
-                    <Bar dataKey="total" name="إجمالي" fill="#0099B7" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="completed" name="مكتمل" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="emergency" name="طارئ" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    <Bar
+                      dataKey="total"
+                      name="إجمالي"
+                      fill="#0099B7"
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="completed"
+                      name="مكتمل"
+                      fill="#22c55e"
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="emergency"
+                      name="طارئ"
+                      fill="#ef4444"
+                      radius={[4, 4, 0, 0]}
+                    />
                   </BarChart>
                 ) : (
                   <LineChart
                     data={trendsChartData}
-                    margin={{ top: 10, right: 30, left: 0, bottom: 20 }}
+                    margin={{ top: 10, right: 30, left: 10, bottom: 20 }}
                   >
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -399,6 +525,8 @@ export default function Statistics() {
                         backgroundColor: "hsl(var(--popover))",
                         border: "1px solid hsl(var(--border))",
                         borderRadius: "8px",
+                        direction: "rtl",
+                        textAlign: "right",
                       }}
                       labelStyle={{ color: "hsl(var(--foreground))" }}
                     />

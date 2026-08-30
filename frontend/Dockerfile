@@ -11,7 +11,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --legacy-peer-deps
+RUN npm ci --legacy-peer-deps --include=dev
 
 # Copy source code
 COPY . .
@@ -33,6 +33,9 @@ RUN npm run build
 # Production Stage - Nginx
 # =====================================================
 FROM nginx:alpine
+
+# Install curl
+RUN apk add --no-cache curl
 
 # Remove default nginx config
 RUN rm /etc/nginx/conf.d/default.conf

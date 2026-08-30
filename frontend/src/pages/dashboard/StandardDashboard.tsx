@@ -252,7 +252,7 @@ export default function StandardDashboard() {
           </CardHeader>
           <CardContent className="pb-4">
             {hasStatusData ? (
-              <div className="h-[250px] sm:h-[280px]">
+              <div className="h-[250px] sm:h-[280px]" dir="ltr">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -298,7 +298,7 @@ export default function StandardDashboard() {
           </CardHeader>
           <CardContent className="pb-4">
             {hasTypeData ? (
-              <div className="h-[250px] sm:h-[280px]">
+              <div className="h-[250px] sm:h-[280px]" dir="ltr">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -345,7 +345,7 @@ export default function StandardDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[280px] sm:h-[350px]">
+            <div className="h-[280px] sm:h-[350px]" dir="ltr">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -373,6 +373,8 @@ export default function StandardDashboard() {
                       backgroundColor: "hsl(var(--popover))",
                       border: "1px solid hsl(var(--border))",
                       borderRadius: "8px",
+                      direction: "rtl",
+                      textAlign: "right",
                     }}
                     labelStyle={{ color: "hsl(var(--foreground))" }}
                     formatter={(value: number, _name, props: any) => {
