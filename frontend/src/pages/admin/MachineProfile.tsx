@@ -17,7 +17,7 @@ import { Breadcrumbs } from "@/components/shared/Breadcrumbs";
 import { DetailSkeleton } from "@/components/shared/AdminSkeletons";
 import { Pagination } from "@/components/shared/Pagination";
 import { analyticsService } from "@/services/analytics";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, formatDuration } from "@/lib/utils";
 
 const RECURRENCE_THRESHOLDS = {
   watch: 2,
@@ -103,18 +103,18 @@ export default function MachineProfile() {
         />
         <HealthCard
           title="متوسط زمن الإنجاز"
-          value={`${data.health.avgCompletionTimeHours} س`}
+          value={formatDuration(data.health.avgCompletionTimeHours, "hours")}
           icon={Clock3}
         />
         <HealthCard
-          title="أعطال آخر 30 يومًا"
-          value={data.health.failuresLast30Days}
+          title="أعطال طارئة / آخر 30 يومًا"
+          value={`${data.health.failuresLast30Days} طلب`}
           icon={AlertTriangle}
           tone="text-amber-600"
         />
         <HealthCard
-          title="أعطال آخر 90 يومًا"
-          value={data.health.failuresLast90Days}
+          title="أعطال طارئة / آخر 90 يومًا"
+          value={`${data.health.failuresLast90Days} طلب`}
           icon={CalendarClock}
           tone="text-red-600"
         />

@@ -26,6 +26,7 @@
     "backup:reference-ids": "node --env-file-if-exists=.env -r ts-node/register scripts/backup-reference-id-integrity.ts",
     "normalize:reference-ids": "node --env-file-if-exists=.env -r ts-node/register scripts/normalize-reference-id-types.ts",
     "verify:reference-analytics": "node --env-file-if-exists=.env -r ts-node/register scripts/verify-reference-analytics.ts"
+    ,"audit:request-activity": "node --env-file-if-exists=.env -r ts-node/register scripts/audit-request-activity-integrity.ts"
   },
   "dependencies": {
     "@nestjs/cache-manager": "^2.2.0",

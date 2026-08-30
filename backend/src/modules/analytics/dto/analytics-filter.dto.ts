@@ -37,6 +37,10 @@ export class AnalyticsFilterDto {
   @IsOptional()
   @IsMongoId()
   engineerId?: string;
+
+  @IsOptional()
+  @IsIn(["custom", "month_to_date", "year_to_date"])
+  comparisonPreset?: "custom" | "month_to_date" | "year_to_date";
 }
 
 export class AnalyticsTrendFilterDto extends AnalyticsFilterDto {

@@ -24,37 +24,52 @@ export function formatDateTime(date: string | Date): string {
   });
 }
 
+export type DurationUnit = "milliseconds" | "seconds" | "minutes" | "hours";
+
+const durationUnitInMilliseconds: Record<DurationUnit, number> = {
+  milliseconds: 1,
+  seconds: 1000,
+  minutes: 60_000,
+  hours: 3_600_000,
+};
+
+/** Shared human-readable duration formatter for Admin Intelligence surfaces. */
 export function formatDuration(
-  from: string | Date,
-  to?: string | Date
+  value: number,
+  unit: DurationUnit = "milliseconds",
 ): string {
-  const start = new Date(from).getTime();
-  const end = to ? new Date(to).getTime() : Date.now();
+  if (!Number.isFinite(value)) return "—";
 
-  if (Number.isNaN(start) || Number.isNaN(end)) {
-    return "-";
-  }
-
-  const diffMs = Math.max(0, end - start);
+  const diffMs = Math.max(0, value * durationUnitInMilliseconds[unit]);
   const totalSeconds = Math.floor(diffMs / 1000);
 
   const days = Math.floor(totalSeconds / 86400);
   const hours = Math.floor((totalSeconds % 86400) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
+  if (totalSeconds < 60) return `${totalSeconds} ثانية`;
+  if (totalSeconds < 3600) return `${Math.floor(totalSeconds / 60)} دقائق`;
+  if (days > 0)
+    return hours > 0 ? `${days} يوم و${hours} ساعة` : `${days} يوم`;
+  return minutes > 0 ? `${hours} ساعة و${minutes} دقيقة` : `${hours} ساعة`;
+}
 
-  const pad = (n: number) => n.toString().padStart(2, "0");
+export function formatDurationBetween(
+  from: string | Date,
+  to: string | Date = new Date(),
+): string {
+  const start = new Date(from).getTime();
+  const end = new Date(to).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end)) return "—";
+  return formatDuration(Math.max(0, end - start));
+}
 
-  // يظهر الأيام فقط عند الحاجة، مع تنسيق متصاعد (يوم/ساعة/دقيقة/ثانية)
-  if (days > 0) {
-    return `${days}ي ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+export function formatPercentage(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return "—";
   }
-
-  if (hours > 0) {
-    return `${hours}:${pad(minutes)}:${pad(seconds)}`;
-  }
-
-  return `${minutes}:${pad(seconds)}`;
+  return `${new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 1,
+  }).format(value)}%`;
 }
 
 export function getStatusLabel(status: RequestStatus): string {

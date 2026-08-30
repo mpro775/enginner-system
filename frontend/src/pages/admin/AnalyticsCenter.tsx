@@ -34,7 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { cn, formatDuration, formatPercentage } from "@/lib/utils";
 import { Breadcrumbs } from "@/components/shared/Breadcrumbs";
 import { ANALYTICS_TIMEZONE, formatAnalyticsDate } from "@/lib/analytics-time";
 import {
@@ -50,7 +50,59 @@ import {
 } from "@/services/reference-data";
 
 type Tab = "overview" | "performance" | "aging" | "distributions" | "patterns";
+
 const COLORS = ["#0099B7", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6"];
+
+const TOOLTIP_STYLE = {
+  background: "hsl(var(--popover))",
+  border: "1px solid hsl(var(--border))",
+  borderColor: "hsl(var(--border))",
+  color: "hsl(var(--popover-foreground))",
+  borderRadius: "0.5rem",
+};
+
+const COMPARISON_DIRECTIONS = {
+  totalRequests: "neutral",
+  emergencyRequests: "lower",
+  avgCompletionTime: "lower",
+  preventiveCompliance: "higher",
+  repeatFailures: "lower",
+} as const;
+
+function comparisonTone(
+  key: keyof typeof COMPARISON_DIRECTIONS,
+  change: number | null,
+) {
+  const direction = COMPARISON_DIRECTIONS[key];
+
+  if (!change || direction === "neutral") {
+    return "text-muted-foreground";
+  }
+
+  const favourable = direction === "lower" ? change < 0 : change > 0;
+
+  return favourable
+    ? "text-green-600 dark:text-green-400"
+    : "text-red-600 dark:text-red-400";
+}
+
+function comparisonValue(
+  key: keyof typeof COMPARISON_DIRECTIONS,
+  value: number,
+) {
+  if (key === "avgCompletionTime") {
+    return formatDuration(value, "hours");
+  }
+
+  if (key === "preventiveCompliance") {
+    return formatPercentage(value);
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 const DAY_LABELS = [
   "الأحد",
   "الاثنين",
@@ -68,24 +120,47 @@ function dateInZone(date: Date) {
 function presetDates(preset: "month" | "previous" | "30days" | "year") {
   const today = dateInZone(new Date());
   const [year, month] = today.split("-").map(Number);
-  if (preset === "month")
+
+  if (preset === "month") {
     return {
       fromDate: `${year}-${String(month).padStart(2, "0")}-01`,
       toDate: today,
+      comparisonPreset: "month_to_date" as const,
     };
-  if (preset === "year") return { fromDate: `${year}-01-01`, toDate: today };
+  }
+
+  if (preset === "year") {
+    return {
+      fromDate: `${year}-01-01`,
+      toDate: today,
+      comparisonPreset: "year_to_date" as const,
+    };
+  }
+
   if (preset === "30days") {
     const from = new Date();
     from.setDate(from.getDate() - 29);
-    return { fromDate: dateInZone(from), toDate: today };
+
+    return {
+      fromDate: dateInZone(from),
+      toDate: today,
+      comparisonPreset: "custom" as const,
+    };
   }
+
   const firstCurrent = new Date(Date.UTC(year, month - 1, 1));
-  const lastPrevious = new Date(firstCurrent.getTime() - 24 * 60 * 60 * 1000);
+  const lastPrevious = new Date(
+    firstCurrent.getTime() - 24 * 60 * 60 * 1000,
+  );
   const previousYear = lastPrevious.getUTCFullYear();
   const previousMonth = lastPrevious.getUTCMonth() + 1;
+
   return {
     fromDate: `${previousYear}-${String(previousMonth).padStart(2, "0")}-01`,
-    toDate: `${previousYear}-${String(previousMonth).padStart(2, "0")}-${String(lastPrevious.getUTCDate()).padStart(2, "0")}`,
+    toDate: `${previousYear}-${String(previousMonth).padStart(2, "0")}-${String(
+      lastPrevious.getUTCDate(),
+    ).padStart(2, "0")}`,
+    comparisonPreset: "custom" as const,
   };
 }
 
@@ -103,10 +178,12 @@ function Metric({
   title,
   value,
   hint,
+  scope = "period",
 }: {
   title: string;
   value: string | number;
   hint: string;
+  scope?: "current" | "period";
 }) {
   return (
     <Card>
@@ -117,7 +194,12 @@ function Metric({
             <Info className="h-4 w-4 text-muted-foreground" />
           </span>
         </div>
+
         <p className="mt-3 text-2xl font-bold">{value}</p>
+
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          {scope === "current" ? "الحالة الحالية" : "خلال الفترة المختارة"}
+        </p>
       </CardContent>
     </Card>
   );
@@ -125,13 +207,16 @@ function Metric({
 
 const formatChartLabel = (value: string) => {
   if (!value) return "";
+
   const parts = value
     .split("/")
     .map((part) => part.trim())
     .filter(Boolean);
 
   const arabic =
-    parts.find((part) => /[\u0600-\u06FF]/.test(part)) ?? parts[0] ?? value;
+    parts.find((part) => /[\u0600-\u06FF]/.test(part)) ??
+    parts[0] ??
+    value;
 
   return arabic.length > 24 ? `${arabic.slice(0, 22)}…` : arabic;
 };
@@ -148,6 +233,7 @@ function RankingChart({
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
+
       <CardContent className="h-80">
         {data.length ? (
           <div dir="ltr" className="h-full w-full">
@@ -157,8 +243,14 @@ function RankingChart({
                 layout="vertical"
                 margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
               >
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <CartesianGrid
+                  stroke="hsl(var(--border))"
+                  strokeDasharray="3 3"
+                  horizontal={false}
+                />
+
                 <XAxis type="number" allowDecimals={false} />
+
                 <YAxis
                   type="category"
                   dataKey="name"
@@ -168,17 +260,21 @@ function RankingChart({
                   tick={{ fontSize: 11 }}
                   tickFormatter={formatChartLabel}
                 />
+
                 <Tooltip
                   formatter={(value: any) => [value, "الطلبات"]}
                   labelFormatter={(label: any) => label}
                   contentStyle={{
-                    backgroundColor: "hsl(var(--popover))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
+                    ...TOOLTIP_STYLE,
                     direction: "rtl",
                     textAlign: "right",
                   }}
+                  cursor={{
+                    fill: "hsl(var(--muted))",
+                    fillOpacity: 0.55,
+                  }}
                 />
+
                 <Bar
                   dataKey="count"
                   name="الطلبات"
@@ -206,43 +302,65 @@ function Empty({ text }: { text: string }) {
 
 export default function AnalyticsCenter() {
   const [searchParams] = useSearchParams();
+
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+
   const [filters, setFilters] = useState<AnalyticsFilters>(() => ({
     ...presetDates("30days"),
     machineId: searchParams.get("machineId") || undefined,
   }));
+
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["analytics-overview", filters],
     queryFn: () =>
-      analyticsService.getOverview({ ...filters, period: "daily" }),
+      analyticsService.getOverview({
+        ...filters,
+        period: "daily",
+      }),
   });
+
   const { data: repeatFailures } = useQuery({
     queryKey: ["repeat-failures", filters],
     queryFn: () =>
-      analyticsService.getRepeatFailures({ ...filters, days: 30, limit: 10 }),
+      analyticsService.getRepeatFailures({
+        ...filters,
+        days: 30,
+        limit: 10,
+      }),
   });
+
   const { data: locations } = useQuery({
     queryKey: ["analytics-locations"],
     queryFn: () => locationsService.getAll(),
   });
+
   const { data: departments } = useQuery({
     queryKey: ["analytics-departments"],
     queryFn: () => departmentsService.getAll(),
   });
+
   const { data: systems } = useQuery({
     queryKey: ["analytics-systems"],
     queryFn: () => systemsService.getAll(),
   });
+
   const { data: machines } = useQuery({
     queryKey: ["analytics-machines"],
     queryFn: () => machinesService.getAll(),
   });
 
-  const updateFilter = (key: keyof AnalyticsFilters, value: string) =>
+  const updateFilter = (
+    key: keyof AnalyticsFilters,
+    value: string,
+  ) =>
     setFilters((current) => ({
       ...current,
       [key]: value === "all" || !value ? undefined : value,
+      ...((key === "fromDate" || key === "toDate") && {
+        comparisonPreset: "custom" as const,
+      }),
     }));
+
   const tabs: Array<{ key: Tab; label: string }> = [
     { key: "overview", label: "نظرة عامة" },
     { key: "performance", label: "الأداء" },
@@ -254,18 +372,23 @@ export default function AnalyticsCenter() {
   const heatmap = useMemo(() => {
     const lookup = new Map<string, number>();
     let max = 0;
+
     for (const point of data?.heatmaps.dayHour.points || []) {
       lookup.set(`${point.dayOfWeek}-${point.hour}`, point.count);
       max = Math.max(max, point.count);
     }
+
     return { lookup, max };
   }, [data]);
 
   return (
     <div className="space-y-6 animate-in">
       <Breadcrumbs items={[{ label: "مركز التحليلات" }]} />
+
       <div>
-        <h1 className="text-2xl font-bold sm:text-3xl">مركز التحليلات</h1>
+        <h1 className="text-2xl font-bold sm:text-3xl">
+          مركز التحليلات
+        </h1>
         <p className="text-sm text-muted-foreground">
           تحليل تفصيلي قابل للتصفية لعمليات الصيانة
         </p>
@@ -278,6 +401,7 @@ export default function AnalyticsCenter() {
             نطاق التحليل
           </CardTitle>
         </CardHeader>
+
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-2">
             {(
@@ -293,13 +417,17 @@ export default function AnalyticsCenter() {
                 size="sm"
                 variant="outline"
                 onClick={() =>
-                  setFilters((current) => ({ ...current, ...presetDates(key) }))
+                  setFilters((current) => ({
+                    ...current,
+                    ...presetDates(key),
+                  }))
                 }
               >
                 {label}
               </Button>
             ))}
           </div>
+
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div>
               <Label htmlFor="analytics-from">من</Label>
@@ -312,15 +440,19 @@ export default function AnalyticsCenter() {
                 }
               />
             </div>
+
             <div>
               <Label htmlFor="analytics-to">إلى</Label>
               <Input
                 id="analytics-to"
                 type="date"
                 value={filters.toDate || ""}
-                onChange={(event) => updateFilter("toDate", event.target.value)}
+                onChange={(event) =>
+                  updateFilter("toDate", event.target.value)
+                }
               />
             </div>
+
             <FilterSelect
               label="الموقع"
               value={filters.locationId}
@@ -328,8 +460,11 @@ export default function AnalyticsCenter() {
                 id: item.id,
                 name: item.name,
               }))}
-              onChange={(value) => updateFilter("locationId", value)}
+              onChange={(value) =>
+                updateFilter("locationId", value)
+              }
             />
+
             <FilterSelect
               label="القسم"
               value={filters.departmentId}
@@ -337,8 +472,11 @@ export default function AnalyticsCenter() {
                 id: item.id,
                 name: item.name,
               }))}
-              onChange={(value) => updateFilter("departmentId", value)}
+              onChange={(value) =>
+                updateFilter("departmentId", value)
+              }
             />
+
             <FilterSelect
               label="النظام"
               value={filters.systemId}
@@ -346,8 +484,11 @@ export default function AnalyticsCenter() {
                 id: item.id,
                 name: item.name,
               }))}
-              onChange={(value) => updateFilter("systemId", value)}
+              onChange={(value) =>
+                updateFilter("systemId", value)
+              }
             />
+
             <FilterSelect
               label="الآلة"
               value={filters.machineId}
@@ -355,9 +496,19 @@ export default function AnalyticsCenter() {
                 id: item.id,
                 name: item.name,
               }))}
-              onChange={(value) => updateFilter("machineId", value)}
+              onChange={(value) =>
+                updateFilter("machineId", value)
+              }
             />
           </div>
+
+          <p className="text-xs text-muted-foreground">
+            {filters.comparisonPreset === "year_to_date"
+              ? "المقارنة: العام الحالي حتى التاريخ المحدد مقابل الفترة المناظرة من العام السابق."
+              : filters.comparisonPreset === "month_to_date"
+                ? "المقارنة: الشهر الحالي حتى التاريخ المحدد مقابل الجزء المناظر من الشهر السابق."
+                : "المقارنة: النطاق المختار مقابل فترة سابقة مساوية له مباشرةً."}
+          </p>
         </CardContent>
       </Card>
 
@@ -390,7 +541,9 @@ export default function AnalyticsCenter() {
           <CardContent className="flex min-h-64 flex-col items-center justify-center gap-3">
             <AlertCircle className="h-8 w-8 text-destructive" />
             <p>تعذر تحميل بيانات التحليلات.</p>
-            <Button onClick={() => refetch()}>إعادة المحاولة</Button>
+            <Button onClick={() => refetch()}>
+              إعادة المحاولة
+            </Button>
           </CardContent>
         </Card>
       ) : (
@@ -400,94 +553,167 @@ export default function AnalyticsCenter() {
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <Metric
                   title="متوسط زمن إنجاز الطلب"
-                  value={`${data.kpis.avgCompletionTimeHours} س`}
-                  hint="closedAt - openedAt للطلبات المكتملة"
+                  value={formatDuration(
+                    data.kpis.avgCompletionTimeHours,
+                    "hours",
+                  )}
+                  hint="متوسط الزمن بين فتح الطلب وإغلاقه للطلبات المكتملة خلال الفترة."
                 />
+
                 <Metric
                   title="أقل زمن إنجاز"
-                  value={`${data.kpis.minCompletionTimeHours} س`}
+                  value={formatDuration(
+                    data.kpis.minCompletionTimeHours,
+                    "hours",
+                  )}
                   hint="أقصر مدة بين فتح الطلب وإغلاقه"
                 />
+
                 <Metric
                   title="أعلى زمن إنجاز"
-                  value={`${data.kpis.maxCompletionTimeHours} س`}
+                  value={formatDuration(
+                    data.kpis.maxCompletionTimeHours,
+                    "hours",
+                  )}
                   hint="أطول مدة بين فتح الطلب وإغلاقه"
                 />
+
                 <Metric
-                  title="متوسط عمر الطلب المفتوح"
-                  value={`${data.kpis.openRequestAverageAgeHours} س`}
-                  hint="الوقت منذ openedAt للطلبات المفتوحة والمتوقفة"
+                  title="متوسط عمر الطلبات غير المغلقة"
+                  value={formatDuration(
+                    data.kpis.openRequestAverageAgeHours,
+                    "hours",
+                  )}
+                  hint="متوسط الوقت منذ فتح الطلبات قيد التنفيذ والمتوقفة حاليًا."
+                  scope="current"
                 />
+
                 <Metric
                   title="معدل الإنجاز"
-                  value={`${data.kpis.completionRate}%`}
+                  value={formatPercentage(
+                    data.kpis.completionRate,
+                  )}
                   hint="المكتمل من إجمالي طلبات الفترة"
                 />
+
                 <Metric
                   title="معدل التوقف"
-                  value={`${data.kpis.stopRate}%`}
+                  value={formatPercentage(data.kpis.stopRate)}
                   hint="المتوقف من إجمالي طلبات الفترة"
                 />
+
                 <Metric
                   title="نسبة الطارئ إلى الوقائي"
-                  value={data.kpis.emergencyPreventiveRatio ?? "—"}
-                  hint="عدد الطوارئ مقسومًا على عدد الطلبات الوقائية"
+                  value={
+                    data.kpis.emergencyPreventiveRatio === null
+                      ? "—"
+                      : `${data.kpis.emergencyPreventiveRatio} طلب طارئ لكل طلب وقائي`
+                  }
+                  hint="عدد طلبات الصيانة الطارئة مقابل كل طلب صيانة وقائية خلال الفترة."
                 />
+
                 <Metric
-                  title="الالتزام الوقائي"
+                  title="نسبة إنجاز الصيانة الوقائية المستحقة"
                   value={
                     data.kpis.preventiveCompliance === null
                       ? "لا توجد مهام مستحقة"
-                      : `${data.kpis.preventiveCompliance}%`
+                      : formatPercentage(
+                          data.kpis.preventiveCompliance,
+                        )
                   }
-                  hint="المهام الوقائية المكتملة من المستحقة، مع استبعاد الملغاة"
+                  hint="المكتمل من جميع المهام الوقائية المستحقة غير الملغاة؛ لا تقيس الالتزام بالموعد."
+                />
+
+                <Metric
+                  title="المهام الوقائية المتأخرة حاليًا"
+                  value={data.kpis.overduePreventiveTasks}
+                  hint="مهام معلقة موعدها قبل بداية اليوم؛ مهام اليوم لا تُعد متأخرة."
+                  scope="current"
                 />
               </div>
+
               <Card>
                 <CardHeader>
                   <CardTitle>الاتجاه العام</CardTitle>
                 </CardHeader>
+
                 <CardContent className="h-80">
                   {data.trends.length ? (
                     <div dir="ltr" className="h-full w-full">
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer
+                        width="100%"
+                        height="100%"
+                      >
                         <LineChart
                           data={data.trends}
-                          margin={{ top: 10, right: 20, left: 10, bottom: 10 }}
+                          margin={{
+                            top: 10,
+                            right: 20,
+                            left: 10,
+                            bottom: 10,
+                          }}
                         >
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                          <XAxis dataKey="period" tick={{ fontSize: 10 }} />
+                          <CartesianGrid
+                            stroke="hsl(var(--border))"
+                            strokeDasharray="3 3"
+                            vertical={false}
+                          />
+
+                          <XAxis
+                            dataKey="period"
+                            tick={{ fontSize: 10 }}
+                          />
+
                           <YAxis allowDecimals={false} />
+
                           <Tooltip
                             contentStyle={{
-                              backgroundColor: "hsl(var(--popover))",
-                              border: "1px solid hsl(var(--border))",
-                              borderRadius: "8px",
+                              ...TOOLTIP_STYLE,
                               direction: "rtl",
                               textAlign: "right",
                             }}
+                            cursor={{
+                              stroke: "hsl(var(--primary))",
+                              strokeOpacity: 0.45,
+                            }}
                           />
+
                           <Legend />
+
                           <Line
                             type="monotone"
                             dataKey="total"
                             name="الإجمالي"
                             stroke="#0099B7"
                             strokeWidth={2}
+                            activeDot={{
+                              fill: "hsl(var(--card))",
+                              stroke: "hsl(var(--primary))",
+                            }}
                           />
+
                           <Line
                             type="monotone"
                             dataKey="completed"
                             name="المكتمل"
                             stroke="#22c55e"
                             strokeWidth={2}
+                            activeDot={{
+                              fill: "hsl(var(--card))",
+                              stroke: "#22c55e",
+                            }}
                           />
+
                           <Line
                             type="monotone"
                             dataKey="emergency"
                             name="الطارئ"
                             stroke="#ef4444"
                             strokeWidth={2}
+                            activeDot={{
+                              fill: "hsl(var(--card))",
+                              stroke: "#ef4444",
+                            }}
                           />
                         </LineChart>
                       </ResponsiveContainer>
@@ -497,12 +723,14 @@ export default function AnalyticsCenter() {
                   )}
                 </CardContent>
               </Card>
+
               <Card className="xl:col-span-2">
                 <CardHeader>
                   <CardTitle className="text-base">
                     الأعطال الطارئة المتكررة — آخر 30 يومًا
                   </CardTitle>
                 </CardHeader>
+
                 <CardContent>
                   {repeatFailures?.machines.length ? (
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -516,18 +744,24 @@ export default function AnalyticsCenter() {
                             <span className="font-medium">
                               {machine.machineName}
                             </span>
+
                             <span className="text-sm font-bold text-red-600">
-                              {machine.currentCount}
+                              {machine.currentCount} طلب صيانة طارئة / آخر 30 يومًا
                             </span>
                           </div>
+
                           <p className="text-xs text-muted-foreground">
                             {machine.systemName}
                           </p>
+
                           <p className="mt-2 text-xs">
-                            الفترة السابقة: {machine.previousCount} · التغير:{" "}
+                            الفترة السابقة: {machine.previousCount} ·
+                            التغير:{" "}
                             {machine.percentChange === null
                               ? "غير قابل للمقارنة"
-                              : `${machine.percentChange}%`}
+                              : formatPercentage(
+                                  machine.percentChange,
+                                )}
                           </p>
                         </Link>
                       ))}
@@ -546,42 +780,43 @@ export default function AnalyticsCenter() {
                 title="الطلبات حسب المهندس"
                 data={data.rankings.requestsPerEngineer}
               />
+
               <RankingChart
                 title="الطلبات حسب القسم"
                 data={data.rankings.requestsPerDepartment}
               />
-              <RankingChart
-                title="الطلبات حسب الموقع"
-                data={data.rankings.requestsPerLocation}
-              />
-              <RankingChart
-                title="الطلبات حسب النظام"
-                data={data.rankings.requestsPerSystem}
-              />
+
               <RankingChart
                 title="الطلبات حسب الآلة"
                 data={data.rankings.requestsPerMachine}
               />
+
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">مؤشرات الوقائي</CardTitle>
+                  <CardTitle className="text-base">
+                    مؤشرات الوقائي
+                  </CardTitle>
                 </CardHeader>
+
                 <CardContent className="grid grid-cols-2 gap-3">
                   <Metric
                     title="المستحقة"
                     value={data.preventive.scheduledDue}
-                    hint="المهام الواقعة في الفترة باستثناء الملغاة"
+                    hint="المهام التي أصبح موعدها قبل بداية اليوم ضمن الفترة، باستثناء الملغاة."
                   />
+
                   <Metric
                     title="المكتملة"
                     value={data.preventive.completed}
                     hint="المهام المكتملة"
                   />
+
                   <Metric
                     title="المتأخرة"
                     value={data.preventive.overdue}
-                    hint="موعدها مضى ولم تكتمل أو تلغَ"
+                    hint="موعدها قبل بداية اليوم ولم تكتمل أو تُلغَ؛ مهام اليوم ليست متأخرة."
                   />
+
                   <Metric
                     title="الملغاة"
                     value={data.preventive.cancelled}
@@ -596,22 +831,46 @@ export default function AnalyticsCenter() {
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>توزيع عمر الطلبات المفتوحة</CardTitle>
+                  <CardTitle>
+                    توزيع عمر الطلبات غير المغلقة
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    الحالة الحالية: تشمل الطلبات قيد التنفيذ
+                    والمتوقفة.
+                  </p>
                 </CardHeader>
+
                 <CardContent>
                   <div className="flex h-12 overflow-hidden rounded-xl bg-muted">
                     {(
                       [
-                        ["under4Hours", "أقل من 4س", "bg-green-500"],
-                        ["fourTo24Hours", "4–24س", "bg-primary"],
-                        ["oneTo3Days", "1–3 أيام", "bg-amber-500"],
-                        ["threeDaysOrMore", "72س+", "bg-red-500"],
+                        [
+                          "under4Hours",
+                          "أقل من 4س",
+                          "bg-green-500",
+                        ],
+                        [
+                          "fourTo24Hours",
+                          "4–24س",
+                          "bg-primary",
+                        ],
+                        [
+                          "oneTo3Days",
+                          "1–3 أيام",
+                          "bg-amber-500",
+                        ],
+                        [
+                          "threeDaysOrMore",
+                          "72س+",
+                          "bg-red-500",
+                        ],
                       ] as const
                     ).map(([key, label, color]) => {
                       const value = data.aging.buckets[key];
                       const width = data.aging.totalOpen
                         ? (value / data.aging.totalOpen) * 100
                         : 0;
+
                       return width ? (
                         <div
                           key={key}
@@ -627,66 +886,123 @@ export default function AnalyticsCenter() {
                       ) : null;
                     })}
                   </div>
+
                   <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-                    <span>أقل من 4س: {data.aging.buckets.under4Hours}</span>
-                    <span>4–24س: {data.aging.buckets.fourTo24Hours}</span>
-                    <span>1–3 أيام: {data.aging.buckets.oneTo3Days}</span>
+                    <span>
+                      أقل من 4س:{" "}
+                      {data.aging.buckets.under4Hours}
+                    </span>
+
+                    <span>
+                      4–24س:{" "}
+                      {data.aging.buckets.fourTo24Hours}
+                    </span>
+
+                    <span>
+                      1–3 أيام:{" "}
+                      {data.aging.buckets.oneTo3Days}
+                    </span>
+
                     <span className="text-red-600">
-                      72س+: {data.aging.buckets.threeDaysOrMore}
+                      72س+:{" "}
+                      {data.aging.buckets.threeDaysOrMore}
                     </span>
                   </div>
                 </CardContent>
               </Card>
+
               <Card>
                 <CardHeader>
-                  <CardTitle>أقدم الطلبات المفتوحة</CardTitle>
+                  <CardTitle>
+                    أقدم الطلبات غير المغلقة
+                  </CardTitle>
                 </CardHeader>
+
                 <CardContent className="overflow-x-auto">
                   {data.aging.oldestOpenRequests.length ? (
                     <table className="data-table min-w-[650px]">
                       <thead>
                         <tr>
                           <th>الطلب</th>
-                          <th>العمر</th>
+                          <th>الحالة الزمنية</th>
                           <th>الحالة</th>
+                          <th>سبب التوقف</th>
                           <th>الآلة</th>
                           <th>الموقع</th>
                           <th></th>
                         </tr>
                       </thead>
+
                       <tbody>
-                        {data.aging.oldestOpenRequests.map((request) => (
-                          <tr key={request.id}>
-                            <td>{request.requestCode}</td>
-                            <td
-                              className={cn(
-                                request.ageHours >= 72 &&
-                                  "font-bold text-red-600",
-                              )}
-                            >
-                              {request.ageHours} س
-                            </td>
-                            <td>
-                              {request.status === "stopped"
-                                ? "متوقف"
-                                : "قيد التنفيذ"}
-                            </td>
-                            <td>{request.machine}</td>
-                            <td>{request.location}</td>
-                            <td>
-                              <Button asChild size="sm" variant="ghost">
-                                <Link to={`/app/requests/${request.id}`}>
-                                  فتح
-                                  <ArrowLeft className="mr-1 h-3 w-3" />
-                                </Link>
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
+                        {data.aging.oldestOpenRequests.map(
+                          (request) => (
+                            <tr key={request.id}>
+                              <td>{request.requestCode}</td>
+
+                              <td
+                                className={cn(
+                                  request.ageHours >= 72 &&
+                                    "font-bold text-red-600",
+                                )}
+                              >
+                                {request.status === "stopped"
+                                  ? `متوقف منذ ${formatDuration(
+                                      request.ageHours,
+                                      "hours",
+                                    )}`
+                                  : `قيد التنفيذ منذ ${formatDuration(
+                                      request.ageHours,
+                                      "hours",
+                                    )}`}
+
+                                {request.status === "stopped" && (
+                                  <span className="mt-1 block text-[11px] font-normal text-muted-foreground">
+                                    فُتح منذ{" "}
+                                    {formatDuration(
+                                      request.openedAgeHours,
+                                      "hours",
+                                    )}
+                                  </span>
+                                )}
+                              </td>
+
+                              <td>
+                                {request.status === "stopped"
+                                  ? "متوقف"
+                                  : "قيد التنفيذ"}
+                              </td>
+
+                              <td className="max-w-56">
+                                {request.status === "stopped"
+                                  ? request.stopReason ||
+                                    "لم يُسجل سبب"
+                                  : "—"}
+                              </td>
+
+                              <td>{request.machine}</td>
+                              <td>{request.location}</td>
+
+                              <td>
+                                <Button
+                                  asChild
+                                  size="sm"
+                                  variant="ghost"
+                                >
+                                  <Link
+                                    to={`/app/requests/${request.id}`}
+                                  >
+                                    فتح
+                                    <ArrowLeft className="mr-1 h-3 w-3" />
+                                  </Link>
+                                </Button>
+                              </td>
+                            </tr>
+                          ),
+                        )}
                       </tbody>
                     </table>
                   ) : (
-                    <Empty text="لا توجد طلبات مفتوحة في الفترة المحددة." />
+                    <Empty text="لا توجد طلبات غير مغلقة حاليًا." />
                   )}
                 </CardContent>
               </Card>
@@ -699,24 +1015,37 @@ export default function AnalyticsCenter() {
                 title="التوزيع حسب الموقع"
                 data={data.rankings.requestsPerLocation}
               />
+
               <RankingChart
                 title="التوزيع حسب النظام"
                 data={data.rankings.requestsPerSystem}
               />
+
               <Card>
                 <CardHeader>
-                  <CardTitle>تركيب أنواع الصيانة</CardTitle>
+                  <CardTitle>
+                    تركيب أنواع الصيانة
+                  </CardTitle>
                 </CardHeader>
+
                 <CardContent className="h-72">
                   <div dir="ltr" className="h-full w-full">
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer
+                      width="100%"
+                      height="100%"
+                    >
                       <PieChart>
                         <Pie
                           data={[
-                            { name: "طارئة", value: data.kpis.emergencyRequests },
+                            {
+                              name: "طارئة",
+                              value:
+                                data.kpis.emergencyRequests,
+                            },
                             {
                               name: "وقائية",
-                              value: data.kpis.preventiveRequests,
+                              value:
+                                data.kpis.preventiveRequests,
                             },
                           ]}
                           dataKey="value"
@@ -725,56 +1054,107 @@ export default function AnalyticsCenter() {
                           outerRadius={95}
                         >
                           {[0, 1].map((index) => (
-                            <Cell key={index} fill={COLORS[index]} />
+                            <Cell
+                              key={index}
+                              fill={COLORS[index]}
+                            />
                           ))}
                         </Pie>
+
                         <Tooltip
                           contentStyle={{
-                            backgroundColor: "hsl(var(--popover))",
-                            border: "1px solid hsl(var(--border))",
-                            borderRadius: "8px",
+                            ...TOOLTIP_STYLE,
                             direction: "rtl",
                             textAlign: "right",
                           }}
                         />
+
                         <Legend />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
                 </CardContent>
               </Card>
+
               <Card>
                 <CardHeader>
-                  <CardTitle>مقارنة الفترة الحالية بالسابقة</CardTitle>
+                  <CardTitle>
+                    مقارنة الفترة الحالية بالمرجع السابق
+                  </CardTitle>
+
+                  <p className="text-xs text-muted-foreground">
+                    {data.period.comparisonMode ===
+                    "previous_year_to_date"
+                      ? "من بداية العام حتى التاريخ المحدد مقابل الفترة المناظرة من العام السابق."
+                      : data.period.comparisonMode ===
+                          "previous_month_to_date"
+                        ? "من بداية الشهر حتى التاريخ المحدد مقابل الجزء المناظر من الشهر السابق."
+                        : "مقابل فترة سابقة مساوية للنطاق المختار مباشرةً."}
+                  </p>
                 </CardHeader>
+
                 <CardContent className="space-y-3">
-                  {Object.entries(data.comparisons).map(([key, comparison]) => (
-                    <div
-                      key={key}
-                      className="flex items-center justify-between rounded-lg border p-3"
-                    >
-                      <span className="text-sm">
-                        {
-                          {
-                            totalRequests: "إجمالي الطلبات",
-                            emergencyRequests: "الطوارئ",
-                            avgCompletionTime: "متوسط الإنجاز",
-                            preventiveCompliance: "الالتزام الوقائي",
-                            repeatFailures: "الأعطال المتكررة",
-                          }[key]
-                        }
-                      </span>
-                      <span className="text-sm font-semibold">
-                        {comparison.current}{" "}
-                        <span className="text-muted-foreground">
-                          مقابل {comparison.previous}
-                        </span>{" "}
-                        {comparison.percentChange === null
-                          ? "—"
-                          : `${comparison.percentChange > 0 ? "+" : ""}${comparison.percentChange}%`}
-                      </span>
-                    </div>
-                  ))}
+                  {Object.entries(data.comparisons).map(
+                    ([rawKey, comparison]) => {
+                      const key =
+                        rawKey as keyof typeof COMPARISON_DIRECTIONS;
+
+                      return (
+                        <div
+                          key={key}
+                          className="flex items-center justify-between rounded-lg border p-3"
+                        >
+                          <span className="text-sm">
+                            {
+                              {
+                                totalRequests:
+                                  "إجمالي الطلبات",
+                                emergencyRequests:
+                                  "الطوارئ",
+                                avgCompletionTime:
+                                  "متوسط الإنجاز",
+                                preventiveCompliance:
+                                  "إنجاز الوقائي المستحق",
+                                repeatFailures:
+                                  "الآلات ذات الأعطال الطارئة المتكررة",
+                              }[key]
+                            }
+                          </span>
+
+                          <span
+                            className={cn(
+                              "text-sm font-semibold",
+                              comparisonTone(
+                                key,
+                                comparison.percentChange,
+                              ),
+                            )}
+                          >
+                            {comparisonValue(
+                              key,
+                              comparison.current,
+                            )}{" "}
+                            <span className="text-muted-foreground">
+                              مقابل{" "}
+                              {comparisonValue(
+                                key,
+                                comparison.previous,
+                              )}
+                            </span>{" "}
+                            {comparison.percentChange === null
+                              ? "—"
+                              : `${
+                                  comparison.percentChange > 0
+                                    ? "+"
+                                    : ""
+                                }${formatPercentage(
+                                  comparison.percentChange,
+                                )}`}
+                          </span>
+                        </div>
+                      );
+                    },
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -784,12 +1164,16 @@ export default function AnalyticsCenter() {
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>خريطة الطوارئ: اليوم × الساعة</CardTitle>
+                  <CardTitle>
+                    خريطة الطوارئ: اليوم × الساعة
+                  </CardTitle>
+
                   <p className="text-xs text-muted-foreground">
                     اليوم 0 = الأحد، والحساب حسب{" "}
                     {data.heatmaps.dayHour.timezone}
                   </p>
                 </CardHeader>
+
                 <CardContent className="overflow-x-auto">
                   <div className="min-w-[780px]">
                     <div
@@ -800,15 +1184,19 @@ export default function AnalyticsCenter() {
                       }}
                     >
                       <span />
-                      {Array.from({ length: 24 }).map((_, hour) => (
-                        <span
-                          key={hour}
-                          className="text-center text-[10px] text-muted-foreground"
-                        >
-                          {hour}
-                        </span>
-                      ))}
+
+                      {Array.from({ length: 24 }).map(
+                        (_, hour) => (
+                          <span
+                            key={hour}
+                            className="text-center text-[10px] text-muted-foreground"
+                          >
+                            {hour}
+                          </span>
+                        ),
+                      )}
                     </div>
+
                     {DAY_LABELS.map((day, dayIndex) => (
                       <div
                         key={day}
@@ -818,41 +1206,59 @@ export default function AnalyticsCenter() {
                             "80px repeat(24, minmax(24px, 1fr))",
                         }}
                       >
-                        <span className="flex items-center text-xs">{day}</span>
-                        {Array.from({ length: 24 }).map((_, hour) => {
-                          const value =
-                            heatmap.lookup.get(`${dayIndex}-${hour}`) || 0;
-                          const opacity = heatmap.max
-                            ? 0.12 + (value / heatmap.max) * 0.88
-                            : 0.06;
-                          return (
-                            <div
-                              key={hour}
-                              title={`${day}، الساعة ${hour}:00 — ${value} طلب`}
-                              className="flex aspect-square items-center justify-center rounded text-[9px]"
-                              style={{
-                                backgroundColor: `rgb(239 68 68 / ${opacity})`,
-                                color: opacity > 0.55 ? "white" : "inherit",
-                              }}
-                            >
-                              {value || ""}
-                            </div>
-                          );
-                        })}
+                        <span className="flex items-center text-xs">
+                          {day}
+                        </span>
+
+                        {Array.from({ length: 24 }).map(
+                          (_, hour) => {
+                            const value =
+                              heatmap.lookup.get(
+                                `${dayIndex}-${hour}`,
+                              ) || 0;
+
+                            const opacity = heatmap.max
+                              ? 0.12 +
+                                (value / heatmap.max) * 0.88
+                              : 0.06;
+
+                            return (
+                              <div
+                                key={hour}
+                                title={`${day}، الساعة ${hour}:00 — ${value} طلب`}
+                                className="flex aspect-square items-center justify-center rounded text-[9px]"
+                                style={{
+                                  backgroundColor: `rgb(239 68 68 / ${opacity})`,
+                                  color:
+                                    opacity > 0.55
+                                      ? "white"
+                                      : "inherit",
+                                }}
+                              >
+                                {value || ""}
+                              </div>
+                            );
+                          },
+                        )}
                       </div>
                     ))}
                   </div>
                 </CardContent>
               </Card>
-              <LocationSystemHeatmap points={data.heatmaps.locationSystem} />
+
+              <LocationSystemHeatmap
+                points={data.heatmaps.locationSystem}
+              />
             </div>
           )}
         </>
       )}
+
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
         <CalendarDays className="h-3.5 w-3.5" />
-        كل الحسابات الزمنية موحدة حسب {data?.timezone || ANALYTICS_TIMEZONE}.
-        متوسط الإنجاز يعني الزمن من فتح الطلب إلى إغلاقه.
+        كل الحسابات الزمنية موحدة حسب{" "}
+        {data?.timezone || ANALYTICS_TIMEZONE}. متوسط الإنجاز يعني
+        الزمن من فتح الطلب إلى إغلاقه.
       </p>
     </div>
   );
@@ -872,14 +1278,23 @@ function FilterSelect({
   return (
     <div>
       <Label>{label}</Label>
-      <Select value={value || "all"} onValueChange={onChange}>
+
+      <Select
+        value={value || "all"}
+        onValueChange={onChange}
+      >
         <SelectTrigger>
           <SelectValue />
         </SelectTrigger>
+
         <SelectContent>
           <SelectItem value="all">الكل</SelectItem>
+
           {items.map((item) => (
-            <SelectItem key={item.id} value={item.id}>
+            <SelectItem
+              key={item.id}
+              value={item.id}
+            >
               {item.name}
             </SelectItem>
           ))}
@@ -902,63 +1317,97 @@ function LocationSystemHeatmap({
 }) {
   const locations = [
     ...new Map(
-      points.map((point) => [point.locationId, point.locationName]),
+      points.map((point) => [
+        point.locationId,
+        point.locationName,
+      ]),
     ).entries(),
   ];
+
   const systems = [
     ...new Map(
-      points.map((point) => [point.systemId, point.systemName]),
+      points.map((point) => [
+        point.systemId,
+        point.systemName,
+      ]),
     ).entries(),
   ];
+
   const lookup = new Map(
     points.map((point) => [
       `${point.locationId}-${point.systemId}`,
       point.count,
     ]),
   );
-  const max = Math.max(0, ...points.map((point) => point.count));
+
+  const max = Math.max(
+    0,
+    ...points.map((point) => point.count),
+  );
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>خريطة الموقع × النظام</CardTitle>
       </CardHeader>
+
       <CardContent className="overflow-x-auto">
         {points.length ? (
           <table className="min-w-full border-separate border-spacing-1 text-xs">
             <thead>
               <tr>
-                <th className="p-2 text-right">الموقع \ النظام</th>
+                <th className="p-2 text-right">
+                  الموقع \ النظام
+                </th>
+
                 {systems.map(([id, name]) => (
-                  <th key={id} className="min-w-24 p-2 text-center font-medium">
+                  <th
+                    key={id}
+                    className="min-w-24 p-2 text-center font-medium"
+                  >
                     {name}
                   </th>
                 ))}
               </tr>
             </thead>
+
             <tbody>
-              {locations.map(([locationId, locationName]) => (
-                <tr key={locationId}>
-                  <th className="whitespace-nowrap p-2 text-right font-medium">
-                    {locationName}
-                  </th>
-                  {systems.map(([systemId]) => {
-                    const value = lookup.get(`${locationId}-${systemId}`) || 0;
-                    const opacity = max ? 0.1 + (value / max) * 0.9 : 0.05;
-                    return (
-                      <td
-                        key={systemId}
-                        className="rounded p-3 text-center font-semibold"
-                        style={{
-                          backgroundColor: `rgb(0 153 183 / ${opacity})`,
-                          color: opacity > 0.58 ? "white" : "inherit",
-                        }}
-                      >
-                        {value || "—"}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+              {locations.map(
+                ([locationId, locationName]) => (
+                  <tr key={locationId}>
+                    <th className="whitespace-nowrap p-2 text-right font-medium">
+                      {locationName}
+                    </th>
+
+                    {systems.map(([systemId]) => {
+                      const value =
+                        lookup.get(
+                          `${locationId}-${systemId}`,
+                        ) || 0;
+
+                      const opacity = max
+                        ? 0.1 + (value / max) * 0.9
+                        : 0.05;
+
+                      return (
+                        <td
+                          key={systemId}
+                          className="rounded p-3 text-center font-semibold"
+                          style={{
+                            backgroundColor: `rgb(0 153 183 / ${opacity})`,
+                            color:
+                              opacity > 0.58
+                                ? "white"
+                                : "inherit",
+                          }}
+                        >
+                          {value || "—"}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ),
+              )}
             </tbody>
           </table>
         ) : (

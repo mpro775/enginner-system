@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Clock3,
   FileText,
+  Info,
   PauseCircle,
   RefreshCcw,
   ShieldAlert,
@@ -25,13 +26,38 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { analyticsService, PeriodComparison } from "@/services/analytics";
+import {
+  cn,
+  formatDuration,
+  formatPercentage,
+} from "@/lib/utils";
+import {
+  analyticsService,
+  PeriodComparison,
+} from "@/services/analytics";
 
-const formatNumber = (value: number, options?: Intl.NumberFormatOptions) =>
+const formatNumber = (
+  value: number,
+  options?: Intl.NumberFormatOptions,
+) =>
   new Intl.NumberFormat("en-US", options).format(value);
+
+type KpiDirection = "higher" | "lower" | "neutral";
+
+const KPI_DIRECTIONS = {
+  totalRequests: "neutral",
+  emergencyRequests: "lower",
+  avgCompletionTime: "lower",
+  preventiveCompliance: "higher",
+  repeatFailures: "lower",
+} satisfies Record<string, KpiDirection>;
 
 function DashboardSkeleton() {
   return (
@@ -40,11 +66,16 @@ function DashboardSkeleton() {
       aria-label="جاري تحميل لوحة العمليات"
     >
       <div className="h-16 rounded-xl bg-muted" />
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 6 }).map((_, index) => (
-          <div key={index} className="h-32 rounded-xl bg-muted" />
+          <div
+            key={index}
+            className="h-32 rounded-xl bg-muted"
+          />
         ))}
       </div>
+
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="h-80 rounded-xl bg-muted" />
         <div className="h-80 rounded-xl bg-muted" />
@@ -59,42 +90,82 @@ function KpiCard({
   suffix,
   icon: Icon,
   comparison,
-  lowerIsBetter = false,
+  direction = "neutral",
+  scope,
+  context,
+  help,
 }: {
   title: string;
   value: number | string;
   suffix?: string;
   icon: typeof FileText;
   comparison?: PeriodComparison;
-  lowerIsBetter?: boolean;
+  direction?: KpiDirection;
+  scope: "current" | "period";
+  context?: string;
+  help?: string;
 }) {
   const changed = Boolean(
     comparison &&
-    comparison.percentChange !== null &&
-    comparison.percentChange !== 0,
+      comparison.percentChange !== null &&
+      comparison.percentChange !== 0,
   );
-  const increasing = (comparison?.percentChange || 0) > 0;
-  const favourable = changed && (lowerIsBetter ? !increasing : increasing);
+
+  const increasing =
+    (comparison?.percentChange || 0) > 0;
+
+  const favourable =
+    changed &&
+    direction !== "neutral" &&
+    (direction === "lower" ? !increasing : increasing);
+
+  const comparisonTone =
+    !changed || direction === "neutral"
+      ? "text-muted-foreground"
+      : favourable
+        ? "text-green-600 dark:text-green-400"
+        : "text-red-600 dark:text-red-400";
+
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm text-muted-foreground">{title}</p>
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <p>{title}</p>
+
+              {help && (
+                <span
+                  title={help}
+                  aria-label={help}
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </span>
+              )}
+            </div>
+
             <p className="mt-2 text-3xl font-bold">
               {typeof value === "number"
-                ? formatNumber(value, { maximumFractionDigits: 1 })
+                ? formatNumber(value, {
+                    maximumFractionDigits: 1,
+                  })
                 : value}
               {suffix}
             </p>
           </div>
+
           <span className="rounded-xl bg-primary/10 p-3 text-primary">
             <Icon className="h-5 w-5" />
           </span>
         </div>
+
         <div className="mt-4 flex items-center gap-2 text-xs">
           {!comparison ? (
-            <span className="text-muted-foreground">لقطة الحالة الحالية</span>
+            <span className="text-muted-foreground">
+              {scope === "current"
+                ? "الحالة الحالية"
+                : "خلال الفترة المختارة"}
+            </span>
           ) : !comparison.comparable ? (
             <span className="text-muted-foreground">
               لا توجد بيانات كافية للمقارنة
@@ -103,7 +174,7 @@ function KpiCard({
             <span
               className={cn(
                 "flex items-center gap-1 font-medium",
-                favourable ? "text-green-600" : "text-red-600",
+                comparisonTone,
               )}
             >
               {increasing ? (
@@ -111,13 +182,25 @@ function KpiCard({
               ) : (
                 <ArrowDownLeft className="h-3.5 w-3.5" />
               )}
-              {formatNumber(Math.abs(comparison.percentChange || 0), {
-                maximumFractionDigits: 1,
-              })}
+
+              {formatNumber(
+                Math.abs(
+                  comparison.percentChange || 0,
+                ),
+                {
+                  maximumFractionDigits: 1,
+                },
+              )}
               % عن الفترة السابقة
             </span>
           )}
         </div>
+
+        {context && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {context}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
@@ -126,7 +209,7 @@ function KpiCard({
 const attentionLinks = [
   {
     key: "emergency",
-    label: "طوارئ مفتوحة",
+    label: "طوارئ غير مغلقة",
     icon: ShieldAlert,
     href: "/app/requests?maintenanceType=emergency&openOnly=true",
     tone: "text-red-600 bg-red-500/10",
@@ -176,24 +259,42 @@ const attentionLinks = [
 ] as const;
 
 export default function AdminOperationsDashboard() {
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    isFetching,
+  } = useQuery({
     queryKey: ["admin-operations-dashboard"],
-    queryFn: () => analyticsService.getOperationsDashboard(),
+    queryFn: () =>
+      analyticsService.getOperationsDashboard(),
   });
 
-  if (isLoading) return <DashboardSkeleton />;
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
+
   if (isError || !data) {
     return (
       <Card>
         <CardContent className="flex min-h-72 flex-col items-center justify-center gap-4 text-center">
           <AlertCircle className="h-10 w-10 text-destructive" />
+
           <div>
-            <h2 className="font-semibold">تعذر تحميل مركز العمليات</h2>
+            <h2 className="font-semibold">
+              تعذر تحميل مركز العمليات
+            </h2>
+
             <p className="text-sm text-muted-foreground">
-              يمكن إعادة المحاولة دون التأثير على بقية النظام.
+              يمكن إعادة المحاولة دون التأثير على بقية
+              النظام.
             </p>
           </div>
-          <Button onClick={() => refetch()}>إعادة المحاولة</Button>
+
+          <Button onClick={() => refetch()}>
+            إعادة المحاولة
+          </Button>
         </CardContent>
       </Card>
     );
@@ -211,11 +312,28 @@ export default function AdminOperationsDashboard() {
     complaints: data.unresolvedComplaints,
     repeat: data.repeatFailureMachines,
   };
+
   const agingData = [
-    { name: "أقل من 4س", value: data.aging.under4Hours, fill: "#22c55e" },
-    { name: "4–24س", value: data.aging.fourTo24Hours, fill: "#0099B7" },
-    { name: "1–3 أيام", value: data.aging.oneTo3Days, fill: "#f59e0b" },
-    { name: "72س+", value: data.aging.threeDaysOrMore, fill: "#ef4444" },
+    {
+      name: "أقل من 4س",
+      value: data.aging.under4Hours,
+      fill: "#22c55e",
+    },
+    {
+      name: "4–24س",
+      value: data.aging.fourTo24Hours,
+      fill: "#0099B7",
+    },
+    {
+      name: "1–3 أيام",
+      value: data.aging.oneTo3Days,
+      fill: "#f59e0b",
+    },
+    {
+      name: "72س+",
+      value: data.aging.threeDaysOrMore,
+      fill: "#ef4444",
+    },
   ];
 
   return (
@@ -225,11 +343,13 @@ export default function AdminOperationsDashboard() {
           <h1 className="text-2xl font-bold sm:text-3xl">
             مركز عمليات الصيانة
           </h1>
+
           <p className="text-sm text-muted-foreground">
-            الحالة التشغيلية الآن واتجاهات آخر 30 يومًا — التوقيت{" "}
-            {data.timezone}
+            الحالة التشغيلية الآن واتجاهات آخر 30 يومًا —
+            التوقيت {data.timezone}
           </p>
         </div>
+
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -237,12 +357,18 @@ export default function AdminOperationsDashboard() {
             disabled={isFetching}
           >
             <RefreshCcw
-              className={cn("ml-2 h-4 w-4", isFetching && "animate-spin")}
+              className={cn(
+                "ml-2 h-4 w-4",
+                isFetching && "animate-spin",
+              )}
             />
             تحديث
           </Button>
+
           <Button asChild>
-            <Link to="/app/admin/analytics">التحليلات التفصيلية</Link>
+            <Link to="/app/admin/analytics">
+              التحليلات التفصيلية
+            </Link>
           </Button>
         </div>
       </div>
@@ -253,36 +379,74 @@ export default function AdminOperationsDashboard() {
           value={data.totalRequests}
           icon={FileText}
           comparison={data.comparisons.totalRequests}
+          direction={
+            KPI_DIRECTIONS.totalRequests
+          }
+          scope="period"
         />
+
         <KpiCard
-          title="الطلبات المفتوحة"
+          title="الطلبات غير المغلقة"
           value={data.openRequests}
           icon={Wrench}
+          scope="current"
+          context={`قيد التنفيذ: ${Math.max(
+            0,
+            data.openRequests -
+              data.stoppedRequests,
+          )} · متوقفة: ${data.stoppedRequests}`}
+          help="تشمل الطلبات قيد التنفيذ والمتوقفة لأنها لم تُغلق بعد."
         />
+
         <KpiCard
-          title="الطارئة المفتوحة"
+          title="الطارئة غير المغلقة"
           value={data.emergencyOpen}
           icon={ShieldAlert}
+          scope="current"
         />
+
         <KpiCard
           title="الطلبات المتوقفة"
           value={data.stoppedRequests}
           icon={PauseCircle}
+          scope="current"
         />
+
         <KpiCard
           title="متوسط زمن إنجاز الطلب"
-          value={data.avgCompletionTimeHours}
-          suffix=" س"
+          value={formatDuration(
+            data.avgCompletionTimeHours,
+            "hours",
+          )}
           icon={Clock3}
-          comparison={data.comparisons.avgCompletionTime}
-          lowerIsBetter
+          comparison={
+            data.comparisons.avgCompletionTime
+          }
+          direction={
+            KPI_DIRECTIONS.avgCompletionTime
+          }
+          scope="period"
+          help="متوسط الزمن بين فتح الطلب وإغلاقه للطلبات المكتملة خلال الفترة."
         />
+
         <KpiCard
-          title="الالتزام بالصيانة الوقائية"
-          value={data.preventiveCompliance ?? "لا توجد مهام مستحقة"}
-          suffix={data.preventiveCompliance === null ? undefined : "%"}
+          title="نسبة إنجاز الصيانة الوقائية المستحقة"
+          value={
+            data.preventiveCompliance === null
+              ? "لا توجد مهام مستحقة"
+              : formatPercentage(
+                  data.preventiveCompliance,
+                )
+          }
           icon={CheckCircle2}
-          comparison={data.comparisons.preventiveCompliance}
+          comparison={
+            data.comparisons.preventiveCompliance
+          }
+          direction={
+            KPI_DIRECTIONS.preventiveCompliance
+          }
+          scope="period"
+          help="المهام الوقائية المكتملة من جميع المهام المستحقة غير الملغاة. لا تقيس الالتزام بالموعد."
         />
       </div>
 
@@ -290,23 +454,33 @@ export default function AdminOperationsDashboard() {
         <CardHeader>
           <CardTitle>يحتاج انتباهك الآن</CardTitle>
         </CardHeader>
+
         <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {attentionLinks.map((item) => {
             const Icon = item.icon;
-            const value = attentionValues[item.key];
+            const value =
+              attentionValues[item.key];
+
             return (
               <Link
                 key={item.key}
                 to={item.href}
                 className="group flex items-center gap-3 rounded-xl border p-4 transition hover:-translate-y-0.5 hover:shadow-md"
               >
-                <span className={cn("rounded-lg p-2", item.tone)}>
+                <span
+                  className={cn(
+                    "rounded-lg p-2",
+                    item.tone,
+                  )}
+                >
                   <Icon className="h-5 w-5" />
                 </span>
+
                 <span className="min-w-0 flex-1">
                   <span className="block text-2xl font-bold">
                     {formatNumber(value)}
                   </span>
+
                   <span className="text-xs text-muted-foreground">
                     {item.label}
                   </span>
@@ -322,37 +496,87 @@ export default function AdminOperationsDashboard() {
           <CardHeader>
             <CardTitle>اتجاه الطلبات</CardTitle>
           </CardHeader>
+
           <CardContent className="h-80">
             {data.trends.length ? (
-              <div dir="ltr" className="h-full w-full">
-                <ResponsiveContainer width="100%" height="100%">
+              <div
+                dir="ltr"
+                className="h-full w-full"
+              >
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
                   <AreaChart data={data.trends}>
                     <defs>
-                      <linearGradient id="opsTrend" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient
+                        id="opsTrend"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
                         <stop
                           offset="5%"
                           stopColor="#0099B7"
                           stopOpacity={0.35}
                         />
-                        <stop offset="95%" stopColor="#0099B7" stopOpacity={0} />
+
+                        <stop
+                          offset="95%"
+                          stopColor="#0099B7"
+                          stopOpacity={0}
+                        />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+
+                    <CartesianGrid
+                      stroke="hsl(var(--border))"
+                      strokeDasharray="3 3"
+                      vertical={false}
+                    />
+
+                    <XAxis
+                      dataKey="period"
+                      tick={{ fontSize: 11 }}
+                    />
+
                     <YAxis
                       allowDecimals={false}
-                      tickFormatter={(value) => formatNumber(Number(value))}
+                      tickFormatter={(value) =>
+                        formatNumber(
+                          Number(value),
+                        )
+                      }
                     />
+
                     <Tooltip
-                      formatter={(value) => formatNumber(Number(value))}
+                      cursor={{
+                        stroke:
+                          "hsl(var(--primary))",
+                        strokeOpacity: 0.45,
+                      }}
                       contentStyle={{
-                        backgroundColor: "hsl(var(--popover))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "8px",
+                        background:
+                          "hsl(var(--popover))",
+                        border:
+                          "1px solid hsl(var(--border))",
+                        borderColor:
+                          "hsl(var(--border))",
+                        color:
+                          "hsl(var(--popover-foreground))",
+                        borderRadius:
+                          "0.5rem",
                         direction: "rtl",
                         textAlign: "right",
                       }}
+                      formatter={(value) =>
+                        formatNumber(
+                          Number(value),
+                        )
+                      }
                     />
+
                     <Area
                       type="monotone"
                       dataKey="total"
@@ -360,7 +584,14 @@ export default function AdminOperationsDashboard() {
                       stroke="#0099B7"
                       fill="url(#opsTrend)"
                       strokeWidth={2}
+                      activeDot={{
+                        fill:
+                          "hsl(var(--card))",
+                        stroke:
+                          "hsl(var(--primary))",
+                      }}
                     />
+
                     <Area
                       type="monotone"
                       dataKey="emergency"
@@ -368,6 +599,11 @@ export default function AdminOperationsDashboard() {
                       stroke="#ef4444"
                       fill="transparent"
                       strokeWidth={2}
+                      activeDot={{
+                        fill:
+                          "hsl(var(--card))",
+                        stroke: "#ef4444",
+                      }}
                     />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -379,43 +615,99 @@ export default function AdminOperationsDashboard() {
             )}
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader>
-            <CardTitle>التراكم الزمني للطلبات المفتوحة</CardTitle>
+            <CardTitle>
+              التراكم الزمني للطلبات غير المغلقة
+            </CardTitle>
           </CardHeader>
+
           <CardContent className="h-80">
-            {agingData.some((item) => item.value) ? (
-              <div dir="ltr" className="h-full w-full">
-                <ResponsiveContainer width="100%" height="100%">
+            {agingData.some(
+              (item) => item.value,
+            ) ? (
+              <div
+                dir="ltr"
+                className="h-full w-full"
+              >
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
                   <BarChart
                     data={agingData}
                     layout="vertical"
-                    margin={{ right: 15, left: 15 }}
+                    margin={{
+                      right: 15,
+                      left: 15,
+                    }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <CartesianGrid
+                      stroke="hsl(var(--border))"
+                      strokeDasharray="3 3"
+                      horizontal={false}
+                    />
+
                     <XAxis
                       type="number"
                       allowDecimals={false}
-                      tickFormatter={(value) => formatNumber(Number(value))}
+                      tickFormatter={(value) =>
+                        formatNumber(
+                          Number(value),
+                        )
+                      }
                     />
-                    <YAxis type="category" dataKey="name" width={75} />
+
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={75}
+                    />
+
                     <Tooltip
-                      formatter={(value) => formatNumber(Number(value))}
+                      cursor={{
+                        fill:
+                          "hsl(var(--muted))",
+                        fillOpacity: 0.55,
+                      }}
                       contentStyle={{
-                        backgroundColor: "hsl(var(--popover))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "8px",
+                        background:
+                          "hsl(var(--popover))",
+                        border:
+                          "1px solid hsl(var(--border))",
+                        borderColor:
+                          "hsl(var(--border))",
+                        color:
+                          "hsl(var(--popover-foreground))",
+                        borderRadius:
+                          "0.5rem",
                         direction: "rtl",
                         textAlign: "right",
                       }}
+                      formatter={(value) =>
+                        formatNumber(
+                          Number(value),
+                        )
+                      }
                     />
-                    <Bar dataKey="value" name="الطلبات" radius={[0, 6, 6, 0]} />
+
+                    <Bar
+                      dataKey="value"
+                      name="الطلبات"
+                      radius={[
+                        0,
+                        6,
+                        6,
+                        0,
+                      ]}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                لا توجد طلبات مفتوحة.
+                لا توجد طلبات غير مغلقة.
               </div>
             )}
           </CardContent>
@@ -424,28 +716,40 @@ export default function AdminOperationsDashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>أبرز الأعطال المتكررة</CardTitle>
+          <CardTitle>
+            أبرز الأعطال المتكررة
+          </CardTitle>
         </CardHeader>
+
         <CardContent>
           {data.topRecurringFailures.length ? (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {data.topRecurringFailures.map((machine) => (
-                <Link
-                  to={`/app/admin/machines/${machine.machineId}`}
-                  key={machine.machineId}
-                  className="rounded-lg border p-4 hover:bg-muted/40"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">{machine.machineName}</span>
-                    <span className="rounded-full bg-red-500/10 px-2 py-1 text-xs font-bold text-red-600">
-                      {formatNumber(machine.failureCount)} أعطال
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {machine.systemName}
-                  </p>
-                </Link>
-              ))}
+              {data.topRecurringFailures.map(
+                (machine) => (
+                  <Link
+                    to={`/app/admin/machines/${machine.machineId}`}
+                    key={machine.machineId}
+                    className="rounded-lg border p-4 hover:bg-muted/40"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">
+                        {machine.machineName}
+                      </span>
+
+                      <span className="rounded-full bg-red-500/10 px-2 py-1 text-xs font-bold text-red-600">
+                        {formatNumber(
+                          machine.failureCount,
+                        )}{" "}
+                        طلب صيانة طارئة / آخر 30 يومًا
+                      </span>
+                    </div>
+
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {machine.systemName}
+                    </p>
+                  </Link>
+                ),
+              )}
             </div>
           ) : (
             <p className="py-8 text-center text-sm text-muted-foreground">

@@ -3,6 +3,7 @@ export interface AnalyticsPeriod {
   toExclusive: Date;
   previousFrom: Date;
   previousToExclusive: Date;
+  comparisonMode: "previous_equal_period" | "previous_month_to_date" | "previous_year_to_date";
 }
 
 interface DateParts {
@@ -116,11 +117,31 @@ function parseBoundary(
   return new Date(value);
 }
 
+function shiftZonedDate(
+  date: Date,
+  amount: number,
+  unit: "month" | "year",
+  timeZone: string,
+): Date {
+  const parts = zonedParts(date, timeZone);
+  const targetYear = parts.year + (unit === "year" ? amount : 0);
+  const targetMonthIndex = parts.month - 1 + (unit === "month" ? amount : 0);
+  const normalized = new Date(Date.UTC(targetYear, targetMonthIndex, 1));
+  const year = normalized.getUTCFullYear();
+  const month = normalized.getUTCMonth() + 1;
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return zonedDateTimeToUtc(
+    { ...parts, year, month, day: Math.min(parts.day, lastDay) },
+    timeZone,
+  );
+}
+
 export function resolveAnalyticsPeriod(
   fromDate: string | undefined,
   toDate: string | undefined,
   timeZone: string,
   now = new Date(),
+  comparisonPreset: "custom" | "month_to_date" | "year_to_date" = "custom",
 ): AnalyticsPeriod {
   const tomorrow = addZonedDays(startOfZonedDay(now, timeZone), 1, timeZone);
   const from = fromDate
@@ -129,11 +150,41 @@ export function resolveAnalyticsPeriod(
   const toExclusive = toDate ? parseBoundary(toDate, timeZone, true) : tomorrow;
   const duration = Math.max(toExclusive.getTime() - from.getTime(), DAY_MS);
 
+  if (comparisonPreset === "year_to_date") {
+    return {
+      from,
+      toExclusive,
+      previousFrom: shiftZonedDate(from, -1, "year", timeZone),
+      previousToExclusive: shiftZonedDate(
+        toExclusive,
+        -1,
+        "year",
+        timeZone,
+      ),
+      comparisonMode: "previous_year_to_date",
+    };
+  }
+  if (comparisonPreset === "month_to_date") {
+    return {
+      from,
+      toExclusive,
+      previousFrom: shiftZonedDate(from, -1, "month", timeZone),
+      previousToExclusive: shiftZonedDate(
+        toExclusive,
+        -1,
+        "month",
+        timeZone,
+      ),
+      comparisonMode: "previous_month_to_date",
+    };
+  }
+
   return {
     from,
     toExclusive,
     previousFrom: new Date(from.getTime() - duration),
     previousToExclusive: new Date(from),
+    comparisonMode: "previous_equal_period",
   };
 }
 

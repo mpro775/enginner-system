@@ -24,6 +24,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Breadcrumbs } from "@/components/shared/Breadcrumbs";
 import { formatAnalyticsDate } from "@/lib/analytics-time";
+import { formatPercentage } from "@/lib/utils";
 import { analyticsService, PreventiveCalendarItem } from "@/services/analytics";
 import { TaskStatus } from "@/types";
 
@@ -190,16 +191,19 @@ export default function PreventiveCalendar() {
           tone="text-gray-600"
         />
         <SummaryCard
-          title="نسبة الالتزام"
+          title="نسبة إنجاز الصيانة الوقائية المستحقة"
           value={
             summary?.compliancePercent === null
               ? "لا توجد مهام مستحقة"
-              : `${summary?.compliancePercent ?? 0}%`
+              : formatPercentage(summary?.compliancePercent ?? 0)
           }
           icon={CheckCircle2}
           tone="text-primary"
         />
       </div>
+      <p className="-mt-2 text-xs text-muted-foreground">
+        النسبة = المهام الوقائية المكتملة من جميع المهام المستحقة غير الملغاة.
+      </p>
 
       <Card>
         <CardHeader className="gap-4 lg:flex-row lg:items-center lg:justify-between">

@@ -243,6 +243,41 @@
   z-index: 1000;
 }
 
+.recharts-default-tooltip {
+  background: hsl(var(--popover)) !important;
+  border-color: hsl(var(--border)) !important;
+  color: hsl(var(--popover-foreground)) !important;
+  border-radius: var(--radius);
+}
+
+.recharts-tooltip-label,
+.recharts-tooltip-item {
+  color: hsl(var(--popover-foreground)) !important;
+}
+
+.recharts-tooltip-cursor {
+  fill: hsl(var(--muted)) !important;
+  fill-opacity: 0.5;
+  stroke: hsl(var(--primary)) !important;
+  stroke-opacity: 0.45;
+}
+
+.recharts-cartesian-grid line,
+.recharts-reference-line line {
+  stroke: hsl(var(--border));
+}
+
+.recharts-active-dot circle {
+  fill: hsl(var(--card));
+  stroke: hsl(var(--primary));
+}
+
+.recharts-active-dot,
+.recharts-dot {
+  pointer-events: auto;
+}
+
+
 .recharts-pie-label-text {
   fill: white !important;
   font-weight: 600;

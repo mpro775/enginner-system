@@ -9,6 +9,18 @@ export interface AnalyticsFilters {
   systemId?: string;
   machineId?: string;
   engineerId?: string;
+  comparisonPreset?: "custom" | "month_to_date" | "year_to_date";
+}
+
+export interface AnalyticsPeriod {
+  from: string;
+  toExclusive: string;
+  previousFrom: string;
+  previousToExclusive: string;
+  comparisonMode:
+    | "previous_equal_period"
+    | "previous_month_to_date"
+    | "previous_year_to_date";
 }
 
 export interface PeriodComparison {
@@ -31,7 +43,10 @@ export interface AgingAnalytics {
     id: string;
     requestCode: string;
     openedAt: string;
+    stoppedAt?: string;
+    stopReason?: string;
     ageHours: number;
+    openedAgeHours: number;
     status: string;
     machine: string;
     location: string;
@@ -149,18 +164,20 @@ export interface RepeatFailureResult {
 export interface RequestActivityItem {
   id: string;
   action: string;
-  actorName: string;
+  actorName: string | null;
   createdAt: string;
   summary: string;
   relevantChanges: {
     status?: string;
     maintenanceType?: string;
     noteType?: "consultant" | "health_safety" | "project_manager";
+    stopReason?: string;
   };
 }
 
 export interface OperationsDashboard {
   timezone: string;
+  period: AnalyticsPeriod;
   totalRequests: number;
   openRequests: number;
   emergencyOpen: number;
@@ -193,6 +210,7 @@ export interface OperationsDashboard {
 
 export interface AnalyticsOverview {
   timezone: string;
+  period: AnalyticsPeriod;
   kpis: {
     totalRequests: number;
     openRequests: number;
