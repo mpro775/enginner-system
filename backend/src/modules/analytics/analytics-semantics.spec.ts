@@ -9,13 +9,14 @@ import {
 } from "../../common/enums";
 import { MaintenanceRequestsService } from "../maintenance-requests/maintenance-requests.service";
 import { AnalyticsService } from "./analytics.service";
+import { resolveAnalyticsPeriod } from "./utils/date-period.util";
 
 describe("analytics snapshot semantics", () => {
-  const requestModel = { aggregate: jest.fn() };
+  const requestModel = { aggregate: jest.fn(), findById: jest.fn() };
   const taskModel = { aggregate: jest.fn() };
   const complaintModel = { countDocuments: jest.fn() };
   const machineModel = {};
-  const auditLogModel = {};
+  const auditLogModel = { aggregate: jest.fn() };
   const cacheManager = {
     get: jest.fn().mockResolvedValue(undefined),
     set: jest.fn().mockResolvedValue(undefined),
@@ -139,11 +140,11 @@ describe("analytics snapshot semantics", () => {
       $nin: [TaskStatus.COMPLETED, TaskStatus.CANCELLED],
     });
     expect(pipeline[2].$match.scheduledDate.$lt.toISOString()).toBe(
-      "2026-08-29T21:00:00.000Z",
+      "2026-08-28T21:00:00.000Z",
     );
   });
 
-  it("excludes tomorrow from the preventive compliance denominator", async () => {
+  it("excludes today and tomorrow from overdue and due-preventive semantics", async () => {
     jest.useFakeTimers().setSystemTime(new Date("2026-08-29T12:00:00.000Z"));
     taskModel.aggregate.mockResolvedValue([
       {
@@ -167,13 +168,72 @@ describe("analytics snapshot semantics", () => {
     const dueCondition = pipeline[3].$group.scheduledDue.$sum.$cond[0].$and;
 
     expect(dueCondition[1].$lt[1].toISOString()).toBe(
-      "2026-08-29T21:00:00.000Z",
+      "2026-08-28T21:00:00.000Z",
     );
     expect(summary).toMatchObject({
       scheduled: 3,
       scheduledDue: 2,
       completed: 2,
       compliancePercent: 100,
+    });
+  });
+
+  it("compares year-to-date with the same portion of the previous year", () => {
+    const period = resolveAnalyticsPeriod(
+      "2026-01-01",
+      "2026-08-30",
+      "Asia/Riyadh",
+      new Date("2026-08-30T12:00:00.000Z"),
+      "year_to_date",
+    );
+
+    expect(period.previousFrom.toISOString()).toBe(
+      "2024-12-31T21:00:00.000Z",
+    );
+    expect(period.previousToExclusive.toISOString()).toBe(
+      "2025-08-30T21:00:00.000Z",
+    );
+    expect(period.comparisonMode).toBe("previous_year_to_date");
+  });
+
+  it("loads request activity across String/ObjectId ids and derives only missing lifecycle events", async () => {
+    auditLogModel.aggregate.mockResolvedValue([
+      {
+        _id: "audit-create",
+        action: "create",
+        userName: "مدير",
+        createdAt: new Date("2026-08-24T07:06:00.000Z"),
+        changes: { status: RequestStatus.IN_PROGRESS },
+      },
+    ]);
+    requestModel.findById.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({
+          openedAt: new Date("2026-08-24T07:06:00.000Z"),
+          stoppedAt: new Date("2026-08-25T10:20:00.000Z"),
+          stopReason: "  عدم   توفر قطع غيار  ",
+        }),
+      }),
+    });
+
+    const result = await createService().getRequestActivity(
+      "66cc4d3f22b91d593535aaaa",
+    );
+    const pipeline = auditLogModel.aggregate.mock.calls[0][0];
+
+    expect(pipeline[0].$match).toEqual({
+      entity: "MaintenanceRequest",
+      $expr: {
+        $eq: [{ $toString: "$entityId" }, "66cc4d3f22b91d593535aaaa"],
+      },
+    });
+    expect(result.filter((event) => event.summary === "تم إنشاء الطلب")).toHaveLength(
+      1,
+    );
+    expect(result[0]).toMatchObject({
+      summary: "تم إيقاف الطلب",
+      actorName: null,
+      relevantChanges: { stopReason: "عدم توفر قطع غيار" },
     });
   });
 
@@ -186,8 +246,8 @@ describe("analytics snapshot semantics", () => {
       "utf8",
     );
     for (const title of [
-      "الطلبات المفتوحة",
-      "الطارئة المفتوحة",
+      "الطلبات غير المغلقة",
+      "الطارئة غير المغلقة",
       "الطلبات المتوقفة",
     ]) {
       const card = source.match(

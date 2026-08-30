@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Clock3,
   FileText,
+  Info,
   PauseCircle,
   RefreshCcw,
   ShieldAlert,
@@ -27,11 +28,20 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, formatDuration, formatPercentage } from "@/lib/utils";
 import { analyticsService, PeriodComparison } from "@/services/analytics";
 
 const formatNumber = (value: number, options?: Intl.NumberFormatOptions) =>
   new Intl.NumberFormat("en-US", options).format(value);
+
+type KpiDirection = "higher" | "lower" | "neutral";
+const KPI_DIRECTIONS = {
+  totalRequests: "neutral",
+  emergencyRequests: "lower",
+  avgCompletionTime: "lower",
+  preventiveCompliance: "higher",
+  repeatFailures: "lower",
+} satisfies Record<string, KpiDirection>;
 
 function DashboardSkeleton() {
   return (
@@ -59,14 +69,20 @@ function KpiCard({
   suffix,
   icon: Icon,
   comparison,
-  lowerIsBetter = false,
+  direction = "neutral",
+  scope,
+  context,
+  help,
 }: {
   title: string;
   value: number | string;
   suffix?: string;
   icon: typeof FileText;
   comparison?: PeriodComparison;
-  lowerIsBetter?: boolean;
+  direction?: KpiDirection;
+  scope: "current" | "period";
+  context?: string;
+  help?: string;
 }) {
   const changed = Boolean(
     comparison &&
@@ -74,13 +90,28 @@ function KpiCard({
     comparison.percentChange !== 0,
   );
   const increasing = (comparison?.percentChange || 0) > 0;
-  const favourable = changed && (lowerIsBetter ? !increasing : increasing);
+  const favourable =
+    changed &&
+    direction !== "neutral" &&
+    (direction === "lower" ? !increasing : increasing);
+  const comparisonTone = !changed || direction === "neutral"
+    ? "text-muted-foreground"
+    : favourable
+      ? "text-green-600 dark:text-green-400"
+      : "text-red-600 dark:text-red-400";
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm text-muted-foreground">{title}</p>
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <p>{title}</p>
+              {help && (
+                <span title={help} aria-label={help}>
+                  <Info className="h-3.5 w-3.5" />
+                </span>
+              )}
+            </div>
             <p className="mt-2 text-3xl font-bold">
               {typeof value === "number"
                 ? formatNumber(value, { maximumFractionDigits: 1 })
@@ -94,7 +125,9 @@ function KpiCard({
         </div>
         <div className="mt-4 flex items-center gap-2 text-xs">
           {!comparison ? (
-            <span className="text-muted-foreground">لقطة الحالة الحالية</span>
+            <span className="text-muted-foreground">
+              {scope === "current" ? "الحالة الحالية" : "خلال الفترة المختارة"}
+            </span>
           ) : !comparison.comparable ? (
             <span className="text-muted-foreground">
               لا توجد بيانات كافية للمقارنة
@@ -103,7 +136,7 @@ function KpiCard({
             <span
               className={cn(
                 "flex items-center gap-1 font-medium",
-                favourable ? "text-green-600" : "text-red-600",
+                comparisonTone,
               )}
             >
               {increasing ? (
@@ -118,6 +151,9 @@ function KpiCard({
             </span>
           )}
         </div>
+        {context && (
+          <p className="mt-2 text-xs text-muted-foreground">{context}</p>
+        )}
       </CardContent>
     </Card>
   );
@@ -126,7 +162,7 @@ function KpiCard({
 const attentionLinks = [
   {
     key: "emergency",
-    label: "طوارئ مفتوحة",
+    label: "طوارئ غير مغلقة",
     icon: ShieldAlert,
     href: "/app/requests?maintenanceType=emergency&openOnly=true",
     tone: "text-red-600 bg-red-500/10",
@@ -253,36 +289,50 @@ export default function AdminOperationsDashboard() {
           value={data.totalRequests}
           icon={FileText}
           comparison={data.comparisons.totalRequests}
+          direction={KPI_DIRECTIONS.totalRequests}
+          scope="period"
         />
         <KpiCard
-          title="الطلبات المفتوحة"
+          title="الطلبات غير المغلقة"
           value={data.openRequests}
           icon={Wrench}
+          scope="current"
+          context={`قيد التنفيذ: ${Math.max(0, data.openRequests - data.stoppedRequests)} · متوقفة: ${data.stoppedRequests}`}
+          help="تشمل الطلبات قيد التنفيذ والمتوقفة لأنها لم تُغلق بعد."
         />
         <KpiCard
-          title="الطارئة المفتوحة"
+          title="الطارئة غير المغلقة"
           value={data.emergencyOpen}
           icon={ShieldAlert}
+          scope="current"
         />
         <KpiCard
           title="الطلبات المتوقفة"
           value={data.stoppedRequests}
           icon={PauseCircle}
+          scope="current"
         />
         <KpiCard
           title="متوسط زمن إنجاز الطلب"
-          value={data.avgCompletionTimeHours}
-          suffix=" س"
+          value={formatDuration(data.avgCompletionTimeHours, "hours")}
           icon={Clock3}
           comparison={data.comparisons.avgCompletionTime}
-          lowerIsBetter
+          direction={KPI_DIRECTIONS.avgCompletionTime}
+          scope="period"
+          help="متوسط الزمن بين فتح الطلب وإغلاقه للطلبات المكتملة خلال الفترة."
         />
         <KpiCard
-          title="الالتزام بالصيانة الوقائية"
-          value={data.preventiveCompliance ?? "لا توجد مهام مستحقة"}
-          suffix={data.preventiveCompliance === null ? undefined : "%"}
+          title="نسبة إنجاز الصيانة الوقائية المستحقة"
+          value={
+            data.preventiveCompliance === null
+              ? "لا توجد مهام مستحقة"
+              : formatPercentage(data.preventiveCompliance)
+          }
           icon={CheckCircle2}
           comparison={data.comparisons.preventiveCompliance}
+          direction={KPI_DIRECTIONS.preventiveCompliance}
+          scope="period"
+          help="المهام الوقائية المكتملة من جميع المهام المستحقة غير الملغاة. لا تقيس الالتزام بالموعد."
         />
       </div>
 
@@ -336,13 +386,22 @@ export default function AdminOperationsDashboard() {
                       <stop offset="95%" stopColor="#0099B7" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="period" tick={{ fontSize: 11 }} />
                   <YAxis
                     allowDecimals={false}
                     tickFormatter={(value) => formatNumber(Number(value))}
                   />
-                  <Tooltip formatter={(value) => formatNumber(Number(value))} />
+                  <Tooltip
+                    cursor={{ stroke: "hsl(var(--primary))", strokeOpacity: 0.45 }}
+                    contentStyle={{
+                      background: "hsl(var(--popover))",
+                      borderColor: "hsl(var(--border))",
+                      color: "hsl(var(--popover-foreground))",
+                      borderRadius: "0.5rem",
+                    }}
+                    formatter={(value) => formatNumber(Number(value))}
+                  />
                   <Area
                     type="monotone"
                     dataKey="total"
@@ -350,6 +409,7 @@ export default function AdminOperationsDashboard() {
                     stroke="#0099B7"
                     fill="url(#opsTrend)"
                     strokeWidth={2}
+                    activeDot={{ fill: "hsl(var(--card))", stroke: "hsl(var(--primary))" }}
                   />
                   <Area
                     type="monotone"
@@ -370,7 +430,7 @@ export default function AdminOperationsDashboard() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>التراكم الزمني للطلبات المفتوحة</CardTitle>
+            <CardTitle>التراكم الزمني للطلبات غير المغلقة</CardTitle>
           </CardHeader>
           <CardContent className="h-80">
             {agingData.some((item) => item.value) ? (
@@ -380,20 +440,29 @@ export default function AdminOperationsDashboard() {
                   layout="vertical"
                   margin={{ right: 15, left: 15 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" horizontal={false} />
                   <XAxis
                     type="number"
                     allowDecimals={false}
                     tickFormatter={(value) => formatNumber(Number(value))}
                   />
                   <YAxis type="category" dataKey="name" width={75} />
-                  <Tooltip formatter={(value) => formatNumber(Number(value))} />
+                  <Tooltip
+                    cursor={{ fill: "hsl(var(--muted))", fillOpacity: 0.55 }}
+                    contentStyle={{
+                      background: "hsl(var(--popover))",
+                      borderColor: "hsl(var(--border))",
+                      color: "hsl(var(--popover-foreground))",
+                      borderRadius: "0.5rem",
+                    }}
+                    formatter={(value) => formatNumber(Number(value))}
+                  />
                   <Bar dataKey="value" name="الطلبات" radius={[0, 6, 6, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                لا توجد طلبات مفتوحة.
+                لا توجد طلبات غير مغلقة.
               </div>
             )}
           </CardContent>
@@ -416,7 +485,7 @@ export default function AdminOperationsDashboard() {
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{machine.machineName}</span>
                     <span className="rounded-full bg-red-500/10 px-2 py-1 text-xs font-bold text-red-600">
-                      {formatNumber(machine.failureCount)} أعطال
+                      {formatNumber(machine.failureCount)} طلب صيانة طارئة / آخر 30 يومًا
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">

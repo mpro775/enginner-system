@@ -214,6 +214,7 @@ export class AnalyticsService {
         metrics,
         requestSnapshot,
         preventive,
+        currentOverduePreventive,
         comparisons,
         aging,
         trends,
@@ -228,6 +229,7 @@ export class AnalyticsService {
         this.getRequestMetrics(filter, range),
         this.getCurrentRequestSnapshot(filter),
         this.getPreventiveSummaryForRange(filter, range),
+        this.countCurrentOverduePreventive(filter),
         this.getComparisons(filter),
         this.getAging(filter),
         this.getTrends(filter, filter.period),
@@ -247,7 +249,7 @@ export class AnalyticsService {
           ...metrics,
           ...requestSnapshot,
           preventiveCompliance: preventive.compliancePercent,
-          overduePreventiveTasks: preventive.overdue,
+          overduePreventiveTasks: currentOverduePreventive,
         },
         preventive,
         comparisons,
@@ -353,9 +355,38 @@ export class AnalyticsService {
             id: { $toString: "$_id" },
             requestCode: 1,
             openedAt: 1,
-            ageHours: {
+            stoppedAt: 1,
+            stopReason: 1,
+            openedAgeHours: {
               $round: [
                 { $divide: [{ $subtract: [now, "$openedAt"] }, HOUR_MS] },
+                1,
+              ],
+            },
+            ageHours: {
+              $round: [
+                {
+                  $divide: [
+                    {
+                      $subtract: [
+                        now,
+                        {
+                          $cond: [
+                            {
+                              $and: [
+                                { $eq: ["$status", RequestStatus.STOPPED] },
+                                { $ne: ["$stoppedAt", null] },
+                              ],
+                            },
+                            "$stoppedAt",
+                            "$openedAt",
+                          ],
+                        },
+                      ],
+                    },
+                    HOUR_MS,
+                  ],
+                },
                 1,
               ],
             },
@@ -861,17 +892,34 @@ export class AnalyticsService {
     if (!Types.ObjectId.isValid(id)) {
       throw new BadRequestException("Invalid request id");
     }
-    const logs = await this.auditLogModel
-      .find({
-        entity: "MaintenanceRequest",
-        entityId: new Types.ObjectId(id),
-      })
-      .select("action userName createdAt changes")
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .lean();
+    const [logs, request] = await Promise.all([
+      this.auditLogModel.aggregate([
+        {
+          $match: {
+            entity: "MaintenanceRequest",
+            $expr: { $eq: [{ $toString: "$entityId" }, id] },
+          },
+        },
+        { $sort: { createdAt: -1 } },
+        { $limit: 100 },
+        {
+          $project: {
+            action: 1,
+            userName: 1,
+            createdAt: 1,
+            changes: 1,
+          },
+        },
+      ]),
+      this.requestModel
+        .findById(id)
+        .select("openedAt createdAt stoppedAt closedAt stopReason")
+        .lean(),
+    ]);
 
-    return logs.map((log: Record<string, any>) => {
+    if (!request) throw new NotFoundException("Maintenance request not found");
+
+    const genuineEvents = logs.map((log: Record<string, any>) => {
       const changes = (log.changes || {}) as Record<string, unknown>;
       const noteType = changes.consultantNotes
         ? "consultant"
@@ -891,10 +939,16 @@ export class AnalyticsService {
         summary = "تم إكمال الطلب";
       else if (noteType) summary = "أُضيفت أو حُدثت ملاحظة";
 
+      const stopReason =
+        changes.status === RequestStatus.STOPPED &&
+        typeof changes.stopReason === "string"
+          ? this.sanitizeActivityText(changes.stopReason)
+          : undefined;
+
       return {
         id: String(log._id),
         action: log.action,
-        actorName: log.userName,
+        actorName: log.userName || null,
         createdAt: log.createdAt,
         summary,
         relevantChanges: {
@@ -905,9 +959,62 @@ export class AnalyticsService {
             ? { maintenanceType: changes.maintenanceType }
             : {}),
           ...(noteType ? { noteType } : {}),
+          ...(stopReason ? { stopReason } : {}),
         },
       };
     });
+
+    const hasCreated = genuineEvents.some((event) => event.action === "create");
+    const hasStopped = genuineEvents.some(
+      (event) => event.relevantChanges.status === RequestStatus.STOPPED,
+    );
+    const hasCompleted = genuineEvents.some(
+      (event) => event.relevantChanges.status === RequestStatus.COMPLETED,
+    );
+    const derivedEvents: Array<Record<string, any>> = [];
+    const openedAt = request.openedAt || (request as any).createdAt;
+    if (!hasCreated && openedAt) {
+      derivedEvents.push({
+        id: `derived-create-${id}`,
+        action: "derived_create",
+        actorName: null,
+        createdAt: openedAt,
+        summary: "تم إنشاء الطلب",
+        relevantChanges: {},
+      });
+    }
+    if (!hasStopped && request.stoppedAt) {
+      const stopReason = this.sanitizeActivityText(request.stopReason);
+      derivedEvents.push({
+        id: `derived-stop-${id}`,
+        action: "derived_stop",
+        actorName: null,
+        createdAt: request.stoppedAt,
+        summary: "تم إيقاف الطلب",
+        relevantChanges: {
+          status: RequestStatus.STOPPED,
+          ...(stopReason ? { stopReason } : {}),
+        },
+      });
+    }
+    if (!hasCompleted && request.closedAt) {
+      derivedEvents.push({
+        id: `derived-complete-${id}`,
+        action: "derived_complete",
+        actorName: null,
+        createdAt: request.closedAt,
+        summary: "تم إكمال الطلب",
+        relevantChanges: { status: RequestStatus.COMPLETED },
+      });
+    }
+
+    return [...genuineEvents, ...derivedEvents]
+      .sort(
+        (left, right) =>
+          new Date(right.createdAt).getTime() -
+          new Date(left.createdAt).getTime(),
+      )
+      .slice(0, 100);
   }
 
   private async getRequestMetrics(
@@ -1107,8 +1214,7 @@ export class AnalyticsService {
   ): Promise<PreventiveSummary> {
     const now = new Date();
     const todayStart = startOfZonedDay(now, this.timeZone);
-    const tomorrowStart = addZonedDays(todayStart, 1, this.timeZone);
-    const dueCutoff = range.to < tomorrowStart ? range.to : tomorrowStart;
+    const dueCutoff = range.to < todayStart ? range.to : todayStart;
     const rows = await this.taskModel.aggregate([
       { $match: this.taskMatch(filter) },
       { $addFields: { scheduledDate: this.scheduledDateExpression() } },
@@ -1192,17 +1298,13 @@ export class AnalyticsService {
   }
 
   private async countCurrentOverduePreventive(filter: AnalyticsFilterDto) {
-    const tomorrowStart = addZonedDays(
-      startOfZonedDay(new Date(), this.timeZone),
-      1,
-      this.timeZone,
-    );
+    const todayStart = startOfZonedDay(new Date(), this.timeZone);
     const rows = await this.taskModel.aggregate([
       { $match: this.taskMatch(filter) },
       { $addFields: { scheduledDate: this.scheduledDateExpression() } },
       {
         $match: {
-          scheduledDate: { $lt: tomorrowStart },
+          scheduledDate: { $lt: todayStart },
           status: { $nin: [TaskStatus.COMPLETED, TaskStatus.CANCELLED] },
         },
       },
@@ -1229,12 +1331,7 @@ export class AnalyticsService {
     statuses?: TaskStatus[],
     limit = 100,
   ) {
-    const now = new Date();
-    const dueCutoff = addZonedDays(
-      startOfZonedDay(now, this.timeZone),
-      1,
-      this.timeZone,
-    );
+    const dueCutoff = startOfZonedDay(new Date(), this.timeZone);
     const match = this.taskMatch(filter);
     if (statuses) match.status = { $in: statuses };
     return this.taskModel.aggregate([
@@ -1555,6 +1652,8 @@ export class AnalyticsService {
       filter.fromDate,
       filter.toDate,
       this.timeZone,
+      new Date(),
+      filter.comparisonPreset,
     );
     if (period.toExclusive <= period.from) {
       throw new BadRequestException("toDate must be on or after fromDate");
@@ -1568,7 +1667,14 @@ export class AnalyticsService {
       toExclusive: period.toExclusive.toISOString(),
       previousFrom: period.previousFrom.toISOString(),
       previousToExclusive: period.previousToExclusive.toISOString(),
+      comparisonMode: period.comparisonMode,
     };
+  }
+
+  private sanitizeActivityText(value: unknown) {
+    if (typeof value !== "string") return undefined;
+    const normalized = value.replace(/\s+/g, " ").trim();
+    return normalized ? normalized.slice(0, 300) : undefined;
   }
 
   private comparison(

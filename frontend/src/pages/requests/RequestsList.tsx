@@ -62,7 +62,7 @@ import {
   departmentsService,
 } from "@/services/reference-data";
 import { useAuthStore } from "@/store/auth";
-import { formatDate, formatDuration } from "@/lib/utils";
+import { formatDate, formatDurationBetween } from "@/lib/utils";
 import {
   RequestStatus,
   MaintenanceType,
@@ -210,6 +210,7 @@ export default function RequestsList() {
     useState<Record<ColumnKey, boolean>>(DEFAULT_COLUMNS);
   const [savedViews, setSavedViews] = useState<SavedRequestView[]>([]);
   const [savedViewName, setSavedViewName] = useState("");
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const savedViewsKey = user?.id
     ? `maintenance:admin-request-views:v1:${user.id}`
     : null;
@@ -295,6 +296,24 @@ export default function RequestsList() {
     filters.toDate,
     filters.openedBefore,
   ].filter(Boolean).length;
+
+  const isQuickFilterActive = (key: string) => {
+    if (key === "all") return activeFilterCount === 0;
+    if (key === "emergency")
+      return filters.maintenanceType === MaintenanceType.EMERGENCY;
+    if (key === "inProgress")
+      return filters.status === RequestStatus.IN_PROGRESS;
+    if (key === "stopped") return filters.status === RequestStatus.STOPPED;
+    if (key === "over24") return Boolean(filters.openedBefore);
+    const current = new Date();
+    if (key === "today") return filters.fromDate === toDateInput(current);
+    if (key === "week") {
+      const start = new Date(current);
+      start.setDate(start.getDate() - start.getDay());
+      return filters.fromDate === toDateInput(start);
+    }
+    return false;
+  };
 
   const visibleTableColumnCount =
     Object.entries(visibleColumns).filter(
@@ -397,16 +416,22 @@ export default function RequestsList() {
   };
 
   const getRequestDuration = (request: MaintenanceRequest) => {
-    const isClosed =
-      request.status === RequestStatus.COMPLETED ||
-      request.status === RequestStatus.STOPPED;
-
-    const endTime: Date | string =
-      (isClosed &&
-        (request.closedAt || request.stoppedAt || request.updatedAt)) ||
-      now;
-
-    return formatDuration(request.createdAt, endTime);
+    if (request.status === RequestStatus.STOPPED) {
+      return `متوقف منذ ${formatDurationBetween(
+        request.stoppedAt || request.openedAt || request.createdAt,
+        now,
+      )}`;
+    }
+    if (request.status === RequestStatus.COMPLETED) {
+      return `استغرق ${formatDurationBetween(
+        request.openedAt || request.createdAt,
+        request.closedAt || request.updatedAt,
+      )}`;
+    }
+    return `قيد التنفيذ منذ ${formatDurationBetween(
+      request.openedAt || request.createdAt,
+      now,
+    )}`;
   };
 
   if (isLoading) {
@@ -489,7 +514,7 @@ export default function RequestsList() {
                 <Button
                   key={key}
                   size="sm"
-                  variant="outline"
+                  variant={isQuickFilterActive(key) ? "default" : "outline"}
                   onClick={() => applyQuickFilter(key)}
                 >
                   {label}
@@ -607,6 +632,18 @@ export default function RequestsList() {
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <Button
+                  type="button"
+                  variant={advancedFiltersOpen ? "secondary" : "outline"}
+                  onClick={() => setAdvancedFiltersOpen((open) => !open)}
+                  aria-expanded={advancedFiltersOpen}
+                  aria-controls="advanced-request-filters"
+                  className="shrink-0"
+                >
+                  <Filter className="ml-2 h-4 w-4" />
+                  فلاتر متقدمة
+                  {activeFilterCount > 0 && ` (${activeFilterCount})`}
+                </Button>
               </div>
             </div>
           </CardContent>
@@ -614,7 +651,8 @@ export default function RequestsList() {
       )}
 
       {/* Filters */}
-      <Card className="dark:border-border/50">
+      {(!isAdmin || advancedFiltersOpen) && (
+      <Card id="advanced-request-filters" className="dark:border-border/50">
         <CardHeader className="pb-3 sm:pb-6">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <Filter className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
@@ -632,7 +670,7 @@ export default function RequestsList() {
                 onClick={() => applyQuickFilter("all")}
               >
                 <X className="ml-1 h-3.5 w-3.5" />
-                مسح الكل
+                مسح الفلاتر
               </Button>
             )}
           </CardTitle>
@@ -803,6 +841,7 @@ export default function RequestsList() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Mobile Cards View */}
       <div className="block lg:hidden space-y-3">
@@ -1201,9 +1240,16 @@ export default function RequestsList() {
                 {quickPeekRequest.engineerId?.name || "—"}
               </div>
               <div>
-                <span className="text-muted-foreground">العمر:</span>{" "}
+                <span className="text-muted-foreground">المدة التشغيلية:</span>{" "}
                 {getRequestDuration(quickPeekRequest)}
               </div>
+              {quickPeekRequest.status === RequestStatus.STOPPED &&
+                quickPeekRequest.stopReason && (
+                  <div className="sm:col-span-2 rounded-lg border border-orange-500/30 bg-orange-500/5 p-3">
+                    <p className="mb-1 text-muted-foreground">سبب التوقف</p>
+                    <p>{quickPeekRequest.stopReason}</p>
+                  </div>
+                )}
               <div className="sm:col-span-2 rounded-lg border bg-muted/30 p-3">
                 <p className="mb-1 text-muted-foreground">سبب الطلب</p>
                 <p>{quickPeekRequest.reasonText || "لم يُسجل سبب"}</p>

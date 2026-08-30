@@ -68,7 +68,7 @@ import {
   machinesService,
 } from "@/services/reference-data";
 import { useAuthStore } from "@/store/auth";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, formatDurationBetween } from "@/lib/utils";
 import { RequestStatus, Role, MaintenanceType } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 
@@ -481,18 +481,17 @@ export default function RequestDetails() {
     request.status !== RequestStatus.STOPPED;
   const canAddProjectManagerNote =
     (isProjectManager || isAdmin) && request.status !== RequestStatus.STOPPED;
-  const requestAgeHours = Math.max(
-    0,
-    Math.floor(
-      ((request.closedAt ? new Date(request.closedAt) : new Date()).getTime() -
-        new Date(request.openedAt).getTime()) /
-        3_600_000,
-    ),
-  );
   const requestAge =
-    requestAgeHours >= 24
-      ? `${Math.floor(requestAgeHours / 24)} يوم و${requestAgeHours % 24} ساعة`
-      : `${requestAgeHours} ساعة`;
+    request.status === RequestStatus.STOPPED
+      ? `متوقف منذ ${formatDurationBetween(
+          request.stoppedAt || request.openedAt,
+        )}`
+      : request.status === RequestStatus.COMPLETED
+        ? `استغرق ${formatDurationBetween(
+            request.openedAt,
+            request.closedAt || request.updatedAt,
+          )}`
+        : `قيد التنفيذ منذ ${formatDurationBetween(request.openedAt)}`;
 
   const handleStop = () => {
     setShowStopDialog(true);
@@ -786,7 +785,7 @@ export default function RequestDetails() {
           <CardContent className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="grid flex-1 gap-3 sm:grid-cols-3">
               <div>
-                <p className="text-xs text-muted-foreground">عمر الطلب</p>
+                <p className="text-xs text-muted-foreground">الحالة الزمنية</p>
                 <p className="font-semibold">{requestAge}</p>
               </div>
               <div>
@@ -1268,14 +1267,22 @@ export default function RequestDetails() {
                         <span className="absolute -right-[1.48rem] top-1.5 h-2.5 w-2.5 rounded-full bg-primary" />
                         <p className="text-sm font-medium">{item.summary}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {item.actorName} · {formatDateTime(item.createdAt)}
+                          {item.actorName
+                            ? `${item.actorName} · `
+                            : ""}
+                          {formatDateTime(item.createdAt)}
                         </p>
+                        {item.relevantChanges.stopReason && (
+                          <p className="mt-1 text-xs text-orange-700 dark:text-orange-300">
+                            سبب التوقف: {item.relevantChanges.stopReason}
+                          </p>
+                        )}
                       </li>
                     ))}
                   </ol>
                 ) : (
                   <div className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">
-                    لا يوجد نشاط إداري مسجل لهذا الطلب حتى الآن.
+                    لا توجد أحداث مسجلة لهذا الطلب.
                   </div>
                 )}
               </CardContent>

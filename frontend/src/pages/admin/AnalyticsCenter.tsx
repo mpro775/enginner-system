@@ -34,7 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { cn, formatDuration, formatPercentage } from "@/lib/utils";
 import { Breadcrumbs } from "@/components/shared/Breadcrumbs";
 import { ANALYTICS_TIMEZONE, formatAnalyticsDate } from "@/lib/analytics-time";
 import {
@@ -51,6 +51,42 @@ import {
 
 type Tab = "overview" | "performance" | "aging" | "distributions" | "patterns";
 const COLORS = ["#0099B7", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6"];
+const TOOLTIP_STYLE = {
+  background: "hsl(var(--popover))",
+  borderColor: "hsl(var(--border))",
+  color: "hsl(var(--popover-foreground))",
+  borderRadius: "0.5rem",
+};
+const COMPARISON_DIRECTIONS = {
+  totalRequests: "neutral",
+  emergencyRequests: "lower",
+  avgCompletionTime: "lower",
+  preventiveCompliance: "higher",
+  repeatFailures: "lower",
+} as const;
+
+function comparisonTone(
+  key: keyof typeof COMPARISON_DIRECTIONS,
+  change: number | null,
+) {
+  const direction = COMPARISON_DIRECTIONS[key];
+  if (!change || direction === "neutral") return "text-muted-foreground";
+  const favourable = direction === "lower" ? change < 0 : change > 0;
+  return favourable
+    ? "text-green-600 dark:text-green-400"
+    : "text-red-600 dark:text-red-400";
+}
+
+function comparisonValue(
+  key: keyof typeof COMPARISON_DIRECTIONS,
+  value: number,
+) {
+  if (key === "avgCompletionTime") return formatDuration(value, "hours");
+  if (key === "preventiveCompliance") return formatPercentage(value);
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(
+    value,
+  );
+}
 const DAY_LABELS = [
   "الأحد",
   "الاثنين",
@@ -72,12 +108,22 @@ function presetDates(preset: "month" | "previous" | "30days" | "year") {
     return {
       fromDate: `${year}-${String(month).padStart(2, "0")}-01`,
       toDate: today,
+      comparisonPreset: "month_to_date" as const,
     };
-  if (preset === "year") return { fromDate: `${year}-01-01`, toDate: today };
+  if (preset === "year")
+    return {
+      fromDate: `${year}-01-01`,
+      toDate: today,
+      comparisonPreset: "year_to_date" as const,
+    };
   if (preset === "30days") {
     const from = new Date();
     from.setDate(from.getDate() - 29);
-    return { fromDate: dateInZone(from), toDate: today };
+    return {
+      fromDate: dateInZone(from),
+      toDate: today,
+      comparisonPreset: "custom" as const,
+    };
   }
   const firstCurrent = new Date(Date.UTC(year, month - 1, 1));
   const lastPrevious = new Date(firstCurrent.getTime() - 24 * 60 * 60 * 1000);
@@ -86,6 +132,7 @@ function presetDates(preset: "month" | "previous" | "30days" | "year") {
   return {
     fromDate: `${previousYear}-${String(previousMonth).padStart(2, "0")}-01`,
     toDate: `${previousYear}-${String(previousMonth).padStart(2, "0")}-${String(lastPrevious.getUTCDate()).padStart(2, "0")}`,
+    comparisonPreset: "custom" as const,
   };
 }
 
@@ -103,10 +150,12 @@ function Metric({
   title,
   value,
   hint,
+  scope = "period",
 }: {
   title: string;
   value: string | number;
   hint: string;
+  scope?: "current" | "period";
 }) {
   return (
     <Card>
@@ -118,6 +167,9 @@ function Metric({
           </span>
         </div>
         <p className="mt-3 text-2xl font-bold">{value}</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          {scope === "current" ? "الحالة الحالية" : "خلال الفترة المختارة"}
+        </p>
       </CardContent>
     </Card>
   );
@@ -139,7 +191,7 @@ function RankingChart({
         {data.length ? (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} layout="vertical" margin={{ left: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+              <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" horizontal={false} />
               <XAxis type="number" allowDecimals={false} />
               <YAxis
                 type="category"
@@ -147,7 +199,10 @@ function RankingChart({
                 width={90}
                 tick={{ fontSize: 11 }}
               />
-              <Tooltip />
+              <Tooltip
+                contentStyle={TOOLTIP_STYLE}
+                cursor={{ fill: "hsl(var(--muted))", fillOpacity: 0.55 }}
+              />
               <Bar
                 dataKey="count"
                 name="الطلبات"
@@ -210,6 +265,9 @@ export default function AnalyticsCenter() {
     setFilters((current) => ({
       ...current,
       [key]: value === "all" || !value ? undefined : value,
+      ...((key === "fromDate" || key === "toDate") && {
+        comparisonPreset: "custom" as const,
+      }),
     }));
   const tabs: Array<{ key: Tab; label: string }> = [
     { key: "overview", label: "نظرة عامة" },
@@ -326,6 +384,13 @@ export default function AnalyticsCenter() {
               onChange={(value) => updateFilter("machineId", value)}
             />
           </div>
+          <p className="text-xs text-muted-foreground">
+            {filters.comparisonPreset === "year_to_date"
+              ? "المقارنة: العام الحالي حتى التاريخ المحدد مقابل الفترة المناظرة من العام السابق."
+              : filters.comparisonPreset === "month_to_date"
+                ? "المقارنة: الشهر الحالي حتى التاريخ المحدد مقابل الجزء المناظر من الشهر السابق."
+                : "المقارنة: النطاق المختار مقابل فترة سابقة مساوية له مباشرةً."}
+          </p>
         </CardContent>
       </Card>
 
@@ -368,47 +433,58 @@ export default function AnalyticsCenter() {
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <Metric
                   title="متوسط زمن إنجاز الطلب"
-                  value={`${data.kpis.avgCompletionTimeHours} س`}
-                  hint="closedAt - openedAt للطلبات المكتملة"
+                  value={formatDuration(data.kpis.avgCompletionTimeHours, "hours")}
+                  hint="متوسط الزمن بين فتح الطلب وإغلاقه للطلبات المكتملة خلال الفترة."
                 />
                 <Metric
                   title="أقل زمن إنجاز"
-                  value={`${data.kpis.minCompletionTimeHours} س`}
+                  value={formatDuration(data.kpis.minCompletionTimeHours, "hours")}
                   hint="أقصر مدة بين فتح الطلب وإغلاقه"
                 />
                 <Metric
                   title="أعلى زمن إنجاز"
-                  value={`${data.kpis.maxCompletionTimeHours} س`}
+                  value={formatDuration(data.kpis.maxCompletionTimeHours, "hours")}
                   hint="أطول مدة بين فتح الطلب وإغلاقه"
                 />
                 <Metric
-                  title="متوسط عمر الطلب المفتوح"
-                  value={`${data.kpis.openRequestAverageAgeHours} س`}
-                  hint="الوقت منذ openedAt للطلبات المفتوحة والمتوقفة"
+                  title="متوسط عمر الطلبات غير المغلقة"
+                  value={formatDuration(data.kpis.openRequestAverageAgeHours, "hours")}
+                  hint="متوسط الوقت منذ فتح الطلبات قيد التنفيذ والمتوقفة حاليًا."
+                  scope="current"
                 />
                 <Metric
                   title="معدل الإنجاز"
-                  value={`${data.kpis.completionRate}%`}
+                  value={formatPercentage(data.kpis.completionRate)}
                   hint="المكتمل من إجمالي طلبات الفترة"
                 />
                 <Metric
                   title="معدل التوقف"
-                  value={`${data.kpis.stopRate}%`}
+                  value={formatPercentage(data.kpis.stopRate)}
                   hint="المتوقف من إجمالي طلبات الفترة"
                 />
                 <Metric
                   title="نسبة الطارئ إلى الوقائي"
-                  value={data.kpis.emergencyPreventiveRatio ?? "—"}
-                  hint="عدد الطوارئ مقسومًا على عدد الطلبات الوقائية"
+                  value={
+                    data.kpis.emergencyPreventiveRatio === null
+                      ? "—"
+                      : `${data.kpis.emergencyPreventiveRatio} طلب طارئ لكل طلب وقائي`
+                  }
+                  hint="عدد طلبات الصيانة الطارئة مقابل كل طلب صيانة وقائية خلال الفترة."
                 />
                 <Metric
-                  title="الالتزام الوقائي"
+                  title="نسبة إنجاز الصيانة الوقائية المستحقة"
                   value={
                     data.kpis.preventiveCompliance === null
                       ? "لا توجد مهام مستحقة"
-                      : `${data.kpis.preventiveCompliance}%`
+                      : formatPercentage(data.kpis.preventiveCompliance)
                   }
-                  hint="المهام الوقائية المكتملة من المستحقة، مع استبعاد الملغاة"
+                  hint="المكتمل من جميع المهام الوقائية المستحقة غير الملغاة؛ لا تقيس الالتزام بالموعد."
+                />
+                <Metric
+                  title="المهام الوقائية المتأخرة حاليًا"
+                  value={data.kpis.overduePreventiveTasks}
+                  hint="مهام معلقة موعدها قبل بداية اليوم؛ مهام اليوم لا تُعد متأخرة."
+                  scope="current"
                 />
               </div>
               <Card>
@@ -419,10 +495,13 @@ export default function AnalyticsCenter() {
                   {data.trends.length ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={data.trends}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="period" tick={{ fontSize: 10 }} />
                         <YAxis allowDecimals={false} />
-                        <Tooltip />
+                        <Tooltip
+                          contentStyle={TOOLTIP_STYLE}
+                          cursor={{ stroke: "hsl(var(--primary))", strokeOpacity: 0.45 }}
+                        />
                         <Legend />
                         <Line
                           type="monotone"
@@ -430,6 +509,7 @@ export default function AnalyticsCenter() {
                           name="الإجمالي"
                           stroke="#0099B7"
                           strokeWidth={2}
+                          activeDot={{ fill: "hsl(var(--card))", stroke: "hsl(var(--primary))" }}
                         />
                         <Line
                           type="monotone"
@@ -437,6 +517,7 @@ export default function AnalyticsCenter() {
                           name="المكتمل"
                           stroke="#22c55e"
                           strokeWidth={2}
+                          activeDot={{ fill: "hsl(var(--card))", stroke: "#22c55e" }}
                         />
                         <Line
                           type="monotone"
@@ -444,6 +525,7 @@ export default function AnalyticsCenter() {
                           name="الطارئ"
                           stroke="#ef4444"
                           strokeWidth={2}
+                          activeDot={{ fill: "hsl(var(--card))", stroke: "#ef4444" }}
                         />
                       </LineChart>
                     </ResponsiveContainer>
@@ -472,7 +554,7 @@ export default function AnalyticsCenter() {
                               {machine.machineName}
                             </span>
                             <span className="text-sm font-bold text-red-600">
-                              {machine.currentCount}
+                              {machine.currentCount} طلب صيانة طارئة / آخر 30 يومًا
                             </span>
                           </div>
                           <p className="text-xs text-muted-foreground">
@@ -482,7 +564,7 @@ export default function AnalyticsCenter() {
                             الفترة السابقة: {machine.previousCount} · التغير:{" "}
                             {machine.percentChange === null
                               ? "غير قابل للمقارنة"
-                              : `${machine.percentChange}%`}
+                              : formatPercentage(machine.percentChange)}
                           </p>
                         </Link>
                       ))}
@@ -506,14 +588,6 @@ export default function AnalyticsCenter() {
                 data={data.rankings.requestsPerDepartment}
               />
               <RankingChart
-                title="الطلبات حسب الموقع"
-                data={data.rankings.requestsPerLocation}
-              />
-              <RankingChart
-                title="الطلبات حسب النظام"
-                data={data.rankings.requestsPerSystem}
-              />
-              <RankingChart
                 title="الطلبات حسب الآلة"
                 data={data.rankings.requestsPerMachine}
               />
@@ -525,7 +599,7 @@ export default function AnalyticsCenter() {
                   <Metric
                     title="المستحقة"
                     value={data.preventive.scheduledDue}
-                    hint="المهام الواقعة في الفترة باستثناء الملغاة"
+                    hint="المهام التي أصبح موعدها قبل بداية اليوم ضمن الفترة، باستثناء الملغاة."
                   />
                   <Metric
                     title="المكتملة"
@@ -535,7 +609,7 @@ export default function AnalyticsCenter() {
                   <Metric
                     title="المتأخرة"
                     value={data.preventive.overdue}
-                    hint="موعدها مضى ولم تكتمل أو تلغَ"
+                    hint="موعدها قبل بداية اليوم ولم تكتمل أو تُلغَ؛ مهام اليوم ليست متأخرة."
                   />
                   <Metric
                     title="الملغاة"
@@ -551,7 +625,10 @@ export default function AnalyticsCenter() {
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>توزيع عمر الطلبات المفتوحة</CardTitle>
+                  <CardTitle>توزيع عمر الطلبات غير المغلقة</CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    الحالة الحالية: تشمل الطلبات قيد التنفيذ والمتوقفة.
+                  </p>
                 </CardHeader>
                 <CardContent>
                   <div className="flex h-12 overflow-hidden rounded-xl bg-muted">
@@ -594,7 +671,7 @@ export default function AnalyticsCenter() {
               </Card>
               <Card>
                 <CardHeader>
-                  <CardTitle>أقدم الطلبات المفتوحة</CardTitle>
+                  <CardTitle>أقدم الطلبات غير المغلقة</CardTitle>
                 </CardHeader>
                 <CardContent className="overflow-x-auto">
                   {data.aging.oldestOpenRequests.length ? (
@@ -602,8 +679,9 @@ export default function AnalyticsCenter() {
                       <thead>
                         <tr>
                           <th>الطلب</th>
-                          <th>العمر</th>
+                          <th>الحالة الزمنية</th>
                           <th>الحالة</th>
+                          <th>سبب التوقف</th>
                           <th>الآلة</th>
                           <th>الموقع</th>
                           <th></th>
@@ -619,12 +697,24 @@ export default function AnalyticsCenter() {
                                   "font-bold text-red-600",
                               )}
                             >
-                              {request.ageHours} س
+                              {request.status === "stopped"
+                                ? `متوقف منذ ${formatDuration(request.ageHours, "hours")}`
+                                : `قيد التنفيذ منذ ${formatDuration(request.ageHours, "hours")}`}
+                              {request.status === "stopped" && (
+                                <span className="mt-1 block text-[11px] font-normal text-muted-foreground">
+                                  فُتح منذ {formatDuration(request.openedAgeHours, "hours")}
+                                </span>
+                              )}
                             </td>
                             <td>
                               {request.status === "stopped"
                                 ? "متوقف"
                                 : "قيد التنفيذ"}
+                            </td>
+                            <td className="max-w-56">
+                              {request.status === "stopped"
+                                ? request.stopReason || "لم يُسجل سبب"
+                                : "—"}
                             </td>
                             <td>{request.machine}</td>
                             <td>{request.location}</td>
@@ -641,7 +731,7 @@ export default function AnalyticsCenter() {
                       </tbody>
                     </table>
                   ) : (
-                    <Empty text="لا توجد طلبات مفتوحة في الفترة المحددة." />
+                    <Empty text="لا توجد طلبات غير مغلقة حاليًا." />
                   )}
                 </CardContent>
               </Card>
@@ -682,7 +772,10 @@ export default function AnalyticsCenter() {
                           <Cell key={index} fill={COLORS[index]} />
                         ))}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip
+                        contentStyle={TOOLTIP_STYLE}
+                        cursor={{ fill: "hsl(var(--muted))", fillOpacity: 0.55 }}
+                      />
                       <Legend />
                     </PieChart>
                   </ResponsiveContainer>
@@ -690,10 +783,19 @@ export default function AnalyticsCenter() {
               </Card>
               <Card>
                 <CardHeader>
-                  <CardTitle>مقارنة الفترة الحالية بالسابقة</CardTitle>
+                  <CardTitle>مقارنة الفترة الحالية بالمرجع السابق</CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    {data.period.comparisonMode === "previous_year_to_date"
+                      ? "من بداية العام حتى التاريخ المحدد مقابل الفترة المناظرة من العام السابق."
+                      : data.period.comparisonMode === "previous_month_to_date"
+                        ? "من بداية الشهر حتى التاريخ المحدد مقابل الجزء المناظر من الشهر السابق."
+                        : "مقابل فترة سابقة مساوية للنطاق المختار مباشرةً."}
+                  </p>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {Object.entries(data.comparisons).map(([key, comparison]) => (
+                  {Object.entries(data.comparisons).map(([rawKey, comparison]) => {
+                    const key = rawKey as keyof typeof COMPARISON_DIRECTIONS;
+                    return (
                     <div
                       key={key}
                       className="flex items-center justify-between rounded-lg border p-3"
@@ -704,22 +806,23 @@ export default function AnalyticsCenter() {
                             totalRequests: "إجمالي الطلبات",
                             emergencyRequests: "الطوارئ",
                             avgCompletionTime: "متوسط الإنجاز",
-                            preventiveCompliance: "الالتزام الوقائي",
-                            repeatFailures: "الأعطال المتكررة",
+                            preventiveCompliance: "إنجاز الوقائي المستحق",
+                            repeatFailures: "الآلات ذات الأعطال الطارئة المتكررة",
                           }[key]
                         }
                       </span>
-                      <span className="text-sm font-semibold">
-                        {comparison.current}{" "}
+                      <span className={cn("text-sm font-semibold", comparisonTone(key, comparison.percentChange))}>
+                        {comparisonValue(key, comparison.current)}{" "}
                         <span className="text-muted-foreground">
-                          مقابل {comparison.previous}
+                          مقابل {comparisonValue(key, comparison.previous)}
                         </span>{" "}
                         {comparison.percentChange === null
                           ? "—"
-                          : `${comparison.percentChange > 0 ? "+" : ""}${comparison.percentChange}%`}
+                          : `${comparison.percentChange > 0 ? "+" : ""}${formatPercentage(comparison.percentChange)}`}
                       </span>
                     </div>
-                  ))}
+                    );
+                  })}
                 </CardContent>
               </Card>
             </div>
