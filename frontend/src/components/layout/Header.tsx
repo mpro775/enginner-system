@@ -1,4 +1,5 @@
-import { Sun, Moon, Menu } from "lucide-react";
+import { Sun, Moon, Menu, House } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/auth";
 import { getRoleLabel } from "@/lib/utils";
@@ -13,6 +14,7 @@ interface HeaderProps {
 }
 
 export function Header({ onMenuClick }: HeaderProps) {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const { theme, toggleTheme } = useTheme();
 
@@ -53,6 +55,17 @@ export function Header({ onMenuClick }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 gap-2 px-2 sm:px-3"
+          onClick={() => navigate("/")}
+          title="العودة للرئيسية"
+          aria-label="العودة للرئيسية"
+        >
+          <House className="h-4 w-4" />
+          <span className="hidden sm:inline">الرئيسية</span>
+        </Button>
         {user?.role === Role.ADMIN && <AdminCommandPalette />}
         <InstallButton />
 

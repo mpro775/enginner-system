@@ -48,6 +48,10 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import {
+  getComplaintDisplayValues,
+  getComplaintLanguagePresence,
+} from "@/lib/complaint-language";
 
 const getComplaintStatusLabel = (status: ComplaintStatus): string => {
   const labels: Record<ComplaintStatus, string> = {
@@ -241,8 +245,13 @@ export default function ComplaintsList() {
       ) : (
         <>
           <div className="space-y-4">
-            {complaints.map((complaint: Complaint) => (
-              <Card
+            {complaints.map((complaint: Complaint) => {
+              const { hasArabic, hasEnglish } =
+                getComplaintLanguagePresence(complaint);
+              const displayValues = getComplaintDisplayValues(complaint);
+
+              return (
+                <Card
                 key={complaint.id}
                 className="hover:shadow-md transition-shadow cursor-pointer"
                 onClick={() => navigate(`/app/complaints/${complaint.id}`)}
@@ -263,8 +272,27 @@ export default function ComplaintsList() {
                               مقدم البلاغ / Reporter:
                             </p>
                             <div className="flex flex-col gap-1">
-                              <span className="font-medium text-sm">{complaint.reporterNameAr}</span>
-                              <span className="font-medium text-xs text-muted-foreground">{complaint.reporterNameEn}</span>
+                              {hasArabic && (
+                                <span className="font-medium text-sm">
+                                  {complaint.reporterNameAr || "—"}
+                                </span>
+                              )}
+                              {hasEnglish && (
+                                <span
+                                  className={cn(
+                                    "font-medium text-sm text-left",
+                                    hasArabic && "text-xs text-muted-foreground"
+                                  )}
+                                  dir="ltr"
+                                >
+                                  {complaint.reporterNameEn || "—"}
+                                </span>
+                              )}
+                              {!hasArabic && !hasEnglish && (
+                                <span className="font-medium text-sm">
+                                  {displayValues.reporterName}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -274,8 +302,27 @@ export default function ComplaintsList() {
                         <div className="flex items-start gap-2 text-muted-foreground">
                           <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" />
                           <div className="flex-1 min-w-0">
-                            <p className="truncate font-medium">{complaint.locationAr}</p>
-                            <p className="truncate text-xs text-muted-foreground">{complaint.locationEn}</p>
+                            {hasArabic && (
+                              <p className="truncate font-medium">
+                                {complaint.locationAr || "—"}
+                              </p>
+                            )}
+                            {hasEnglish && (
+                              <p
+                                className={cn(
+                                  "truncate font-medium text-left",
+                                  hasArabic && "text-xs text-muted-foreground"
+                                )}
+                                dir="ltr"
+                              >
+                                {complaint.locationEn || "—"}
+                              </p>
+                            )}
+                            {!hasArabic && !hasEnglish && (
+                              <p className="truncate font-medium">
+                                {displayValues.location}
+                              </p>
+                            )}
                           </div>
                         </div>
                         {complaint.assignedEngineerId && (
@@ -289,12 +336,27 @@ export default function ComplaintsList() {
                       </div>
 
                       <div className="space-y-1">
-                        <p className="text-sm text-foreground line-clamp-2 font-medium">
-                          {complaint.descriptionAr}
-                        </p>
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {complaint.descriptionEn}
-                        </p>
+                        {hasArabic && (
+                          <p className="text-sm text-foreground line-clamp-2 font-medium">
+                            {complaint.descriptionAr || "—"}
+                          </p>
+                        )}
+                        {hasEnglish && (
+                          <p
+                            className={cn(
+                              "text-sm text-foreground line-clamp-2 font-medium text-left",
+                              hasArabic && "text-xs text-muted-foreground"
+                            )}
+                            dir="ltr"
+                          >
+                            {complaint.descriptionEn || "—"}
+                          </p>
+                        )}
+                        {!hasArabic && !hasEnglish && (
+                          <p className="text-sm text-foreground line-clamp-2 font-medium">
+                            {displayValues.description}
+                          </p>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -353,8 +415,9 @@ export default function ComplaintsList() {
                     </div>
                   </div>
                 </CardContent>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
 
           {/* Pagination */}
@@ -464,4 +527,3 @@ export default function ComplaintsList() {
     </div>
   );
 }
-

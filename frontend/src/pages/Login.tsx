@@ -3,7 +3,15 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Eye, EyeOff, Loader2, Sun, Moon, Monitor } from "lucide-react";
+import {
+  ArrowRight,
+  Eye,
+  EyeOff,
+  Loader2,
+  Sun,
+  Moon,
+  Monitor,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -91,6 +99,17 @@ export default function Login() {
         }
       >
         {getThemeIcon()}
+      </Button>
+
+      <Button
+        variant="ghost"
+        onClick={() => navigate("/")}
+        className="absolute top-4 right-4 z-20 gap-2 text-white/90 hover:text-white hover:bg-white/10 dark:text-white/80 dark:hover:text-white"
+        aria-label="العودة للرئيسية"
+        title="العودة للرئيسية"
+      >
+        <ArrowRight className="h-4 w-4" />
+        <span className="hidden sm:inline">الرئيسية</span>
       </Button>
 
       <div className="w-full max-w-md relative z-10 p-4">

@@ -19,6 +19,7 @@ import {
 } from "../../common/exceptions";
 import {
   ComplaintStatus,
+  ComplaintSubmissionLanguage,
   Role,
   AuditAction,
 } from "../../common/enums";
@@ -32,6 +33,55 @@ import { NotificationsGateway } from "../notifications/notifications.gateway";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
 import { User, UserDocument } from "../users/schemas/user.schema";
 import { MaintenanceRequest, MaintenanceRequestDocument } from "../maintenance-requests/schemas/maintenance-request.schema";
+
+type NormalizedComplaintPayload = Pick<
+  CreateComplaintDto,
+  | "submissionLanguage"
+  | "reporterNameAr"
+  | "reporterNameEn"
+  | "locationAr"
+  | "locationEn"
+  | "descriptionAr"
+  | "descriptionEn"
+  | "notesAr"
+  | "notesEn"
+>;
+
+const trimmedValue = (value?: string): string | undefined => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+export function normalizeComplaintPayload(
+  createDto: CreateComplaintDto
+): NormalizedComplaintPayload {
+  const submissionLanguage =
+    createDto.submissionLanguage ?? ComplaintSubmissionLanguage.BOTH;
+
+  const normalized: NormalizedComplaintPayload = { submissionLanguage };
+
+  if (
+    submissionLanguage === ComplaintSubmissionLanguage.AR ||
+    submissionLanguage === ComplaintSubmissionLanguage.BOTH
+  ) {
+    normalized.reporterNameAr = trimmedValue(createDto.reporterNameAr);
+    normalized.locationAr = trimmedValue(createDto.locationAr);
+    normalized.descriptionAr = trimmedValue(createDto.descriptionAr);
+    normalized.notesAr = trimmedValue(createDto.notesAr);
+  }
+
+  if (
+    submissionLanguage === ComplaintSubmissionLanguage.EN ||
+    submissionLanguage === ComplaintSubmissionLanguage.BOTH
+  ) {
+    normalized.reporterNameEn = trimmedValue(createDto.reporterNameEn);
+    normalized.locationEn = trimmedValue(createDto.locationEn);
+    normalized.descriptionEn = trimmedValue(createDto.descriptionEn);
+    normalized.notesEn = trimmedValue(createDto.notesEn);
+  }
+
+  return normalized;
+}
 
 @Injectable()
 export class ComplaintsService {
@@ -54,9 +104,10 @@ export class ComplaintsService {
   ): Promise<ComplaintDocument> {
     // Generate complaint code
     const complaintCode = await this.generateComplaintCode();
+    const normalizedPayload = normalizeComplaintPayload(createDto);
 
     const complaint = new this.complaintModel({
-      ...createDto,
+      ...normalizedPayload,
       complaintCode,
       status: ComplaintStatus.NEW,
     });
@@ -621,4 +672,3 @@ export class ComplaintsService {
     };
   }
 }
-

@@ -60,3 +60,9 @@ export enum ComplaintStatus {
   RESOLVED = "resolved",
   CLOSED = "closed",
 }
+
+export enum ComplaintSubmissionLanguage {
+  AR = "ar",
+  EN = "en",
+  BOTH = "both",
+}

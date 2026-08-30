@@ -276,6 +276,10 @@ export class NotificationsGateway
       data: {
         id: complaint._id.toString(),
         complaintCode: complaint.complaintCode,
+        reporterName:
+          complaint.reporterNameAr || complaint.reporterNameEn || "",
+        location: complaint.locationAr || complaint.locationEn || "",
+        submissionLanguage: complaint.submissionLanguage,
         reporterNameAr: complaint.reporterNameAr,
         reporterNameEn: complaint.reporterNameEn,
         locationAr: complaint.locationAr,
@@ -300,8 +304,14 @@ export class NotificationsGateway
       data: {
         id: complaint._id.toString(),
         complaintCode: complaint.complaintCode,
+        reporterName:
+          complaint.reporterNameAr || complaint.reporterNameEn || "",
+        location: complaint.locationAr || complaint.locationEn || "",
+        submissionLanguage: complaint.submissionLanguage,
         reporterNameAr: complaint.reporterNameAr,
         reporterNameEn: complaint.reporterNameEn,
+        locationAr: complaint.locationAr,
+        locationEn: complaint.locationEn,
         status: complaint.status,
         engineerName: (complaint.assignedEngineerId as any)?.name,
         resolvedAt: complaint.resolvedAt,

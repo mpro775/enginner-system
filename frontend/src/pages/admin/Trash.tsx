@@ -558,7 +558,7 @@ export default function Trash() {
                 <div>
                   <h3 className="font-semibold text-lg">{complaint.complaintCode}</h3>
                   <p className="text-sm text-muted-foreground line-clamp-2">
-                    {complaint.descriptionAr}
+                    {complaint.descriptionAr || complaint.descriptionEn || "—"}
                   </p>
                 </div>
               </div>

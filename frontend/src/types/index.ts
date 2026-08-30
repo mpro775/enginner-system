@@ -45,6 +45,8 @@ export enum ComplaintStatus {
   CLOSED = "closed",
 }
 
+export type ComplaintSubmissionLanguage = "ar" | "en" | "both";
+
 export enum AuditAction {
   CREATE = "create",
   UPDATE = "update",
@@ -325,12 +327,13 @@ export interface AuditLog {
 export interface Complaint {
   id: string;
   complaintCode: string;
-  reporterNameAr: string;
-  reporterNameEn: string;
-  locationAr: string;
-  locationEn: string;
-  descriptionAr: string;
-  descriptionEn: string;
+  submissionLanguage?: ComplaintSubmissionLanguage;
+  reporterNameAr?: string;
+  reporterNameEn?: string;
+  locationAr?: string;
+  locationEn?: string;
+  descriptionAr?: string;
+  descriptionEn?: string;
   notesAr?: string;
   notesEn?: string;
   status: ComplaintStatus;
@@ -345,12 +348,13 @@ export interface Complaint {
 }
 
 export interface CreateComplaintForm {
-  reporterNameAr: string;
-  reporterNameEn: string;
-  locationAr: string;
-  locationEn: string;
-  descriptionAr: string;
-  descriptionEn: string;
+  submissionLanguage: "ar" | "en";
+  reporterNameAr?: string;
+  reporterNameEn?: string;
+  locationAr?: string;
+  locationEn?: string;
+  descriptionAr?: string;
+  descriptionEn?: string;
   notesAr?: string;
   notesEn?: string;
 }

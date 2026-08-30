@@ -1,9 +1,15 @@
 import {
+  IsEnum,
   IsString,
   IsOptional,
 } from "class-validator";
+import { ComplaintSubmissionLanguage } from "../../../common/enums";
 
 export class UpdateComplaintDto {
+  @IsOptional()
+  @IsEnum(ComplaintSubmissionLanguage)
+  submissionLanguage?: ComplaintSubmissionLanguage;
+
   @IsOptional()
   @IsString()
   reporterNameAr?: string;
@@ -36,6 +42,5 @@ export class UpdateComplaintDto {
   @IsString()
   notesEn?: string;
 }
-
 
 

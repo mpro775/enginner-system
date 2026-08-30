@@ -15,6 +15,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -49,6 +50,10 @@ import {
   machinesService,
 } from "@/services/reference-data";
 import { MaintenanceType } from "@/types";
+import {
+  getComplaintLanguage,
+  getComplaintLanguagePresence,
+} from "@/lib/complaint-language";
 
 export default function ComplaintDetails() {
   const { id } = useParams<{ id: string }>();
@@ -318,6 +323,16 @@ export default function ComplaintDetails() {
     );
   }
 
+  const { hasArabic, hasEnglish } =
+    getComplaintLanguagePresence(complaint);
+  const complaintLanguage = getComplaintLanguage(complaint);
+  const complaintLanguageLabel =
+    complaintLanguage === "ar"
+      ? "لغة البلاغ: العربية"
+      : complaintLanguage === "en"
+        ? "Complaint language: English"
+        : "عربي + English";
+
   const handleAssignToMe = () => {
     if (user?.id) {
       assignMutation.mutate(user.id);
@@ -381,6 +396,7 @@ export default function ComplaintDetails() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <Badge variant="secondary">{complaintLanguageLabel}</Badge>
           <ComplaintStatusBadge status={complaint.status} />
         </div>
       </div>
@@ -396,7 +412,7 @@ export default function ComplaintDetails() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Reporter Name - Bilingual */}
+              {/* Reporter name and location in the available languages */}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="flex items-start gap-3">
                   <User className="h-5 w-5 text-muted-foreground mt-1" />
@@ -405,22 +421,32 @@ export default function ComplaintDetails() {
                       مقدم البلاغ / Reporter Name
                     </p>
                     <div className="space-y-2">
-                      <div className="p-2 bg-muted/50 rounded border-r-2 border-r-primary">
-                        <p className="text-xs text-muted-foreground mb-1">
-                          بالعربية:
-                        </p>
-                        <p className="font-medium">
-                          {complaint.reporterNameAr}
-                        </p>
-                      </div>
-                      <div className="p-2 bg-muted/50 rounded border-r-2 border-r-primary">
-                        <p className="text-xs text-muted-foreground mb-1">
-                          In English:
-                        </p>
-                        <p className="font-medium">
-                          {complaint.reporterNameEn}
-                        </p>
-                      </div>
+                      {hasArabic && (
+                        <div className="p-2 bg-muted/50 rounded border-r-2 border-r-primary">
+                          <p className="text-xs text-muted-foreground mb-1">
+                            بالعربية:
+                          </p>
+                          <p className="font-medium">
+                            {complaint.reporterNameAr || "—"}
+                          </p>
+                        </div>
+                      )}
+                      {hasEnglish && (
+                        <div
+                          className="p-2 bg-muted/50 rounded border-l-2 border-l-primary text-left"
+                          dir="ltr"
+                        >
+                          <p className="text-xs text-muted-foreground mb-1">
+                            In English:
+                          </p>
+                          <p className="font-medium">
+                            {complaint.reporterNameEn || "—"}
+                          </p>
+                        </div>
+                      )}
+                      {!hasArabic && !hasEnglish && (
+                        <div className="p-2 bg-muted/50 rounded">—</div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -431,45 +457,69 @@ export default function ComplaintDetails() {
                       الموقع / Location
                     </p>
                     <div className="space-y-2">
-                      <div className="p-2 bg-muted/50 rounded border-r-2 border-r-primary">
-                        <p className="text-xs text-muted-foreground mb-1">
-                          بالعربية:
-                        </p>
-                        <p className="font-medium">{complaint.locationAr}</p>
-                      </div>
-                      <div className="p-2 bg-muted/50 rounded border-r-2 border-r-primary">
-                        <p className="text-xs text-muted-foreground mb-1">
-                          In English:
-                        </p>
-                        <p className="font-medium">{complaint.locationEn}</p>
-                      </div>
+                      {hasArabic && (
+                        <div className="p-2 bg-muted/50 rounded border-r-2 border-r-primary">
+                          <p className="text-xs text-muted-foreground mb-1">
+                            بالعربية:
+                          </p>
+                          <p className="font-medium">
+                            {complaint.locationAr || "—"}
+                          </p>
+                        </div>
+                      )}
+                      {hasEnglish && (
+                        <div
+                          className="p-2 bg-muted/50 rounded border-l-2 border-l-primary text-left"
+                          dir="ltr"
+                        >
+                          <p className="text-xs text-muted-foreground mb-1">
+                            In English:
+                          </p>
+                          <p className="font-medium">
+                            {complaint.locationEn || "—"}
+                          </p>
+                        </div>
+                      )}
+                      {!hasArabic && !hasEnglish && (
+                        <div className="p-2 bg-muted/50 rounded">—</div>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Description - Bilingual */}
+              {/* Description */}
               <div className="border-t pt-4">
                 <p className="text-sm text-muted-foreground mb-3">
                   وصف البلاغ / Description
                 </p>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="p-3 bg-muted/50 rounded border-r-2 border-r-primary">
-                    <p className="text-xs text-muted-foreground mb-2 font-semibold">
-                      بالعربية:
-                    </p>
-                    <p className="font-medium whitespace-pre-wrap text-sm">
-                      {complaint.descriptionAr}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-muted/50 rounded border-r-2 border-r-primary">
-                    <p className="text-xs text-muted-foreground mb-2 font-semibold">
-                      In English:
-                    </p>
-                    <p className="font-medium whitespace-pre-wrap text-sm">
-                      {complaint.descriptionEn}
-                    </p>
-                  </div>
+                  {hasArabic && (
+                    <div className="p-3 bg-muted/50 rounded border-r-2 border-r-primary">
+                      <p className="text-xs text-muted-foreground mb-2 font-semibold">
+                        بالعربية:
+                      </p>
+                      <p className="font-medium whitespace-pre-wrap text-sm">
+                        {complaint.descriptionAr || "—"}
+                      </p>
+                    </div>
+                  )}
+                  {hasEnglish && (
+                    <div
+                      className="p-3 bg-muted/50 rounded border-l-2 border-l-primary text-left"
+                      dir="ltr"
+                    >
+                      <p className="text-xs text-muted-foreground mb-2 font-semibold">
+                        In English:
+                      </p>
+                      <p className="font-medium whitespace-pre-wrap text-sm">
+                        {complaint.descriptionEn || "—"}
+                      </p>
+                    </div>
+                  )}
+                  {!hasArabic && !hasEnglish && (
+                    <div className="p-3 bg-muted/50 rounded">—</div>
+                  )}
                 </div>
               </div>
 
@@ -491,7 +541,10 @@ export default function ComplaintDetails() {
                       </div>
                     )}
                     {complaint.notesEn && (
-                      <div className="p-3 bg-muted/50 rounded border-r-2 border-r-primary">
+                      <div
+                        className="p-3 bg-muted/50 rounded border-l-2 border-l-primary text-left"
+                        dir="ltr"
+                      >
                         <p className="text-xs text-muted-foreground mb-2 font-semibold">
                           In English:
                         </p>

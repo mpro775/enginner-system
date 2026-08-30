@@ -1,6 +1,9 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { Document, Types } from "mongoose";
-import { ComplaintStatus } from "../../../common/enums";
+import {
+  ComplaintStatus,
+  ComplaintSubmissionLanguage,
+} from "../../../common/enums";
 
 export type ComplaintDocument = Complaint & Document;
 
@@ -18,23 +21,26 @@ export class Complaint {
   @Prop({ required: true, unique: true })
   complaintCode: string;
 
-  @Prop({ required: true, trim: true })
-  reporterNameAr: string;
+  @Prop({ enum: ComplaintSubmissionLanguage })
+  submissionLanguage?: ComplaintSubmissionLanguage;
 
-  @Prop({ required: true, trim: true })
-  reporterNameEn: string;
+  @Prop({ trim: true })
+  reporterNameAr?: string;
 
-  @Prop({ required: true, trim: true })
-  locationAr: string;
+  @Prop({ trim: true })
+  reporterNameEn?: string;
 
-  @Prop({ required: true, trim: true })
-  locationEn: string;
+  @Prop({ trim: true })
+  locationAr?: string;
 
-  @Prop({ required: true, trim: true })
-  descriptionAr: string;
+  @Prop({ trim: true })
+  locationEn?: string;
 
-  @Prop({ required: true, trim: true })
-  descriptionEn: string;
+  @Prop({ trim: true })
+  descriptionAr?: string;
+
+  @Prop({ trim: true })
+  descriptionEn?: string;
 
   @Prop({ trim: true })
   notesAr?: string;
