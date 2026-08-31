@@ -66,8 +66,10 @@ export const usersService = {
     return { data: response.data.data, meta: response.data.meta! };
   },
 
-  async getEngineers(): Promise<User[]> {
-    const response = await api.get<ApiResponse<User[]>>('/users/engineers');
+  async getEngineers(departmentId?: string): Promise<User[]> {
+    const response = await api.get<ApiResponse<User[]>>('/users/engineers', {
+      params: departmentId ? { departmentId } : undefined,
+    });
     return response.data.data;
   },
 
@@ -76,7 +78,6 @@ export const usersService = {
     return response.data.data;
   },
 };
-
 
 
 

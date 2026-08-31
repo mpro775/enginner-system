@@ -5,6 +5,9 @@ import {
   CreateComplaintForm,
   PaginationMeta,
   ComplaintStatus,
+  ComplaintReferenceData,
+  CreateComplaintRequestForm,
+  Floor,
 } from '@/types';
 
 interface ComplaintsResponse {
@@ -18,6 +21,7 @@ interface ComplaintFilters {
   status?: ComplaintStatus;
   search?: string;
   assignedEngineerId?: string;
+  departmentId?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
 }
@@ -41,11 +45,6 @@ export const complaintsService = {
     return response.data.data;
   },
 
-  async update(id: string, data: Partial<CreateComplaintForm>): Promise<Complaint> {
-    const response = await api.patch<ApiResponse<Complaint>>(`/complaints/${id}`, data);
-    return response.data.data;
-  },
-
   async assign(id: string, engineerId: string): Promise<Complaint> {
     const response = await api.patch<ApiResponse<Complaint>>(
       `/complaints/${id}/assign`,
@@ -54,10 +53,44 @@ export const complaintsService = {
     return response.data.data;
   },
 
-  async linkMaintenanceRequest(id: string, maintenanceRequestId: string): Promise<Complaint> {
+  async getPublicReferenceData(): Promise<ComplaintReferenceData> {
+    const response = await api.get<ApiResponse<ComplaintReferenceData>>(
+      '/public/complaints/reference-data',
+    );
+    return response.data.data;
+  },
+
+  async getPublicFloors(locationId: string): Promise<Array<Pick<Floor, 'id' | 'name'>>> {
+    const response = await api.get<ApiResponse<Array<Pick<Floor, 'id' | 'name'>>>>(
+      '/public/complaints/floors',
+      { params: { locationId } },
+    );
+    return response.data.data;
+  },
+
+  async addReviewNote(id: string, body: string): Promise<Complaint> {
+    const response = await api.post<ApiResponse<Complaint>>(
+      `/complaints/${id}/review-notes`,
+      { body },
+    );
+    return response.data.data;
+  },
+
+  async transferDepartment(id: string, toDepartmentId: string, reason?: string): Promise<Complaint> {
     const response = await api.patch<ApiResponse<Complaint>>(
-      `/complaints/${id}/link-request`,
-      { maintenanceRequestId }
+      `/complaints/${id}/transfer-department`,
+      { toDepartmentId, reason },
+    );
+    return response.data.data;
+  },
+
+  async createMaintenanceRequest(
+    id: string,
+    data: CreateComplaintRequestForm,
+  ): Promise<Complaint> {
+    const response = await api.post<ApiResponse<Complaint>>(
+      `/complaints/${id}/create-maintenance-request`,
+      data,
     );
     return response.data.data;
   },
@@ -91,8 +124,6 @@ export const complaintsService = {
     return { data: response.data.data, meta: response.data.meta! };
   },
 };
-
-
 
 
 

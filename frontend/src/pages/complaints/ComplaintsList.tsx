@@ -304,7 +304,7 @@ export default function ComplaintsList() {
                           <div className="flex-1 min-w-0">
                             {hasArabic && (
                               <p className="truncate font-medium">
-                                {complaint.locationAr || "—"}
+                                {complaint.locationId?.name || complaint.locationAr || "—"}
                               </p>
                             )}
                             {hasEnglish && (
@@ -315,7 +315,7 @@ export default function ComplaintsList() {
                                 )}
                                 dir="ltr"
                               >
-                                {complaint.locationEn || "—"}
+                                {complaint.locationId?.name || complaint.locationEn || "—"}
                               </p>
                             )}
                             {!hasArabic && !hasEnglish && (

@@ -75,6 +75,7 @@ export function formatPercentage(value: number | null | undefined): string {
 export function getStatusLabel(status: RequestStatus): string {
   const labels: Record<RequestStatus, string> = {
     [RequestStatus.IN_PROGRESS]: "قيد التنفيذ",
+    [RequestStatus.PENDING_CONSULTANT_APPROVAL]: "بانتظار اعتماد الاستشاري",
     [RequestStatus.COMPLETED]: "منتهي",
     [RequestStatus.STOPPED]: "متوقف",
   };
@@ -84,6 +85,7 @@ export function getStatusLabel(status: RequestStatus): string {
 export function getStatusColor(status: RequestStatus): string {
   const colors: Record<RequestStatus, string> = {
     [RequestStatus.IN_PROGRESS]: "bg-blue-100 text-blue-800 border-blue-200",
+    [RequestStatus.PENDING_CONSULTANT_APPROVAL]: "bg-violet-100 text-violet-800 border-violet-200",
     [RequestStatus.COMPLETED]: "bg-green-100 text-green-800 border-green-200",
     [RequestStatus.STOPPED]: "bg-orange-100 text-orange-800 border-orange-200",
   };

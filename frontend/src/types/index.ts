@@ -15,6 +15,7 @@ export enum MaintenanceType {
 
 export enum RequestStatus {
   IN_PROGRESS = "in_progress",
+  PENDING_CONSULTANT_APPROVAL = "pending_consultant_approval",
   COMPLETED = "completed",
   STOPPED = "stopped",
 }
@@ -92,6 +93,15 @@ export interface Department {
   deletedBy?: User;
 }
 
+export interface Floor {
+  id: string;
+  name: string;
+  locationId: Location | string;
+  isActive: boolean;
+  deletedAt?: string;
+  deletedBy?: User;
+}
+
 export interface System {
   id: string;
   name: string;
@@ -123,6 +133,8 @@ export interface MaintenanceRequest {
   projectManagerId?: User;
   maintenanceType: MaintenanceType;
   locationId: Location;
+  floorId?: Floor;
+  detailedLocation?: string;
   departmentId: Department;
   systemId: System;
   machineId: Machine;
@@ -134,6 +146,7 @@ export interface MaintenanceRequest {
   status: RequestStatus;
   engineerNotes?: string;
   consultantNotes?: string;
+  requestNotes?: RequestNote[];
   healthSafetyNotes?: string;
   projectManagerNotes?: string;
   stopReason?: string;
@@ -141,11 +154,25 @@ export interface MaintenanceRequest {
   openedAt: string;
   closedAt?: string;
   stoppedAt?: string;
+  completionRequestedAt?: string;
+  completionRequestedBy?: User | string;
+  completionApprovedAt?: string;
+  completionApprovedBy?: User | string;
+  completionApprovedByName?: string;
   complaintId?: Complaint | string;
   deletedAt?: string;
   deletedBy?: User;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface RequestNote {
+  id?: string;
+  body: string;
+  authorId: User | string;
+  authorName: string;
+  authorRole: Role;
+  createdAt: string;
 }
 
 // API Response types
@@ -336,6 +363,13 @@ export interface Complaint {
   descriptionEn?: string;
   notesAr?: string;
   notesEn?: string;
+  locationId?: Location;
+  floorId?: Floor;
+  detailedLocation?: string;
+  departmentId?: Department;
+  contactPhone?: string;
+  reviewNotes?: ComplaintReviewNote[];
+  departmentTransferHistory?: DepartmentTransfer[];
   status: ComplaintStatus;
   assignedEngineerId?: User;
   maintenanceRequestId?: MaintenanceRequest | string;
@@ -349,6 +383,11 @@ export interface Complaint {
 
 export interface CreateComplaintForm {
   submissionLanguage: "ar" | "en";
+  locationId: string;
+  floorId: string;
+  detailedLocation: string;
+  departmentId: string;
+  contactPhone?: string;
   reporterNameAr?: string;
   reporterNameEn?: string;
   locationAr?: string;
@@ -357,4 +396,41 @@ export interface CreateComplaintForm {
   descriptionEn?: string;
   notesAr?: string;
   notesEn?: string;
+}
+
+export interface ComplaintReviewNote {
+  id?: string;
+  body: string;
+  authorId: User | string;
+  authorName: string;
+  authorRole: Role;
+  createdAt: string;
+}
+
+export interface DepartmentTransfer {
+  id?: string;
+  fromDepartmentId: Department | string;
+  fromDepartmentName: string;
+  toDepartmentId: Department | string;
+  toDepartmentName: string;
+  transferredBy: User | string;
+  transferredByName: string;
+  transferredByRole: Role;
+  transferredAt: string;
+  reason?: string;
+}
+
+export interface ComplaintReferenceData {
+  locations: Array<Pick<Location, "id" | "name">>;
+  departments: Array<Pick<Department, "id" | "name">>;
+}
+
+export interface CreateComplaintRequestForm {
+  maintenanceType: MaintenanceType;
+  engineerId?: string;
+  systemId: string;
+  machineId: string;
+  maintainAllComponents?: boolean;
+  selectedComponents?: string[];
+  requestNeeds?: string;
 }

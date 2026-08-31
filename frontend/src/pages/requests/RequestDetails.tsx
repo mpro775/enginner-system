@@ -98,6 +98,13 @@ interface RequestsListState {
     maintenanceType: string;
     locationId: string;
     departmentId: string;
+    engineerId?: string;
+    systemId?: string;
+    machineId?: string;
+    openOnly?: boolean;
+    openedBefore?: string;
+    sortBy?: string;
+    sortOrder?: "asc" | "desc";
     fromDate: string;
     toDate: string;
   };
@@ -112,6 +119,13 @@ function buildRequestsUrl(state: RequestsListState | null): string {
   if (f.maintenanceType) params.set("maintenanceType", f.maintenanceType);
   if (f.locationId) params.set("locationId", f.locationId);
   if (f.departmentId) params.set("departmentId", f.departmentId);
+  if (f.engineerId) params.set("engineerId", f.engineerId);
+  if (f.systemId) params.set("systemId", f.systemId);
+  if (f.machineId) params.set("machineId", f.machineId);
+  if (f.openOnly) params.set("openOnly", "true");
+  if (f.openedBefore) params.set("openedBefore", f.openedBefore);
+  if (f.sortBy && f.sortBy !== "createdAt") params.set("sortBy", f.sortBy);
+  if (f.sortOrder && f.sortOrder !== "desc") params.set("sortOrder", f.sortOrder);
   if (f.fromDate) params.set("fromDate", f.fromDate);
   if (f.toDate) params.set("toDate", f.toDate);
   const query = params.toString();
@@ -128,7 +142,6 @@ export default function RequestDetails() {
   const { user } = useAuthStore();
   const { toast } = useToast();
 
-  const [showStopDialog, setShowStopDialog] = useState(false);
   const [showNoteDialog, setShowNoteDialog] = useState(false);
   const [showHealthSafetyNoteDialog, setShowHealthSafetyNoteDialog] =
     useState(false);
@@ -136,13 +149,14 @@ export default function RequestDetails() {
     useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [softDeleteDialog, setSoftDeleteDialog] = useState(false);
   const [hardDeleteDialog, setHardDeleteDialog] = useState(false);
-  const [stopReason, setStopReason] = useState("");
   const [consultantNotes, setConsultantNotes] = useState("");
   const [healthSafetyNotes, setHealthSafetyNotes] = useState("");
   const [projectManagerNotes, setProjectManagerNotes] = useState("");
   const [implementedWork, setImplementedWork] = useState("");
+  const [rejectReason, setRejectReason] = useState("");
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
@@ -231,8 +245,11 @@ export default function RequestDetails() {
   });
 
   const { data: systems } = useQuery({
-    queryKey: ["systems"],
-    queryFn: () => systemsService.getAll(),
+    queryKey: ["systems", watchDepartmentId],
+    queryFn: () =>
+      watchDepartmentId
+        ? systemsService.getByDepartment(watchDepartmentId)
+        : systemsService.getAll(),
   });
 
   const {
@@ -246,31 +263,10 @@ export default function RequestDetails() {
   });
 
   // Filter systems based on selected department
-  const filteredSystems = systems?.filter((system) => {
-    if (!watchDepartmentId) {
-      return true;
-    }
-    const ids = system.departmentIds || [];
-    if (ids.length === 0) return true;
-    return ids.some(
-      (d) => (typeof d === "object" && d ? d.id : d) === watchDepartmentId,
-    );
-  });
-
-  const stopMutation = useMutation({
-    mutationFn: (reason: string) =>
-      requestsService.stop(id!, { stopReason: reason }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["request", id] });
-      queryClient.invalidateQueries({ queryKey: ["requests"] });
-      setShowStopDialog(false);
-      setStopReason("");
-    },
-  });
+  const filteredSystems = systems;
 
   const addNoteMutation = useMutation({
-    mutationFn: (notes: string) =>
-      requestsService.addNote(id!, { consultantNotes: notes }),
+    mutationFn: (notes: string) => requestsService.addRequestNote(id!, notes),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["request", id] });
       queryClient.invalidateQueries({ queryKey: ["requests"] });
@@ -316,7 +312,7 @@ export default function RequestDetails() {
 
   const completeMutation = useMutation({
     mutationFn: (data: { implementedWork?: string }) =>
-      requestsService.complete(id!, data),
+      requestsService.submitCompletion(id!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["request", id] });
       queryClient.invalidateQueries({ queryKey: ["requests"] });
@@ -324,7 +320,7 @@ export default function RequestDetails() {
       setImplementedWork("");
       toast({
         title: "تم بنجاح",
-        description: "تم إكمال الطلب بنجاح",
+        description: "تم إرسال الإكمال لاعتماد الاستشاري",
         variant: "default",
       });
     },
@@ -338,6 +334,26 @@ export default function RequestDetails() {
         description: errorMessage,
         variant: "destructive",
       });
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: () => requestsService.approveCompletion(id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["request", id] });
+      queryClient.invalidateQueries({ queryKey: ["requests"] });
+      toast({ title: "تم اعتماد إكمال الطلب" });
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: () => requestsService.rejectCompletion(id!, rejectReason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["request", id] });
+      queryClient.invalidateQueries({ queryKey: ["requests"] });
+      setShowRejectDialog(false);
+      setRejectReason("");
+      toast({ title: "تمت إعادة الطلب للمهندس" });
     },
   });
 
@@ -424,7 +440,8 @@ export default function RequestDetails() {
       request &&
       isEngineer &&
       request.engineerId?.id === user?.id &&
-      request.status === RequestStatus.IN_PROGRESS
+      request.status === RequestStatus.IN_PROGRESS &&
+      !request.complaintId
     ) {
       reset({
         maintenanceType: request.maintenanceType,
@@ -434,7 +451,7 @@ export default function RequestDetails() {
         machineId: request.machineId?.id || "",
         reasonText: request.reasonText,
         machineNumber: request.machineNumber || "",
-        engineerNotes: request.engineerNotes || "",
+        engineerNotes: "",
       });
       setShowEditDialog(true);
       // Remove the query parameter from URL
@@ -470,12 +487,17 @@ export default function RequestDetails() {
   }
 
   const isOwner = isEngineer && request.engineerId?.id === user?.id;
-  const canEdit = isOwner && request.status === RequestStatus.IN_PROGRESS;
-  const canStop = isOwner && request.status === RequestStatus.IN_PROGRESS;
+  const canEdit =
+    isOwner &&
+    request.status === RequestStatus.IN_PROGRESS &&
+    !request.complaintId;
   const canComplete = isOwner && request.status === RequestStatus.IN_PROGRESS;
   const canAddNote =
-    (isConsultant || isMaintenanceManager || isAdmin) &&
+    (isEngineer || isConsultant || isMaintenanceManager || isAdmin) &&
     request.status !== RequestStatus.STOPPED;
+  const canApprove =
+    isConsultant &&
+    request.status === RequestStatus.PENDING_CONSULTANT_APPROVAL;
   const canAddHealthSafetyNote =
     (isMaintenanceSafetyMonitor || isAdmin) &&
     request.status !== RequestStatus.STOPPED;
@@ -493,15 +515,8 @@ export default function RequestDetails() {
           )}`
         : `قيد التنفيذ منذ ${formatDurationBetween(request.openedAt)}`;
 
-  const handleStop = () => {
-    setShowStopDialog(true);
-  };
-
   const handleAddNote = () => {
-    const notes = request.consultantNotes || "";
-    // Remove author name from the end if present
-    const { text } = parseNoteWithAuthor(notes);
-    setConsultantNotes(text);
+    setConsultantNotes("");
     setShowNoteDialog(true);
   };
 
@@ -640,7 +655,7 @@ export default function RequestDetails() {
         machineId: request.machineId?.id || "",
         reasonText: request.reasonText,
         machineNumber: request.machineNumber || "",
-        engineerNotes: request.engineerNotes || "",
+        engineerNotes: "",
         requestNeeds: request.requestNeeds || "",
         implementedWork: request.implementedWork || "",
       });
@@ -655,12 +670,6 @@ export default function RequestDetails() {
 
   const onSubmitEdit = (data: UpdateRequestFormData) => {
     updateMutation.mutate(data);
-  };
-
-  const submitStop = () => {
-    if (stopReason.trim()) {
-      stopMutation.mutate(stopReason);
-    }
   };
 
   const submitNote = () => {
@@ -857,6 +866,20 @@ export default function RequestDetails() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
+                  <Building2 className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">الطابق</p>
+                    <p className="font-medium">{request.floorId?.name || "—"}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <MapPin className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">الموقع التفصيلي</p>
+                    <p className="font-medium">{request.detailedLocation || "—"}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
                   <Cog className="h-5 w-5 text-muted-foreground" />
                   <div>
                     <p className="text-sm text-muted-foreground">
@@ -959,6 +982,22 @@ export default function RequestDetails() {
                   );
                 })()}
 
+              {!!request.requestNotes?.length && (
+                <div className="space-y-3 border-t pt-4">
+                  <span className="block text-sm font-medium text-muted-foreground">
+                    سجل الملاحظات
+                  </span>
+                  {[...request.requestNotes].reverse().map((note, index) => (
+                    <div key={note.id || index} className="rounded-lg border p-3">
+                      <p className="whitespace-pre-wrap text-sm">{note.body}</p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {note.authorName} · {formatDateTime(note.createdAt)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {request.healthSafetyNotes &&
                 (() => {
                   const { text, author } = parseNoteWithAuthor(
@@ -1031,6 +1070,28 @@ export default function RequestDetails() {
                     )}
                   </div>
                 )}
+
+              {request.status === RequestStatus.PENDING_CONSULTANT_APPROVAL && (
+                <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
+                  <p className="font-medium text-blue-700 dark:text-blue-300">
+                    بانتظار اعتماد الاستشاري
+                  </p>
+                  {request.completionRequestedAt && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      أُرسل في {formatDateTime(request.completionRequestedAt)}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {request.status === RequestStatus.COMPLETED && request.completionApprovedAt && (
+                <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-4">
+                  <p className="font-medium">اعتمد الإكمال: {request.completionApprovedByName || "—"}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {formatDateTime(request.completionApprovedAt)}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -1077,8 +1138,8 @@ export default function RequestDetails() {
 
           {/* Actions */}
           {(canEdit ||
-            canStop ||
             canComplete ||
+            canApprove ||
             canAddNote ||
             canAddHealthSafetyNote ||
             canAddProjectManagerNote ||
@@ -1109,15 +1170,24 @@ export default function RequestDetails() {
                       إكمال الطلب
                     </Button>
                   )}
-                  {canStop && (
-                    <Button
-                      variant="destructive"
-                      onClick={handleStop}
-                      className="flex-1"
-                    >
-                      <StopCircle className="ml-2 h-4 w-4" />
-                      إيقاف الطلب
-                    </Button>
+                  {canApprove && (
+                    <>
+                      <Button
+                        onClick={() => approveMutation.mutate()}
+                        disabled={approveMutation.isPending}
+                        className="flex-1"
+                      >
+                        <CheckCircle2 className="ml-2 h-4 w-4" />
+                        اعتماد الإكمال
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() => setShowRejectDialog(true)}
+                        className="flex-1"
+                      >
+                        إعادة للمهندس
+                      </Button>
+                    </>
                   )}
                   {canAddNote && (
                     <Button
@@ -1126,9 +1196,7 @@ export default function RequestDetails() {
                       className="flex-1"
                     >
                       <MessageSquarePlus className="ml-2 h-4 w-4" />
-                      {request.consultantNotes
-                        ? "تعديل الملاحظة"
-                        : "إضافة ملاحظة"}
+                      إضافة ملاحظة
                     </Button>
                   )}
                   {canAddHealthSafetyNote && (
@@ -1338,46 +1406,6 @@ export default function RequestDetails() {
         </div>
       </div>
 
-      {/* Stop Dialog */}
-      <Dialog open={showStopDialog} onOpenChange={setShowStopDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>إيقاف الطلب</DialogTitle>
-            <DialogDescription>
-              يرجى توضيح سبب إيقاف هذا الطلب
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">سبب الإيقاف *</label>
-              <Textarea
-                placeholder="أدخل سبب إيقاف الطلب..."
-                value={stopReason}
-                onChange={(e) => setStopReason(e.target.value)}
-                rows={4}
-                className="mt-2"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowStopDialog(false)}>
-              إلغاء
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={submitStop}
-              disabled={stopMutation.isPending || !stopReason.trim()}
-            >
-              {stopMutation.isPending ? (
-                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-              ) : (
-                "إيقاف الطلب"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Add Note Dialog */}
       <Dialog open={showNoteDialog} onOpenChange={setShowNoteDialog}>
         <DialogContent>
@@ -1387,9 +1415,7 @@ export default function RequestDetails() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium">
-                ملاحظات المكتب الاستشاري *
-              </label>
+              <label className="text-sm font-medium">نص الملاحظة *</label>
               <Textarea
                 placeholder="أدخل ملاحظاتك هنا..."
                 value={consultantNotes}
@@ -1554,6 +1580,35 @@ export default function RequestDetails() {
               ) : (
                 "إكمال الطلب"
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>إعادة الطلب للمهندس</DialogTitle>
+            <DialogDescription>
+              اكتب سبب الإعادة؛ سيُحفظ في سجل الملاحظات ويصل للمهندس.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={rejectReason}
+            onChange={(event) => setRejectReason(event.target.value)}
+            rows={5}
+            placeholder="سبب إعادة الطلب..."
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRejectDialog(false)}>
+              إلغاء
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => rejectMutation.mutate()}
+              disabled={!rejectReason.trim() || rejectMutation.isPending}
+            >
+              إعادة للمهندس
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -44,10 +44,25 @@ describe("reference ID integrity hardening", () => {
       sort: jest.fn().mockResolvedValue(null),
     });
     RequestModel.findById = jest.fn().mockReturnValue(query);
+    const machineModel = {
+      findOne: jest.fn().mockResolvedValue({ components: [] }),
+    };
+    const userModel = {
+      findOne: jest.fn().mockReturnValue({
+        select: jest.fn().mockResolvedValue({ _id: ids.user }),
+      }),
+      find: jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue([]),
+        }),
+      }),
+    };
+    const systemModel = { exists: jest.fn().mockResolvedValue(true) };
     const service = new MaintenanceRequestsService(
       RequestModel,
-      {} as never,
-      {} as never,
+      machineModel as never,
+      userModel as never,
+      systemModel as never,
       { notifyRequestCreated: jest.fn() } as never,
       { create: jest.fn() } as never,
       {} as never,
@@ -86,10 +101,14 @@ describe("reference ID integrity hardening", () => {
         .mockReturnValueOnce(query),
       findByIdAndUpdate: jest.fn().mockResolvedValue(undefined),
     };
+    const existingReferenceModel = {
+      exists: jest.fn().mockResolvedValue(true),
+    };
     const service = new MaintenanceRequestsService(
       requestModel as never,
-      {} as never,
-      {} as never,
+      existingReferenceModel as never,
+      existingReferenceModel as never,
+      existingReferenceModel as never,
       { notifyRequestUpdated: jest.fn() } as never,
       { create: jest.fn() } as never,
       {} as never,
@@ -107,10 +126,10 @@ describe("reference ID integrity hardening", () => {
     );
 
     const update = requestModel.findByIdAndUpdate.mock.calls[0][1];
-    expectObjectId(update.locationId, ids.location);
-    expectObjectId(update.departmentId, ids.department);
-    expectObjectId(update.systemId, ids.system);
-    expectObjectId(update.machineId, ids.machine);
+    expectObjectId(update.$set.locationId, ids.location);
+    expectObjectId(update.$set.departmentId, ids.department);
+    expectObjectId(update.$set.systemId, ids.system);
+    expectObjectId(update.$set.machineId, ids.machine);
   });
 
   it("stores machine create and update system references as ObjectIds", async () => {

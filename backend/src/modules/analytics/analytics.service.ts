@@ -1034,7 +1034,7 @@ export class AnalyticsService {
                 {
                   $in: [
                     "$status",
-                    [RequestStatus.IN_PROGRESS, RequestStatus.STOPPED],
+                    [...OPEN_REQUEST_STATUSES],
                   ],
                 },
                 1,
@@ -1132,7 +1132,7 @@ export class AnalyticsService {
                 {
                   $in: [
                     "$status",
-                    [RequestStatus.IN_PROGRESS, RequestStatus.STOPPED],
+                    [...OPEN_REQUEST_STATUSES],
                   ],
                 },
                 { $subtract: [now, "$openedAt"] },

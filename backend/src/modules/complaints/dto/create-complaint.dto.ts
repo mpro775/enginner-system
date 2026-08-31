@@ -3,11 +3,35 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsMongoId,
+  Matches,
   ValidateIf,
 } from "class-validator";
+import { Transform } from "class-transformer";
 import { ComplaintSubmissionLanguage } from "../../../common/enums";
 
 export class CreateComplaintDto {
+  @IsMongoId({ message: "Invalid location ID" })
+  @IsNotEmpty({ message: "Location is required" })
+  locationId: string;
+
+  @IsMongoId({ message: "Invalid floor ID" })
+  @IsNotEmpty({ message: "Floor is required" })
+  floorId: string;
+
+  @IsString()
+  @IsNotEmpty({ message: "Detailed location is required" })
+  detailedLocation: string;
+
+  @IsMongoId({ message: "Invalid department ID" })
+  @IsNotEmpty({ message: "Department is required" })
+  departmentId: string;
+
+  @IsOptional()
+  @Transform(({ value }) => normalizeSaudiMobile(value))
+  @Matches(/^\+9665\d{8}$/, { message: "Invalid Saudi mobile number" })
+  contactPhone?: string;
+
   @IsOptional()
   @IsEnum(ComplaintSubmissionLanguage)
   submissionLanguage?: ComplaintSubmissionLanguage;
@@ -32,24 +56,12 @@ export class CreateComplaintDto {
   @IsNotEmpty({ message: "Reporter name (English) is required" })
   reporterNameEn?: string;
 
-  @ValidateIf(
-    (o) =>
-      !o.submissionLanguage ||
-      o.submissionLanguage === ComplaintSubmissionLanguage.AR ||
-      o.submissionLanguage === ComplaintSubmissionLanguage.BOTH
-  )
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: "Location (Arabic) is required" })
   locationAr?: string;
 
-  @ValidateIf(
-    (o) =>
-      !o.submissionLanguage ||
-      o.submissionLanguage === ComplaintSubmissionLanguage.EN ||
-      o.submissionLanguage === ComplaintSubmissionLanguage.BOTH
-  )
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: "Location (English) is required" })
   locationEn?: string;
 
   @ValidateIf(
@@ -81,4 +93,13 @@ export class CreateComplaintDto {
   notesEn?: string;
 }
 
+export function normalizeSaudiMobile(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const compact = value.replace(/[\s-]/g, "").trim();
+  if (!compact) return undefined;
+  if (/^05\d{8}$/.test(compact)) return `+966${compact.slice(1)}`;
+  if (/^5\d{8}$/.test(compact)) return `+966${compact}`;
+  if (/^9665\d{8}$/.test(compact)) return `+${compact}`;
+  return compact;
+}
 

@@ -60,7 +60,10 @@ import { useToast } from "@/hooks/use-toast";
 import {
   locationsService,
   departmentsService,
+  systemsService,
+  machinesService,
 } from "@/services/reference-data";
+import { usersService } from "@/services/users";
 import { useAuthStore } from "@/store/auth";
 import { formatDate, formatDurationBetween } from "@/lib/utils";
 import {
@@ -78,6 +81,9 @@ const defaultFilters = {
   maintenanceType: "",
   locationId: "",
   departmentId: "",
+  engineerId: "",
+  systemId: "",
+  machineId: "",
   fromDate: "",
   toDate: "",
   openedBefore: "",
@@ -126,6 +132,9 @@ function parseFiltersFromSearchParams(
     maintenanceType: searchParams.get("maintenanceType") ?? "",
     locationId: searchParams.get("locationId") ?? "",
     departmentId: searchParams.get("departmentId") ?? "",
+    engineerId: searchParams.get("engineerId") ?? "",
+    systemId: searchParams.get("systemId") ?? "",
+    machineId: searchParams.get("machineId") ?? "",
     fromDate: searchParams.get("fromDate") ?? "",
     toDate: searchParams.get("toDate") ?? "",
     openedBefore: searchParams.get("openedBefore") ?? "",
@@ -142,6 +151,10 @@ export default function RequestsList() {
   const { toast } = useToast();
   const isEngineer = user?.role === Role.ENGINEER;
   const isAdmin = user?.role === Role.ADMIN;
+  const isConsultant = user?.role === Role.CONSULTANT;
+  const supportsEnhancedUx = Boolean(
+    user && [Role.ADMIN, Role.CONSULTANT, Role.ENGINEER].includes(user.role),
+  );
   const [now, setNow] = useState<Date>(new Date());
   const fromDateInputRef = useRef<HTMLInputElement | null>(null);
   const toDateInputRef = useRef<HTMLInputElement | null>(null);
@@ -182,6 +195,13 @@ export default function RequestsList() {
       if (nextFilters.departmentId)
         params.set("departmentId", nextFilters.departmentId);
       else params.delete("departmentId");
+      if (nextFilters.engineerId && !isEngineer)
+        params.set("engineerId", nextFilters.engineerId);
+      else params.delete("engineerId");
+      if (nextFilters.systemId) params.set("systemId", nextFilters.systemId);
+      else params.delete("systemId");
+      if (nextFilters.machineId) params.set("machineId", nextFilters.machineId);
+      else params.delete("machineId");
       if (nextFilters.fromDate) params.set("fromDate", nextFilters.fromDate);
       else params.delete("fromDate");
       if (nextFilters.toDate) params.set("toDate", nextFilters.toDate);
@@ -216,14 +236,14 @@ export default function RequestsList() {
     : null;
 
   useEffect(() => {
-    if (!isAdmin || !savedViewsKey) return;
+    if (!supportsEnhancedUx || !savedViewsKey) return;
     try {
       const stored = localStorage.getItem(savedViewsKey);
       setSavedViews(stored ? (JSON.parse(stored) as SavedRequestView[]) : []);
     } catch {
       setSavedViews([]);
     }
-  }, [isAdmin, savedViewsKey]);
+  }, [supportsEnhancedUx, savedViewsKey]);
 
   const persistViews = (views: SavedRequestView[]) => {
     setSavedViews(views);
@@ -292,6 +312,9 @@ export default function RequestsList() {
     filters.maintenanceType,
     filters.locationId,
     filters.departmentId,
+    filters.engineerId,
+    filters.systemId,
+    filters.machineId,
     filters.fromDate,
     filters.toDate,
     filters.openedBefore,
@@ -332,6 +355,9 @@ export default function RequestsList() {
         maintenanceType?: string;
         locationId?: string;
         departmentId?: string;
+        engineerId?: string;
+        systemId?: string;
+        machineId?: string;
         fromDate?: string;
         toDate?: string;
         openedBefore?: string;
@@ -359,6 +385,9 @@ export default function RequestsList() {
       if (filters.departmentId && filters.departmentId.trim() !== "") {
         cleanFilters.departmentId = filters.departmentId;
       }
+      if (!isEngineer && filters.engineerId) cleanFilters.engineerId = filters.engineerId;
+      if (filters.systemId) cleanFilters.systemId = filters.systemId;
+      if (filters.machineId) cleanFilters.machineId = filters.machineId;
 
       if (filters.fromDate && filters.fromDate.trim() !== "") {
         cleanFilters.fromDate = filters.fromDate;
@@ -385,6 +414,45 @@ export default function RequestsList() {
   const { data: departments } = useQuery({
     queryKey: ["departments"],
     queryFn: () => departmentsService.getAll(),
+  });
+
+  const scopedDepartments = useMemo(() => {
+    if (!departments) return [];
+    if (!isConsultant) return departments;
+    const allowed = new Set((user?.departmentIds || []).map((item) => item.id));
+    return departments.filter((item) => allowed.has(item.id));
+  }, [departments, isConsultant, user?.departmentIds]);
+
+  const { data: systems } = useQuery({
+    queryKey: ["systems", filters.departmentId],
+    queryFn: () =>
+      filters.departmentId
+        ? systemsService.getByDepartment(filters.departmentId)
+        : systemsService.getAll(),
+  });
+
+  const { data: machines } = useQuery({
+    queryKey: ["machines", filters.systemId],
+    queryFn: () => machinesService.getBySystem(filters.systemId),
+    enabled: Boolean(filters.systemId),
+  });
+
+  useEffect(() => {
+    if (filters.systemId && systems && !systems.some((item) => item.id === filters.systemId)) {
+      setFilters({ ...filters, systemId: "", machineId: "", page: 1 });
+    }
+  }, [systems]);
+
+  useEffect(() => {
+    if (filters.machineId && machines && !machines.some((item) => item.id === filters.machineId)) {
+      setFilters({ ...filters, machineId: "", page: 1 });
+    }
+  }, [machines]);
+
+  const { data: engineers } = useQuery({
+    queryKey: ["engineers", filters.departmentId],
+    queryFn: () => usersService.getEngineers(filters.departmentId || undefined),
+    enabled: !isEngineer,
   });
 
   const deleteMutation = useMutation({
@@ -496,7 +564,7 @@ export default function RequestsList() {
         )}
       </div>
 
-      {isAdmin && (
+      {supportsEnhancedUx && (
         <Card className="border-primary/20 bg-primary/[0.02]">
           <CardContent className="space-y-4 p-4">
             <div className="flex flex-wrap gap-2" aria-label="فلاتر سريعة">
@@ -651,18 +719,18 @@ export default function RequestsList() {
       )}
 
       {/* Filters */}
-      {(!isAdmin || advancedFiltersOpen) && (
+      {advancedFiltersOpen && (
       <Card id="advanced-request-filters" className="dark:border-border/50">
         <CardHeader className="pb-3 sm:pb-6">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <Filter className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             تصفية النتائج
-            {isAdmin && activeFilterCount > 0 && (
+            {supportsEnhancedUx && activeFilterCount > 0 && (
               <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
                 {activeFilterCount}
               </span>
             )}
-            {isAdmin && activeFilterCount > 0 && (
+            {supportsEnhancedUx && activeFilterCount > 0 && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -695,6 +763,9 @@ export default function RequestsList() {
                 <SelectItem value="all">جميع الحالات</SelectItem>
                 <SelectItem value={RequestStatus.IN_PROGRESS}>
                   قيد التنفيذ
+                </SelectItem>
+                <SelectItem value={RequestStatus.PENDING_CONSULTANT_APPROVAL}>
+                  بانتظار اعتماد الاستشاري
                 </SelectItem>
                 <SelectItem value={RequestStatus.COMPLETED}>منتهي</SelectItem>
                 <SelectItem value={RequestStatus.STOPPED}>متوقف</SelectItem>
@@ -761,11 +832,53 @@ export default function RequestsList() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">جميع الأقسام</SelectItem>
-                {departments?.map((dept) => (
+                {scopedDepartments.map((dept) => (
                   <SelectItem key={dept.id} value={dept.id}>
                     {dept.name}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+
+            {!isEngineer && (
+              <Select
+                value={filters.engineerId || "all"}
+                onValueChange={(value) =>
+                  setFilters({ ...filters, engineerId: value === "all" ? "" : value, page: 1 })
+                }
+              >
+                <SelectTrigger><SelectValue placeholder="المهندس" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">جميع المهندسين</SelectItem>
+                  {engineers?.map((engineer) => <SelectItem key={engineer.id} value={engineer.id}>{engineer.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+
+            <Select
+              value={filters.systemId || "all"}
+              onValueChange={(value) =>
+                setFilters({ ...filters, systemId: value === "all" ? "" : value, machineId: "", page: 1 })
+              }
+            >
+              <SelectTrigger><SelectValue placeholder="النظام" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">جميع الأنظمة</SelectItem>
+                {systems?.map((system) => <SelectItem key={system.id} value={system.id}>{system.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={filters.machineId || "all"}
+              disabled={!filters.systemId}
+              onValueChange={(value) =>
+                setFilters({ ...filters, machineId: value === "all" ? "" : value, page: 1 })
+              }
+            >
+              <SelectTrigger><SelectValue placeholder="الآلة" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">جميع الآلات</SelectItem>
+                {machines?.map((machine) => <SelectItem key={machine.id} value={machine.id}>{machine.name}</SelectItem>)}
               </SelectContent>
             </Select>
 

@@ -15,12 +15,12 @@ import { MaintenanceRequestsService } from "./maintenance-requests.service";
 import {
   CreateMaintenanceRequestDto,
   UpdateMaintenanceRequestDto,
-  StopRequestDto,
-  AddNoteDto,
   AddHealthSafetyNoteDto,
   AddProjectManagerNoteDto,
   FilterRequestsDto,
   CompleteRequestDto,
+  AddRequestNoteDto,
+  RejectCompletionDto,
 } from "./dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -119,46 +119,6 @@ export class MaintenanceRequestsController {
     };
   }
 
-  @Patch(":id/stop")
-  @UseGuards(RolesGuard)
-  @Roles(Role.ENGINEER)
-  async stop(
-    @Param("id") id: string,
-    @Body() stopDto: StopRequestDto,
-    @CurrentUser() user: CurrentUserData
-  ) {
-    const request = await this.maintenanceRequestsService.stop(id, stopDto, {
-      userId: user.userId,
-      name: user.name,
-    });
-    return {
-      data: request,
-      message: "Maintenance request stopped successfully",
-    };
-  }
-
-  @Patch(":id/note")
-  @UseGuards(RolesGuard)
-  @Roles(Role.CONSULTANT, Role.MAINTENANCE_MANAGER, Role.ADMIN)
-  async addNote(
-    @Param("id") id: string,
-    @Body() noteDto: AddNoteDto,
-    @CurrentUser() user: CurrentUserData
-  ) {
-    const request = await this.maintenanceRequestsService.addConsultantNote(
-      id,
-      noteDto,
-      {
-        userId: user.userId,
-        name: user.name,
-      }
-    );
-    return {
-      data: request,
-      message: "Note added successfully",
-    };
-  }
-
   @Patch(":id/health-safety-note")
   @UseGuards(RolesGuard)
   @Roles(Role.MAINTENANCE_SAFETY_MONITOR, Role.ADMIN)
@@ -203,15 +163,15 @@ export class MaintenanceRequestsController {
     };
   }
 
-  @Patch(":id/complete")
+  @Patch(":id/submit-completion")
   @UseGuards(RolesGuard)
   @Roles(Role.ENGINEER)
-  async complete(
+  async submitCompletion(
     @Param("id") id: string,
     @Body() completeDto: CompleteRequestDto,
     @CurrentUser() user: CurrentUserData
   ) {
-    const request = await this.maintenanceRequestsService.complete(
+    const request = await this.maintenanceRequestsService.submitCompletion(
       id,
       completeDto,
       {
@@ -221,7 +181,65 @@ export class MaintenanceRequestsController {
     );
     return {
       data: request,
-      message: "Maintenance request completed successfully",
+      message: "Completion submitted for consultant approval",
+    };
+  }
+
+  @Post(":id/notes")
+  @UseGuards(RolesGuard)
+  @Roles(
+    Role.ENGINEER,
+    Role.CONSULTANT,
+    Role.MAINTENANCE_MANAGER,
+    Role.ADMIN,
+  )
+  async addRequestNote(
+    @Param("id") id: string,
+    @Body() noteDto: AddRequestNoteDto,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    return {
+      data: await this.maintenanceRequestsService.addRequestNote(id, noteDto, {
+        userId: user.userId,
+        name: user.name,
+        role: user.role,
+      }),
+      message: "Request note added successfully",
+    };
+  }
+
+  @Patch(":id/approve-completion")
+  @UseGuards(RolesGuard)
+  @Roles(Role.CONSULTANT)
+  async approveCompletion(
+    @Param("id") id: string,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    return {
+      data: await this.maintenanceRequestsService.approveCompletion(id, {
+        userId: user.userId,
+        name: user.name,
+        role: user.role,
+      }),
+      message: "Completion approved successfully",
+    };
+  }
+
+  @Patch(":id/reject-completion")
+  @UseGuards(RolesGuard)
+  @Roles(Role.CONSULTANT)
+  async rejectCompletion(
+    @Param("id") id: string,
+    @Body() dto: RejectCompletionDto,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    return {
+      data: await this.maintenanceRequestsService.rejectCompletion(id, dto, {
+        userId: user.userId,
+        name: user.name,
+        role: user.role,
+      }),
+      message: "Completion returned to engineer",
     };
   }
 

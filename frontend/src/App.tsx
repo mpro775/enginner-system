@@ -15,6 +15,7 @@ import {
   DepartmentsPage,
   SystemsPage,
   MachinesPage,
+  FloorsPage,
   AuditLogs,
 } from "@/pages/admin";
 import ScheduledTasksManagement from "@/pages/admin/ScheduledTasksManagement";
@@ -55,8 +56,8 @@ function App() {
 
           {/* Requests */}
           {/* Complaints */}
-          <Route path="complaints" element={<ComplaintsList />} />
-          <Route path="complaints/:id" element={<ComplaintDetails />} />
+          <Route path="complaints" element={<ProtectedRoute allowedRoles={[Role.ADMIN, Role.CONSULTANT, Role.ENGINEER, Role.MAINTENANCE_MANAGER]}><ComplaintsList /></ProtectedRoute>} />
+          <Route path="complaints/:id" element={<ProtectedRoute allowedRoles={[Role.ADMIN, Role.CONSULTANT, Role.ENGINEER, Role.MAINTENANCE_MANAGER]}><ComplaintDetails /></ProtectedRoute>} />
 
           {/* Requests */}
           <Route path="requests" element={<RequestsList />} />
@@ -150,6 +151,14 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={[Role.ADMIN]}>
                 <LocationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin/floors"
+            element={
+              <ProtectedRoute allowedRoles={[Role.ADMIN]}>
+                <FloorsPage />
               </ProtectedRoute>
             }
           />

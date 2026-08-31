@@ -160,6 +160,7 @@ function generateReportContent(data: RequestReportData[], stats: any): string {
   // Status translation map
   const statusMap: Record<string, string> = {
     in_progress: "قيد التنفيذ",
+    pending_consultant_approval: "بانتظار اعتماد الاستشاري",
     completed: "مكتملة",
     stopped: "متوقفة",
     pending: "معلقة",
@@ -217,6 +218,7 @@ function generateSingleRequestContent(request: MaintenanceRequestDocument): stri
   // Status translation map
   const statusMap: Record<string, string> = {
     in_progress: "قيد التنفيذ",
+    pending_consultant_approval: "بانتظار اعتماد الاستشاري",
     completed: "مكتملة",
     stopped: "متوقفة",
     pending: "معلقة",

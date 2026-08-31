@@ -74,8 +74,15 @@ export function NotificationDropdown() {
         return <XCircle className="h-4 w-4 text-orange-500" />;
       case "request:updated":
         return <Clock className="h-4 w-4 text-yellow-500" />;
+      case "request:completion-pending":
+        return <Clock className="h-4 w-4 text-blue-500" />;
+      case "request:completion-approved":
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+      case "request:completion-rejected":
+        return <XCircle className="h-4 w-4 text-red-500" />;
       case "complaint:created":
       case "complaint:resolved":
+      case "complaint:transferred":
         return <AlertCircle className="h-4 w-4 text-red-500" />;
       case "task:created":
       case "task:overdue":
@@ -96,10 +103,18 @@ export function NotificationDropdown() {
         return "تم إيقاف الطلب";
       case "request:updated":
         return "تم تحديث الطلب";
+      case "request:completion-pending":
+        return "بانتظار الاعتماد";
+      case "request:completion-approved":
+        return "تم اعتماد الإكمال";
+      case "request:completion-rejected":
+        return "أُعيد للمهندس";
       case "complaint:created":
         return "بلاغ جديد";
       case "complaint:resolved":
         return "تم حل البلاغ";
+      case "complaint:transferred":
+        return "تم تحويل البلاغ";
       case "task:created":
         return "مهمة جديدة";
       case "task:overdue":

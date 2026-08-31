@@ -8,6 +8,7 @@ import { NotificationsController } from './notifications.controller';
 import { MaintenanceRequest, MaintenanceRequestSchema } from '../maintenance-requests/schemas/maintenance-request.schema';
 import { ScheduledTask, ScheduledTaskSchema } from '../scheduled-tasks/schemas/scheduled-task.schema';
 import { Complaint, ComplaintSchema } from '../complaints/schemas/complaint.schema';
+import { User, UserSchema } from '../users/schemas/user.schema';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { Complaint, ComplaintSchema } from '../complaints/schemas/complaint.sche
       { name: MaintenanceRequest.name, schema: MaintenanceRequestSchema },
       { name: ScheduledTask.name, schema: ScheduledTaskSchema },
       { name: Complaint.name, schema: ComplaintSchema },
+      { name: User.name, schema: UserSchema },
     ]),
   ],
   providers: [NotificationsGateway, NotificationsService],
@@ -28,7 +30,6 @@ import { Complaint, ComplaintSchema } from '../complaints/schemas/complaint.sche
   exports: [NotificationsGateway],
 })
 export class NotificationsModule {}
-
 
 
 

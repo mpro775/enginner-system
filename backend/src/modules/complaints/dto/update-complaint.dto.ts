@@ -1,39 +1,7 @@
-import {
-  IsEnum,
-  IsString,
-  IsOptional,
-} from "class-validator";
-import { ComplaintSubmissionLanguage } from "../../../common/enums";
+import { IsString, IsOptional } from "class-validator";
 
 export class UpdateComplaintDto {
-  @IsOptional()
-  @IsEnum(ComplaintSubmissionLanguage)
-  submissionLanguage?: ComplaintSubmissionLanguage;
-
-  @IsOptional()
-  @IsString()
-  reporterNameAr?: string;
-
-  @IsOptional()
-  @IsString()
-  reporterNameEn?: string;
-
-  @IsOptional()
-  @IsString()
-  locationAr?: string;
-
-  @IsOptional()
-  @IsString()
-  locationEn?: string;
-
-  @IsOptional()
-  @IsString()
-  descriptionAr?: string;
-
-  @IsOptional()
-  @IsString()
-  descriptionEn?: string;
-
+  /** Legacy operational notes only. Original complaint source fields are immutable. */
   @IsOptional()
   @IsString()
   notesAr?: string;
@@ -42,5 +10,4 @@ export class UpdateComplaintDto {
   @IsString()
   notesEn?: string;
 }
-
 

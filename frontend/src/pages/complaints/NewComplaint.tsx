@@ -3,81 +3,55 @@ import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import {
-  ArrowRight,
-  CheckCircle2,
-  Loader2,
-  Monitor,
-  Moon,
-  Sun,
-} from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowRight, CheckCircle2, Loader2, Monitor, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { complaintsService } from "@/services/complaints";
 import { useTheme } from "@/hooks/useTheme";
 import type { CreateComplaintForm } from "@/types";
 
 type ComplaintLanguage = "ar" | "en";
-
 type ComplaintUiForm = {
   reporterName: string;
-  location: string;
+  locationId: string;
+  floorId: string;
+  detailedLocation: string;
+  departmentId: string;
+  contactPhone?: string;
   description: string;
   notes?: string;
 };
 
+const isSaudiMobile = (value: string) => {
+  const compact = value.replace(/[\s-]/g, "");
+  return /^(?:05\d{8}|5\d{8}|9665\d{8}|\+9665\d{8})$/.test(compact);
+};
+
 const createComplaintSchema = (language: ComplaintLanguage) =>
   z.object({
-    reporterName: z
-      .string()
-      .trim()
-      .min(
-        2,
-        language === "ar"
-          ? "اسم مقدم البلاغ يجب أن يكون حرفين على الأقل"
-          : "Reporter name must be at least 2 characters"
-      ),
-    location: z
-      .string()
-      .trim()
-      .min(
-        2,
-        language === "ar"
-          ? "الموقع يجب أن يكون حرفين على الأقل"
-          : "Location must be at least 2 characters"
-      ),
-    description: z
-      .string()
-      .trim()
-      .min(
-        10,
-        language === "ar"
-          ? "وصف البلاغ يجب أن يكون 10 أحرف على الأقل"
-          : "Description must be at least 10 characters"
-      ),
+    reporterName: z.string().trim().min(2, language === "ar" ? "اسم مقدم البلاغ مطلوب" : "Reporter name is required"),
+    locationId: z.string().min(1, language === "ar" ? "اختر الموقع" : "Select a location"),
+    floorId: z.string().min(1, language === "ar" ? "اختر الطابق" : "Select a floor"),
+    detailedLocation: z.string().trim().min(2, language === "ar" ? "أدخل الموقع التفصيلي" : "Enter the detailed location"),
+    departmentId: z.string().min(1, language === "ar" ? "اختر القسم" : "Select a department"),
+    contactPhone: z.string().trim().refine((value) => !value || isSaudiMobile(value), language === "ar" ? "رقم الجوال السعودي غير صالح" : "Invalid Saudi mobile number").optional(),
+    description: z.string().trim().min(10, language === "ar" ? "وصف البلاغ يجب أن يكون 10 أحرف على الأقل" : "Description must be at least 10 characters"),
     notes: z.string().trim().optional(),
   });
 
 const emptyForm: ComplaintUiForm = {
   reporterName: "",
-  location: "",
+  locationId: "",
+  floorId: "",
+  detailedLocation: "",
+  departmentId: "",
+  contactPhone: "",
   description: "",
   notes: "",
 };
@@ -86,404 +60,160 @@ export default function NewComplaint() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const [language, setLanguage] = useState<ComplaintLanguage>("ar");
-  const [pendingLanguage, setPendingLanguage] =
-    useState<ComplaintLanguage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [successDialog, setSuccessDialog] = useState(false);
   const [complaintCode, setComplaintCode] = useState("");
+  const isArabic = language === "ar";
 
   const {
     register,
     handleSubmit,
-    formState: { errors },
-    getValues,
+    setValue,
+    watch,
     reset,
+    formState: { errors },
   } = useForm<ComplaintUiForm>({
     resolver: zodResolver(createComplaintSchema(language)),
     defaultValues: emptyForm,
   });
 
-  const isArabic = language === "ar";
+  const locationId = watch("locationId");
+  const floorId = watch("floorId");
+  const departmentId = watch("departmentId");
 
-  const getThemeIcon = () => {
-    switch (theme) {
-      case "light":
-        return <Sun className="h-4 w-4" />;
-      case "dark":
-        return <Moon className="h-4 w-4" />;
-      default:
-        return <Monitor className="h-4 w-4" />;
-    }
-  };
+  const { data: referenceData, isLoading: loadingReferences } = useQuery({
+    queryKey: ["public-complaint-reference-data"],
+    queryFn: complaintsService.getPublicReferenceData,
+  });
 
-  const changeLanguage = (nextLanguage: ComplaintLanguage) => {
-    reset(emptyForm);
-    setError("");
-    setLanguage(nextLanguage);
-    setPendingLanguage(null);
-  };
-
-  const requestLanguageChange = (nextLanguage: ComplaintLanguage) => {
-    if (nextLanguage === language) return;
-
-    const hasEnteredData = Object.values(getValues()).some(
-      (value) => typeof value === "string" && value.trim().length > 0
-    );
-
-    if (hasEnteredData) {
-      setPendingLanguage(nextLanguage);
-      return;
-    }
-
-    changeLanguage(nextLanguage);
-  };
+  const { data: floors, isFetching: loadingFloors } = useQuery({
+    queryKey: ["public-complaint-floors", locationId],
+    queryFn: () => complaintsService.getPublicFloors(locationId),
+    enabled: Boolean(locationId),
+  });
 
   const onSubmit = async (data: ComplaintUiForm) => {
     try {
       setIsSubmitting(true);
       setError("");
-
-      const notes = data.notes?.trim();
-      const payload: CreateComplaintForm = isArabic
-        ? {
-            submissionLanguage: "ar",
-            reporterNameAr: data.reporterName.trim(),
-            locationAr: data.location.trim(),
-            descriptionAr: data.description.trim(),
-            ...(notes ? { notesAr: notes } : {}),
-          }
-        : {
-            submissionLanguage: "en",
-            reporterNameEn: data.reporterName.trim(),
-            locationEn: data.location.trim(),
-            descriptionEn: data.description.trim(),
-            ...(notes ? { notesEn: notes } : {}),
-          };
-
+      const payload: CreateComplaintForm = {
+        submissionLanguage: language,
+        locationId: data.locationId,
+        floorId: data.floorId,
+        detailedLocation: data.detailedLocation.trim(),
+        departmentId: data.departmentId,
+        ...(data.contactPhone?.trim() ? { contactPhone: data.contactPhone.trim() } : {}),
+        ...(isArabic
+          ? {
+              reporterNameAr: data.reporterName.trim(),
+              descriptionAr: data.description.trim(),
+              ...(data.notes?.trim() ? { notesAr: data.notes.trim() } : {}),
+            }
+          : {
+              reporterNameEn: data.reporterName.trim(),
+              descriptionEn: data.description.trim(),
+              ...(data.notes?.trim() ? { notesEn: data.notes.trim() } : {}),
+            }),
+      };
       const complaint = await complaintsService.create(payload);
       setComplaintCode(complaint.complaintCode);
       setSuccessDialog(true);
       reset(emptyForm);
-    } catch (err: unknown) {
-      const requestError = err as {
-        response?: { data?: { message?: string | string[] } };
-      };
-      const message = requestError.response?.data?.message;
-      setError(
-        Array.isArray(message)
-          ? message.join("، ")
-          : message ||
-              (isArabic
-                ? "فشل تقديم البلاغ"
-                : "Failed to submit the complaint")
-      );
+    } catch (err: any) {
+      const message = err?.response?.data?.message;
+      setError(Array.isArray(message) ? message.join("، ") : message || (isArabic ? "فشل تقديم البلاغ" : "Failed to submit the complaint"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const themeIcon = theme === "light" ? <Sun className="h-4 w-4" /> : theme === "dark" ? <Moon className="h-4 w-4" /> : <Monitor className="h-4 w-4" />;
+
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-background py-6">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary/90 to-primary dark:from-background dark:via-background/95 dark:to-background" />
-      <div className="absolute inset-0 opacity-10 dark:opacity-5">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-foreground rounded-full filter blur-3xl -translate-x-1/2 -translate-y-1/2" />
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-foreground rounded-full filter blur-3xl translate-x-1/2 translate-y-1/2" />
-      </div>
-
-      <Button
-        variant="ghost"
-        size="icon"
-        className="absolute top-4 left-4 z-20 text-white/90 hover:text-white hover:bg-white/10 dark:text-white/80 dark:hover:text-white"
-        onClick={toggleTheme}
-        title={
-          theme === "light"
-            ? "الوضع الفاتح"
-            : theme === "dark"
-              ? "الوضع الداكن"
-              : "تلقائي (النظام)"
-        }
-      >
-        {getThemeIcon()}
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="icon"
-        className="absolute top-4 right-4 z-20 text-white/90 hover:text-white hover:bg-white/10 dark:text-white/80 dark:hover:text-white"
-        onClick={() => navigate("/")}
-        title={isArabic ? "العودة للرئيسية" : "Back to home"}
-        aria-label={isArabic ? "العودة للرئيسية" : "Back to home"}
-      >
-        <ArrowRight className="h-4 w-4" />
-      </Button>
-
-      <div className="w-full max-w-2xl relative z-10 p-4">
-        <div className="flex flex-col items-center mb-8">
-          <p className="text-white/90 dark:text-white/85 text-base font-semibold mb-1">
-            المملكة العربية السعودية
-          </p>
-          <div className="flex h-24 w-auto items-center justify-center mb-4">
-            <img
-              src="/assets/logo.png"
-              alt="جامعة الملك سعود"
-              className="h-24 w-auto object-contain"
-            />
-          </div>
-          <p className="text-white/90 dark:text-white/85 text-sm">
-            نائب رئيس الجامعة للمشاريع
-          </p>
-          <p className="text-white/80 dark:text-white/75 text-xs mt-1">
-            إدارة التشغيل والصيانة لكليات الجامعة - فرع المزاحمية
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-primary via-primary/90 to-primary px-4 py-8 dark:from-background dark:via-background/95 dark:to-background">
+      <Button variant="ghost" size="icon" className="fixed left-4 top-4 text-white" onClick={toggleTheme}>{themeIcon}</Button>
+      <Button variant="ghost" size="icon" className="fixed right-4 top-4 text-white" onClick={() => navigate("/")}><ArrowRight className="h-4 w-4" /></Button>
+      <div className="mx-auto max-w-2xl space-y-5">
+        <div className="text-center text-white">
+          <img src="/assets/logo.png" alt="جامعة الملك سعود" className="mx-auto h-24 w-auto" />
+          <p className="mt-2 text-sm">إدارة التشغيل والصيانة لكليات الجامعة - فرع المزاحمية</p>
         </div>
-
-        <Card className="border-0 shadow-2xl bg-card/95 dark:bg-card/90 backdrop-blur-sm">
-          <CardHeader className="space-y-1 text-center pb-4">
-            <p className="text-sm text-primary/80 mb-1">
-              نظام إدارة طلبات الصيانة
-            </p>
-            <CardTitle className="text-2xl text-primary">
-              {isArabic ? "تقديم بلاغ" : "Submit a Complaint"}
-            </CardTitle>
-            <CardDescription>
-              {isArabic
-                ? "يرجى ملء جميع الحقول المطلوبة لتقديم البلاغ"
-                : "Complete the required fields to submit your complaint"}
-            </CardDescription>
+        <Card className="border-0 bg-card/95 shadow-2xl backdrop-blur-sm">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl text-primary">{isArabic ? "تقديم بلاغ" : "Submit a Complaint"}</CardTitle>
+            <CardDescription>{isArabic ? "اختر بيانات الموقع والقسم ثم صف سبب البلاغ" : "Select the location and department, then describe the issue"}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="mb-5 rounded-lg border bg-muted/30 p-4 text-center">
-              <p className="font-semibold text-foreground">
-                اختر لغة تقديم البلاغ / Choose complaint language
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {isArabic
-                  ? "يمكنك تقديم البلاغ بلغة واحدة فقط، ولا تحتاج إلى كتابة نفس المعلومات مرتين."
-                  : "Submit the complaint in one language only; you do not need to enter the same information twice."}
-              </p>
-              <div
-                className="mt-4 grid grid-cols-2 gap-2"
-                role="group"
-                aria-label="لغة تقديم البلاغ"
-              >
-                <Button
-                  type="button"
-                  variant={isArabic ? "default" : "outline"}
-                  className="min-h-11"
-                  aria-pressed={isArabic}
-                  onClick={() => requestLanguageChange("ar")}
-                >
-                  العربية {isArabic && <span aria-hidden="true">✓</span>}
-                </Button>
-                <Button
-                  type="button"
-                  variant={!isArabic ? "default" : "outline"}
-                  className="min-h-11"
-                  aria-pressed={!isArabic}
-                  onClick={() => requestLanguageChange("en")}
-                >
-                  English {!isArabic && <span aria-hidden="true">✓</span>}
-                </Button>
-              </div>
+            <div className="mb-5 grid grid-cols-2 gap-2 rounded-lg border bg-muted/30 p-3">
+              <Button type="button" variant={isArabic ? "default" : "outline"} onClick={() => { setLanguage("ar"); reset(emptyForm); }}>العربية</Button>
+              <Button type="button" variant={!isArabic ? "default" : "outline"} onClick={() => { setLanguage("en"); reset(emptyForm); }}>English</Button>
             </div>
-
-            <form
-              onSubmit={handleSubmit(onSubmit)}
-              className="space-y-4"
-              dir={isArabic ? "rtl" : "ltr"}
-              lang={language}
-            >
-              {error && (
-                <div
-                  className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
-                  role="alert"
-                >
-                  {error}
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="reporterName" className="text-primary">
-                  {isArabic ? "اسم مقدم البلاغ" : "Reporter name"}{" "}
-                  <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="reporterName"
-                  autoComplete="name"
-                  placeholder={
-                    isArabic ? "مثال: أحمد محمد العلي" : "Example: Ahmed Al-Ali"
-                  }
-                  {...register("reporterName")}
-                  className={errors.reporterName ? "border-destructive" : ""}
-                />
-                {errors.reporterName && (
-                  <p className="text-xs text-destructive">
-                    {errors.reporterName.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="location" className="text-primary">
-                  {isArabic ? "الموقع" : "Location"}{" "}
-                  <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="location"
-                  placeholder={
-                    isArabic
-                      ? "مثال: مبنى كلية الهندسة - الطابق الثاني - مكتب 205"
-                      : "Example: Engineering College - 2nd Floor - Office 205"
-                  }
-                  {...register("location")}
-                  className={errors.location ? "border-destructive" : ""}
-                />
-                {errors.location && (
-                  <p className="text-xs text-destructive">
-                    {errors.location.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description" className="text-primary">
-                  {isArabic ? "وصف البلاغ" : "Complaint description"}{" "}
-                  <span className="text-destructive">*</span>
-                </Label>
-                <Textarea
-                  id="description"
-                  rows={5}
-                  placeholder={
-                    isArabic
-                      ? "صف المشكلة وموقعها وتأثيرها بوضوح"
-                      : "Clearly describe the issue, its location, and its impact"
-                  }
-                  {...register("description")}
-                  className={errors.description ? "border-destructive" : ""}
-                />
-                {errors.description && (
-                  <p className="text-xs text-destructive">
-                    {errors.description.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="notes" className="text-primary">
-                  {isArabic
-                    ? "ملاحظات / تفاصيل إضافية (اختياري)"
-                    : "Notes / Additional details (optional)"}
-                </Label>
-                <Textarea
-                  id="notes"
-                  rows={3}
-                  placeholder={
-                    isArabic
-                      ? "أي معلومات إضافية قد تساعد فريق الصيانة"
-                      : "Any additional information that may help the maintenance team"
-                  }
-                  {...register("notes")}
-                />
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-2.5"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2
-                      className={`${isArabic ? "ml-2" : "mr-2"} h-4 w-4 animate-spin`}
-                    />
-                    {isArabic ? "جاري تقديم البلاغ..." : "Submitting..."}
-                  </>
-                ) : isArabic ? (
-                  "تقديم البلاغ"
-                ) : (
-                  "Submit complaint"
-                )}
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" dir={isArabic ? "rtl" : "ltr"}>
+              {error && <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
+              <Field label={isArabic ? "الموقع" : "Location"} error={errors.locationId?.message}>
+                <Select value={locationId} onValueChange={(value) => { setValue("locationId", value, { shouldValidate: true }); setValue("floorId", ""); }} disabled={loadingReferences}>
+                  <SelectTrigger><SelectValue placeholder={isArabic ? "اختر الموقع" : "Select location"} /></SelectTrigger>
+                  <SelectContent>{referenceData?.locations.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </Field>
+              <Field label={isArabic ? "الطابق" : "Floor"} error={errors.floorId?.message}>
+                <Select value={floorId} onValueChange={(value) => setValue("floorId", value, { shouldValidate: true })} disabled={!locationId || loadingFloors}>
+                  <SelectTrigger><SelectValue placeholder={isArabic ? "اختر الطابق" : "Select floor"} /></SelectTrigger>
+                  <SelectContent>{floors?.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </Field>
+              <Field label={isArabic ? "الموقع التفصيلي" : "Detailed location"} error={errors.detailedLocation?.message}>
+                <Input {...register("detailedLocation")} placeholder={isArabic ? "المبنى، الغرفة أو أقرب معلم" : "Building, room, or nearest landmark"} />
+              </Field>
+              <Field label={isArabic ? "القسم" : "Department"} error={errors.departmentId?.message}>
+                <Select value={departmentId} onValueChange={(value) => setValue("departmentId", value, { shouldValidate: true })} disabled={loadingReferences}>
+                  <SelectTrigger><SelectValue placeholder={isArabic ? "اختر القسم" : "Select department"} /></SelectTrigger>
+                  <SelectContent>{referenceData?.departments.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </Field>
+              <Field label={isArabic ? "رقم التواصل (اختياري)" : "Contact number (optional)"} error={errors.contactPhone?.message}>
+                <Input {...register("contactPhone")} inputMode="tel" dir="ltr" placeholder="05XXXXXXXX" />
+              </Field>
+              <Field label={isArabic ? "اسم مقدم البلاغ" : "Reporter name"} error={errors.reporterName?.message}>
+                <Input {...register("reporterName")} autoComplete="name" />
+              </Field>
+              <Field label={isArabic ? "وصف البلاغ" : "Complaint description"} error={errors.description?.message}>
+                <Textarea {...register("description")} rows={5} placeholder={isArabic ? "صف سبب البلاغ بوضوح" : "Clearly describe the reason for the complaint"} />
+              </Field>
+              <Field label={isArabic ? "ملاحظات مقدم البلاغ (اختياري)" : "Reporter notes (optional)"}>
+                <Textarea {...register("notes")} rows={3} />
+              </Field>
+              <Button type="submit" className="w-full" disabled={isSubmitting || loadingReferences}>
+                {isSubmitting && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                {isArabic ? "تقديم البلاغ" : "Submit complaint"}
               </Button>
             </form>
           </CardContent>
         </Card>
-
-        <p className="text-center text-white/70 dark:text-white/60 text-xs mt-3">
-          © 2025 جامعة الملك سعود - جميع الحقوق محفوظة
-        </p>
       </div>
-
-      <Dialog
-        open={pendingLanguage !== null}
-        onOpenChange={(open) => !open && setPendingLanguage(null)}
-      >
-        <DialogContent dir={isArabic ? "rtl" : "ltr"} lang={language}>
-          <DialogHeader>
-            <DialogTitle>
-              {isArabic ? "تغيير لغة البلاغ" : "Change complaint language"}
-            </DialogTitle>
-            <DialogDescription>
-              {isArabic
-                ? "تغيير اللغة سيمسح البيانات التي أدخلتها في النموذج الحالي. هل تريد المتابعة؟"
-                : "Changing the language will clear the data entered in the current form. Continue?"}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setPendingLanguage(null)}>
-              {isArabic ? "إلغاء" : "Cancel"}
-            </Button>
-            <Button
-              onClick={() =>
-                pendingLanguage && changeLanguage(pendingLanguage)
-              }
-            >
-              {isArabic ? "تغيير اللغة" : "Change language"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={successDialog} onOpenChange={setSuccessDialog}>
-        <DialogContent dir={isArabic ? "rtl" : "ltr"} lang={language}>
+        <DialogContent dir={isArabic ? "rtl" : "ltr"}>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-green-500" />
-              {isArabic
-                ? "تم تقديم البلاغ بنجاح"
-                : "Complaint submitted successfully"}
-            </DialogTitle>
-            <DialogDescription className="pt-4 text-start">
-              <span className="block text-lg font-semibold text-foreground mb-2">
-                {isArabic ? "رقم البلاغ:" : "Complaint code:"}{" "}
-                <span className="text-primary">{complaintCode}</span>
-              </span>
-              {isArabic
-                ? "تم استلام بلاغك وسيتم متابعته من قبل الفريق المختص."
-                : "Your complaint was received and will be reviewed by the responsible team."}
-            </DialogDescription>
+            <DialogTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" />{isArabic ? "تم تقديم البلاغ بنجاح" : "Complaint submitted successfully"}</DialogTitle>
+            <DialogDescription className="pt-4 text-start">{isArabic ? "رقم البلاغ" : "Complaint code"}: <strong className="text-primary">{complaintCode}</strong></DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSuccessDialog(false);
-                navigate("/");
-              }}
-            >
-              {isArabic ? "العودة للرئيسية" : "Back to home"}
-            </Button>
-            <Button
-              onClick={() => {
-                setSuccessDialog(false);
-                reset(emptyForm);
-              }}
-            >
-              {isArabic ? "تقديم بلاغ آخر" : "Submit another complaint"}
-            </Button>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => navigate("/")}>{isArabic ? "العودة للرئيسية" : "Back home"}</Button>
+            <Button onClick={() => { setSuccessDialog(false); reset(emptyForm); }}>{isArabic ? "تقديم بلاغ آخر" : "Submit another"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <Label className="text-primary">{label} <span className="text-destructive">*</span></Label>
+      {children}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }

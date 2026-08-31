@@ -3,6 +3,7 @@ import {
   IsString,
   IsEnum,
   IsInt,
+  IsMongoId,
   Min,
 } from "class-validator";
 import { Type } from "class-transformer";
@@ -20,6 +21,10 @@ export class FilterComplaintsDto {
   @IsOptional()
   @IsString()
   assignedEngineerId?: string;
+
+  @IsOptional()
+  @IsMongoId()
+  departmentId?: string;
 
   @IsOptional()
   @Type(() => Number)
@@ -41,7 +46,6 @@ export class FilterComplaintsDto {
   @IsString()
   sortOrder?: "asc" | "desc";
 }
-
 
 
 

@@ -10,11 +10,12 @@ import {
   CreateMaintenanceRequestDto,
   UpdateMaintenanceRequestDto,
   StopRequestDto,
-  AddNoteDto,
   AddHealthSafetyNoteDto,
   AddProjectManagerNoteDto,
   FilterRequestsDto,
   CompleteRequestDto,
+  AddRequestNoteDto,
+  RejectCompletionDto,
 } from "./dto";
 import {
   EntityNotFoundException,
@@ -38,6 +39,7 @@ import { NotificationsGateway } from "../notifications/notifications.gateway";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
 import { ScheduledTasksService } from "../scheduled-tasks/scheduled-tasks.service";
 import { User, UserDocument } from "../users/schemas/user.schema";
+import { System, SystemDocument } from "../systems/schemas/system.schema";
 
 @Injectable()
 export class MaintenanceRequestsService {
@@ -48,6 +50,8 @@ export class MaintenanceRequestsService {
     private machineModel: Model<MachineDocument>,
     @InjectModel(User.name)
     private userModel: Model<UserDocument>,
+    @InjectModel(System.name)
+    private systemModel: Model<SystemDocument>,
     @Inject(forwardRef(() => NotificationsGateway))
     private notificationsGateway: NotificationsGateway,
     @Inject(forwardRef(() => AuditLogsService))
@@ -60,6 +64,37 @@ export class MaintenanceRequestsService {
     createDto: CreateMaintenanceRequestDto,
     user: { userId: string; name: string },
   ): Promise<MaintenanceRequestDocument> {
+    const engineer = await this.userModel
+      .findOne({
+        _id: user.userId,
+        role: Role.ENGINEER,
+        isActive: true,
+        deletedAt: null,
+        departmentIds: new Types.ObjectId(createDto.departmentId),
+      })
+      .select("_id");
+    if (!engineer) {
+      throw new ForbiddenAccessException(
+        "You can only create requests in your assigned departments",
+      );
+    }
+    const [system, selectedMachine] = await Promise.all([
+      this.systemModel.exists({
+        _id: createDto.systemId,
+        departmentIds: new Types.ObjectId(createDto.departmentId),
+        isActive: true,
+        deletedAt: null,
+      }),
+      this.machineModel.findOne({
+        _id: createDto.machineId,
+        systemId: new Types.ObjectId(createDto.systemId),
+        isActive: true,
+        deletedAt: null,
+      }),
+    ]);
+    if (!system) throw new EntityNotFoundException("System", createDto.systemId);
+    if (!selectedMachine) throw new EntityNotFoundException("Machine", createDto.machineId);
+
     // Validate components if maintainAllComponents is false
     if (createDto.maintainAllComponents === false) {
       if (
@@ -72,7 +107,7 @@ export class MaintenanceRequestsService {
       }
 
       // Verify that the machine exists and has the selected components
-      const machine = await this.machineModel.findById(createDto.machineId);
+      const machine = selectedMachine;
       if (!machine) {
         throw new EntityNotFoundException("Machine", createDto.machineId);
       }
@@ -115,12 +150,23 @@ export class MaintenanceRequestsService {
       machineId: new Types.ObjectId(createDto.machineId),
     };
 
+    const { engineerNotes, ...requestData } = createDto;
+    const initialNote = engineerNotes?.trim();
     const request = new this.requestModel({
-      ...createDto,
+      ...requestData,
       ...referenceIds,
       maintainAllComponents,
       requestCode,
       engineerId,
+      requestNotes: initialNote
+        ? [{
+            body: initialNote,
+            authorId: engineerId,
+            authorName: user.name,
+            authorRole: Role.ENGINEER,
+            createdAt: new Date(),
+          }]
+        : [],
       status: RequestStatus.IN_PROGRESS,
       openedAt: new Date(),
     });
@@ -136,8 +182,13 @@ export class MaintenanceRequestsService {
       );
     }
 
-    // Send real-time notification
-    this.notificationsGateway.notifyRequestCreated(populated);
+    // Send real-time notification only to the engineer and scoped operational users.
+    const targetIds = await this.getDepartmentNotificationUserIds(
+      referenceIds.departmentId.toString(),
+      [Role.CONSULTANT, Role.MAINTENANCE_MANAGER, Role.ADMIN],
+    );
+    targetIds.push(user.userId);
+    this.notificationsGateway.notifyRequestCreated(populated, targetIds);
 
     // Log the action
     await this.auditLogsService.create({
@@ -172,9 +223,11 @@ export class MaintenanceRequestsService {
         .populate("consultantId", "name email")
         .populate("healthSafetySupervisorId", "name email")
         .populate("locationId", "name")
+        .populate("floorId", "name")
         .populate("departmentId", "name")
         .populate("systemId", "name")
         .populate("machineId", "name components description")
+        .populate("complaintId", "complaintCode reporterNameAr reporterNameEn")
         .populate("deletedBy", "name email")
         .sort(sortOptions)
         .skip(skip)
@@ -207,6 +260,17 @@ export class MaintenanceRequestsService {
       throw new ForbiddenAccessException("You can only view your own requests");
     }
 
+    if (user.role === Role.CONSULTANT) {
+      const departmentId = (request.departmentId as any)?._id?.toString?.() ||
+        request.departmentId?.toString();
+      const departmentIds = await this.getUserDepartmentIds(user.userId);
+      if (!departmentId || !departmentIds.includes(departmentId)) {
+        throw new ForbiddenAccessException(
+          "This request is outside your assigned departments",
+        );
+      }
+    }
+
     return request;
   }
 
@@ -235,6 +299,61 @@ export class MaintenanceRequestsService {
       );
     }
 
+    if (request.complaintId) {
+      const immutableFields = [
+        "locationId",
+        "departmentId",
+        "reasonText",
+      ] as const;
+      if (immutableFields.some((field) => updateDto[field] !== undefined)) {
+        throw new InvalidOperationException(
+          "Source fields inherited from a complaint cannot be edited",
+        );
+      }
+    }
+
+    const effectiveDepartmentId =
+      updateDto.departmentId || request.departmentId.toString();
+    const effectiveSystemId = updateDto.systemId || request.systemId.toString();
+    const effectiveMachineId = updateDto.machineId || request.machineId.toString();
+    const [engineerInDepartment, systemInDepartment, machineInSystem] =
+      await Promise.all([
+        this.userModel.exists({
+          _id: user.userId,
+          role: Role.ENGINEER,
+          isActive: true,
+          deletedAt: null,
+          departmentIds: new Types.ObjectId(effectiveDepartmentId),
+        }),
+        this.systemModel.exists({
+          _id: effectiveSystemId,
+          departmentIds: new Types.ObjectId(effectiveDepartmentId),
+          isActive: true,
+          deletedAt: null,
+        }),
+        this.machineModel.exists({
+          _id: effectiveMachineId,
+          systemId: new Types.ObjectId(effectiveSystemId),
+          isActive: true,
+          deletedAt: null,
+        }),
+      ]);
+    if (!engineerInDepartment) {
+      throw new ForbiddenAccessException(
+        "You can only update requests in your assigned departments",
+      );
+    }
+    if (!systemInDepartment) {
+      throw new InvalidOperationException(
+        "System must be active and belong to the selected department",
+      );
+    }
+    if (!machineInSystem) {
+      throw new InvalidOperationException(
+        "Machine must be active and belong to the selected system",
+      );
+    }
+
     const previousValues: Record<string, unknown> = {
       maintenanceType: request.maintenanceType,
       reasonText: request.reasonText,
@@ -248,6 +367,8 @@ export class MaintenanceRequestsService {
     }
 
     const normalizedUpdate: Record<string, unknown> = { ...updateDto };
+    const appendedEngineerNote = updateDto.engineerNotes?.trim();
+    delete normalizedUpdate.engineerNotes;
     for (const field of [
       "locationId",
       "departmentId",
@@ -259,7 +380,19 @@ export class MaintenanceRequestsService {
       }
     }
 
-    await this.requestModel.findByIdAndUpdate(id, normalizedUpdate);
+    const updateOperation: Record<string, unknown> = { $set: normalizedUpdate };
+    if (appendedEngineerNote) {
+      updateOperation.$push = {
+        requestNotes: {
+          body: appendedEngineerNote,
+          authorId: new Types.ObjectId(user.userId),
+          authorName: user.name,
+          authorRole: Role.ENGINEER,
+          createdAt: new Date(),
+        },
+      };
+    }
+    await this.requestModel.findByIdAndUpdate(id, updateOperation);
 
     // Log the action
     await this.auditLogsService.create({
@@ -274,8 +407,8 @@ export class MaintenanceRequestsService {
 
     const updated = await this.populateRequest(id);
 
-    // Notify about update
-    this.notificationsGateway.notifyRequestUpdated(updated);
+    // The updating engineer receives the event in their user room.
+    this.notificationsGateway.notifyRequestUpdated(updated, [user.userId]);
 
     return updated;
   }
@@ -336,51 +469,8 @@ export class MaintenanceRequestsService {
 
     const updated = await this.populateRequest(id);
 
-    // Notify about stop
-    this.notificationsGateway.notifyRequestUpdated(updated);
-
-    return updated;
-  }
-
-  async addConsultantNote(
-    id: string,
-    noteDto: AddNoteDto,
-    user: { userId: string; name: string },
-  ): Promise<MaintenanceRequestDocument> {
-    const request = await this.requestModel.findById(id);
-
-    if (!request) {
-      throw new EntityNotFoundException("Maintenance Request", id);
-    }
-
-    const previousNotes = request.consultantNotes;
-    const formattedNote = this.formatNoteWithAuthor(
-      noteDto.consultantNotes,
-      user.name,
-    );
-
-    await this.requestModel.findByIdAndUpdate(id, {
-      consultantId: user.userId,
-      consultantNotes: formattedNote,
-    });
-
-    // Log the action
-    await this.auditLogsService.create({
-      userId: user.userId,
-      userName: user.name,
-      action: AuditAction.UPDATE,
-      entity: "MaintenanceRequest",
-      entityId: id,
-      changes: {
-        consultantNotes: formattedNote,
-      },
-      previousValues: { consultantNotes: previousNotes },
-    });
-
-    const updated = await this.populateRequest(id);
-
-    // Notify about update
-    this.notificationsGateway.notifyRequestUpdated(updated);
+    // Historical stop support remains internal; no role-wide broadcast.
+    this.notificationsGateway.notifyRequestUpdated(updated, [user.userId]);
 
     return updated;
   }
@@ -424,8 +514,10 @@ export class MaintenanceRequestsService {
 
     const updated = await this.populateRequest(id);
 
-    // Notify about note addition
-    this.notificationsGateway.notifyRequestUpdated(updated);
+    this.notificationsGateway.notifyRequestUpdated(updated, [
+      request.engineerId.toString(),
+      user.userId,
+    ]);
 
     return updated;
   }
@@ -469,13 +561,15 @@ export class MaintenanceRequestsService {
 
     const updated = await this.populateRequest(id);
 
-    // Notify about note addition
-    this.notificationsGateway.notifyRequestUpdated(updated);
+    this.notificationsGateway.notifyRequestUpdated(updated, [
+      request.engineerId.toString(),
+      user.userId,
+    ]);
 
     return updated;
   }
 
-  async complete(
+  async submitCompletion(
     id: string,
     completeDto: CompleteRequestDto,
     user: { userId: string; name: string },
@@ -504,9 +598,12 @@ export class MaintenanceRequestsService {
     const implementedWorkToStore =
       implementedWorkValue === "" ? undefined : implementedWorkValue;
 
+    const requestedAt = new Date();
     await this.requestModel.findByIdAndUpdate(id, {
-      status: RequestStatus.COMPLETED,
-      closedAt: new Date(),
+      status: RequestStatus.PENDING_CONSULTANT_APPROVAL,
+      completionRequestedAt: requestedAt,
+      completionRequestedBy: new Types.ObjectId(user.userId),
+      $unset: { closedAt: 1 },
       implementedWork: implementedWorkToStore,
     });
 
@@ -518,7 +615,7 @@ export class MaintenanceRequestsService {
       entity: "MaintenanceRequest",
       entityId: id,
       changes: {
-        status: RequestStatus.COMPLETED,
+        status: RequestStatus.PENDING_CONSULTANT_APPROVAL,
         implementedWork: implementedWorkToStore,
       },
       previousValues: {
@@ -529,9 +626,166 @@ export class MaintenanceRequestsService {
 
     const updated = await this.populateRequest(id);
 
-    // Notify about completion
-    this.notificationsGateway.notifyRequestCompleted(updated);
+    const targetIds = await this.getDepartmentNotificationUserIds(
+      request.departmentId.toString(),
+      [Role.CONSULTANT, Role.ADMIN],
+    );
+    this.notificationsGateway.notifyCompletionPending(updated, targetIds);
 
+    return updated;
+  }
+
+  async addRequestNote(
+    id: string,
+    dto: AddRequestNoteDto,
+    user: { userId: string; name: string; role: string },
+  ): Promise<MaintenanceRequestDocument> {
+    const request = await this.requestModel.findOne({ _id: id, deletedAt: null });
+    if (!request) throw new EntityNotFoundException("Maintenance Request", id);
+
+    if (
+      user.role === Role.ENGINEER &&
+      request.engineerId.toString() !== user.userId
+    ) {
+      throw new ForbiddenAccessException("You can only add notes to your own requests");
+    }
+    if (user.role === Role.CONSULTANT) {
+      const departmentIds = await this.getUserDepartmentIds(user.userId);
+      if (!departmentIds.includes(request.departmentId.toString())) {
+        throw new ForbiddenAccessException("This request is outside your assigned departments");
+      }
+    }
+    if (
+      user.role === Role.ENGINEER &&
+      ![
+        RequestStatus.IN_PROGRESS,
+        RequestStatus.PENDING_CONSULTANT_APPROVAL,
+      ].includes(request.status)
+    ) {
+      throw new InvalidOperationException("Notes cannot be added in the current status");
+    }
+
+    await this.requestModel.findByIdAndUpdate(id, {
+      $push: {
+        requestNotes: {
+          body: dto.body.trim(),
+          authorId: new Types.ObjectId(user.userId),
+          authorName: user.name,
+          authorRole: user.role,
+          createdAt: new Date(),
+        },
+      },
+    });
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.UPDATE,
+      entity: "MaintenanceRequest",
+      entityId: id,
+      changes: { requestNoteAdded: true },
+    });
+    const updated = await this.populateRequest(id);
+    this.notificationsGateway.notifyRequestUpdated(updated, [
+      request.engineerId.toString(),
+      user.userId,
+    ]);
+    return updated;
+  }
+
+  async approveCompletion(
+    id: string,
+    user: { userId: string; name: string; role: string },
+  ): Promise<MaintenanceRequestDocument> {
+    const request = await this.requestModel.findOne({ _id: id, deletedAt: null });
+    if (!request) throw new EntityNotFoundException("Maintenance Request", id);
+    const departmentIds = await this.getUserDepartmentIds(user.userId);
+    if (!departmentIds.includes(request.departmentId.toString())) {
+      throw new ForbiddenAccessException("This request is outside your assigned departments");
+    }
+    const approvedAt = new Date();
+    const approved = await this.requestModel.findOneAndUpdate(
+      { _id: id, status: RequestStatus.PENDING_CONSULTANT_APPROVAL },
+      {
+        status: RequestStatus.COMPLETED,
+        closedAt: approvedAt,
+        completionApprovedAt: approvedAt,
+        completionApprovedBy: new Types.ObjectId(user.userId),
+        completionApprovedByName: user.name,
+      },
+      { new: true },
+    );
+    if (!approved) {
+      throw new InvalidOperationException("Completion approval was already processed");
+    }
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.STATUS_CHANGE,
+      entity: "MaintenanceRequest",
+      entityId: id,
+      changes: { status: RequestStatus.COMPLETED, completionApprovedAt: approvedAt },
+      previousValues: { status: RequestStatus.PENDING_CONSULTANT_APPROVAL },
+    });
+    const updated = await this.populateRequest(id);
+    const targetIds = await this.getDepartmentNotificationUserIds(
+      request.departmentId.toString(),
+      [Role.CONSULTANT, Role.ADMIN],
+    );
+    targetIds.push(request.engineerId.toString());
+    this.notificationsGateway.notifyCompletionApproved(updated, targetIds);
+    return updated;
+  }
+
+  async rejectCompletion(
+    id: string,
+    dto: RejectCompletionDto,
+    user: { userId: string; name: string; role: string },
+  ): Promise<MaintenanceRequestDocument> {
+    const request = await this.requestModel.findOne({ _id: id, deletedAt: null });
+    if (!request) throw new EntityNotFoundException("Maintenance Request", id);
+    const departmentIds = await this.getUserDepartmentIds(user.userId);
+    if (!departmentIds.includes(request.departmentId.toString())) {
+      throw new ForbiddenAccessException("This request is outside your assigned departments");
+    }
+    const updatedRaw = await this.requestModel.findOneAndUpdate(
+      { _id: id, status: RequestStatus.PENDING_CONSULTANT_APPROVAL },
+      {
+        status: RequestStatus.IN_PROGRESS,
+        $unset: {
+          completionRequestedAt: 1,
+          completionRequestedBy: 1,
+          closedAt: 1,
+        },
+        $push: {
+          requestNotes: {
+            body: `إعادة الإكمال للمهندس: ${dto.reason.trim()}`,
+            authorId: new Types.ObjectId(user.userId),
+            authorName: user.name,
+            authorRole: user.role,
+            createdAt: new Date(),
+          },
+        },
+      },
+      { new: true },
+    );
+    if (!updatedRaw) {
+      throw new InvalidOperationException("Completion approval was already processed");
+    }
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name,
+      action: AuditAction.STATUS_CHANGE,
+      entity: "MaintenanceRequest",
+      entityId: id,
+      changes: { status: RequestStatus.IN_PROGRESS, rejectionReason: dto.reason.trim() },
+      previousValues: { status: RequestStatus.PENDING_CONSULTANT_APPROVAL },
+    });
+    const updated = await this.populateRequest(id);
+    this.notificationsGateway.notifyCompletionRejected(
+      updated,
+      [request.engineerId.toString()],
+      dto.reason.trim(),
+    );
     return updated;
   }
 
@@ -586,35 +840,20 @@ export class MaintenanceRequestsService {
       } as any;
     }
 
-    // Consultants can only see requests from their departments
+    // Consultants can only see requests from their departments.
     if (user.role === Role.CONSULTANT) {
-      const consultant = (await this.userModel
-        .findById(user.userId)
-        .select("departmentIds +departmentId")
-        .lean()) as {
-        departmentIds?: unknown[];
-        departmentId?: unknown;
-      } | null;
-      // Support both departmentIds (array) and legacy departmentId (single)
-      const deptIds = Array.isArray((consultant as any)?.departmentIds)
-        ? (consultant as any).departmentIds
-        : (consultant as any)?.departmentId
-          ? [(consultant as any).departmentId]
-          : [];
-      if (deptIds.length > 0) {
-        const inValues: (Types.ObjectId | string)[] = [];
-        for (const id of deptIds) {
-          if (!id) continue;
-          const str = String(id);
-          if (Types.ObjectId.isValid(str)) {
-            inValues.push(str);
-            inValues.push(new Types.ObjectId(str));
-          }
-        }
-        if (inValues.length > 0) {
-          filter.departmentId = { $in: inValues } as any;
-        }
+      const departmentIds = await this.getUserDepartmentIds(user.userId);
+      if (
+        filterDto.departmentId &&
+        !departmentIds.includes(filterDto.departmentId)
+      ) {
+        throw new ForbiddenAccessException(
+          "Department is outside your assigned scope",
+        );
       }
+      filter.departmentId = filterDto.departmentId
+        ? new Types.ObjectId(filterDto.departmentId)
+        : { $in: departmentIds.map((id) => new Types.ObjectId(id)) } as any;
     }
 
     if (filterDto.openOnly) {
@@ -660,7 +899,7 @@ export class MaintenanceRequestsService {
       } as any;
     }
 
-    // Only allow manual departmentId filter for Admins (Consultants are auto-filtered by their department)
+    // Consultant department filter is already validated and applied above.
     if (filterDto.departmentId && user.role !== Role.CONSULTANT) {
       // Support both String and ObjectId formats
       filter.departmentId = {
@@ -705,7 +944,7 @@ export class MaintenanceRequestsService {
       filter.openedAt = { $lt: new Date(filterDto.openedBefore) };
       if (!filterDto.status) {
         filter.status = {
-          $in: [RequestStatus.IN_PROGRESS, RequestStatus.STOPPED],
+          $in: [...OPEN_REQUEST_STATUSES],
         } as any;
       }
     }
@@ -740,11 +979,41 @@ export class MaintenanceRequestsService {
       .populate("consultantId", "name email")
       .populate("healthSafetySupervisorId", "name email")
       .populate("locationId", "name")
+      .populate("floorId", "name")
       .populate("departmentId", "name")
       .populate("systemId", "name")
       .populate("machineId", "name components description")
+      .populate("complaintId", "complaintCode reporterNameAr reporterNameEn")
+      .populate("completionApprovedBy", "name email")
       .populate("deletedBy", "name email")
       .exec() as Promise<MaintenanceRequestDocument>;
+  }
+
+  private async getUserDepartmentIds(userId: string): Promise<string[]> {
+    const user = await this.userModel
+      .findById(userId)
+      .select("departmentIds")
+      .lean();
+    return (user?.departmentIds || []).map((id) => id.toString());
+  }
+
+  private async getDepartmentNotificationUserIds(
+    departmentId: string,
+    roles: Role[],
+  ): Promise<string[]> {
+    const users = await this.userModel
+      .find({
+        role: { $in: roles },
+        isActive: true,
+        deletedAt: null,
+        $or: [
+          { role: { $in: [Role.ADMIN, Role.MAINTENANCE_MANAGER] } },
+          { departmentIds: new Types.ObjectId(departmentId) },
+        ],
+      })
+      .select("_id")
+      .lean();
+    return users.map((item) => item._id.toString());
   }
 
   // Methods for statistics

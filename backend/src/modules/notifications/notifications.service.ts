@@ -8,6 +8,7 @@ import {
 import { ScheduledTask, ScheduledTaskDocument } from '../scheduled-tasks/schemas/scheduled-task.schema';
 import { Complaint, ComplaintDocument } from '../complaints/schemas/complaint.schema';
 import { Role, RequestStatus, ComplaintStatus } from '../../common/enums';
+import { User, UserDocument } from '../users/schemas/user.schema';
 
 export interface NotificationResponse {
   type: string;
@@ -25,6 +26,8 @@ export class NotificationsService {
     private taskModel: Model<ScheduledTaskDocument>,
     @InjectModel(Complaint.name)
     private complaintModel: Model<ComplaintDocument>,
+    @InjectModel(User.name)
+    private userModel: Model<UserDocument>,
   ) {}
 
   async getNotifications(
@@ -39,7 +42,14 @@ export class NotificationsService {
     // Get recent maintenance requests based on role
     const requestFilter: any = {
       createdAt: { $gte: sevenDaysAgo },
+      deletedAt: null,
     };
+
+    const scopedUser = await this.userModel
+      .findById(userId)
+      .select('departmentIds')
+      .lean();
+    const departmentIds = scopedUser?.departmentIds || [];
 
     // Engineers can only see their own requests
     if (role === Role.ENGINEER) {
@@ -47,8 +57,7 @@ export class NotificationsService {
         ? new Types.ObjectId(userId)
         : userId;
     } else if (role === Role.CONSULTANT) {
-      // Consultants can see requests assigned to them or all requests
-      // We'll show all recent requests for consultants
+      requestFilter.departmentId = { $in: departmentIds };
     } else if (role === Role.MAINTENANCE_SAFETY_MONITOR) {
       // Health safety monitors can see all requests
     }
@@ -103,6 +112,34 @@ export class NotificationsService {
           },
           message: `Request ${request.requestCode} has been completed`,
           timestamp: request.closedAt.toISOString(),
+        });
+      }
+
+      if (request.completionRequestedAt) {
+        notifications.push({
+          type: 'request:completion-pending',
+          data: {
+            id: request._id.toString(),
+            requestCode: request.requestCode,
+            status: request.status,
+            completionRequestedAt: request.completionRequestedAt,
+          },
+          message: `طلب ${request.requestCode} بانتظار اعتماد الإكمال`,
+          timestamp: request.completionRequestedAt.toISOString(),
+        });
+      }
+
+      if (request.completionApprovedAt) {
+        notifications.push({
+          type: 'request:completion-approved',
+          data: {
+            id: request._id.toString(),
+            requestCode: request.requestCode,
+            completionApprovedAt: request.completionApprovedAt,
+            completionApprovedByName: request.completionApprovedByName,
+          },
+          message: `تم اعتماد إكمال الطلب ${request.requestCode}`,
+          timestamp: request.completionApprovedAt.toISOString(),
         });
       }
 
@@ -183,11 +220,18 @@ export class NotificationsService {
       }
     }
 
-    // Get recent complaints (for all users)
+    const complaintFilter: any = {
+      createdAt: { $gte: sevenDaysAgo },
+      deletedAt: null,
+    };
+    if (role === Role.ENGINEER || role === Role.CONSULTANT) {
+      complaintFilter.departmentId = { $in: departmentIds };
+    } else if (role !== Role.ADMIN && role !== Role.MAINTENANCE_MANAGER) {
+      complaintFilter._id = { $in: [] };
+    }
+
     const recentComplaints = await this.complaintModel
-      .find({
-        createdAt: { $gte: sevenDaysAgo },
-      })
+      .find(complaintFilter)
       .populate('assignedEngineerId', 'name')
       .sort({ createdAt: -1 })
       .limit(20)

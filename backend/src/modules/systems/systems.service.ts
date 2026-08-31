@@ -204,14 +204,10 @@ export class SystemsService {
     if (!Types.ObjectId.isValid(departmentId)) {
       return [];
     }
-    const deptObjId = new Types.ObjectId(departmentId);
-    // Match both new (departmentIds array) and legacy (departmentId single) for backward compatibility
-    const filter: any = {
+    const filter = {
       deletedAt: null,
-      $or: [
-        { departmentIds: { $in: [deptObjId] } },
-        { departmentId: deptObjId },
-      ],
+      isActive: true,
+      departmentIds: new Types.ObjectId(departmentId),
     };
 
     return this.systemModel
@@ -225,6 +221,5 @@ export class SystemsService {
     throw new Error('Use softDelete or hardDelete instead');
   }
 }
-
 
 

@@ -1,5 +1,5 @@
 import api from './api';
-import { ApiResponse, Location, Department, System, Machine } from '@/types';
+import { ApiResponse, Location, Department, System, Machine, Floor } from '@/types';
 
 // Locations
 export const locationsService = {
@@ -51,6 +51,64 @@ export const locationsService = {
 
   async getDeleted(): Promise<Location[]> {
     const response = await api.get<ApiResponse<Location[]>>('/locations/trash');
+    return response.data.data;
+  },
+};
+
+// Floors
+export const floorsService = {
+  async getAll(activeOnly = true): Promise<Floor[]> {
+    const response = await api.get<ApiResponse<Floor[]>>('/floors', {
+      params: { all: !activeOnly },
+    });
+    return response.data.data;
+  },
+
+  async getByLocation(locationId: string): Promise<Floor[]> {
+    const response = await api.get<ApiResponse<Floor[]>>(
+      `/floors/by-location/${locationId}`,
+    );
+    return response.data.data;
+  },
+
+  async getById(id: string): Promise<Floor> {
+    const response = await api.get<ApiResponse<Floor>>(`/floors/${id}`);
+    return response.data.data;
+  },
+
+  async create(data: Partial<Floor>): Promise<Floor> {
+    const response = await api.post<ApiResponse<Floor>>('/floors', data);
+    return response.data.data;
+  },
+
+  async update(id: string, data: Partial<Floor>): Promise<Floor> {
+    const response = await api.patch<ApiResponse<Floor>>(`/floors/${id}`, data);
+    return response.data.data;
+  },
+
+  async toggleStatus(id: string, currentStatus: boolean): Promise<Floor> {
+    return this.update(id, { isActive: !currentStatus });
+  },
+
+  async delete(id: string): Promise<void> {
+    await api.delete(`/floors/${id}`);
+  },
+
+  async softDelete(id: string): Promise<void> {
+    await api.delete(`/floors/${id}`);
+  },
+
+  async hardDelete(id: string): Promise<void> {
+    await api.delete(`/floors/${id}/hard`);
+  },
+
+  async restore(id: string): Promise<Floor> {
+    const response = await api.post<ApiResponse<Floor>>(`/floors/${id}/restore`);
+    return response.data.data;
+  },
+
+  async getDeleted(): Promise<Floor[]> {
+    const response = await api.get<ApiResponse<Floor[]>>('/floors/trash');
     return response.data.data;
   },
 };
@@ -230,6 +288,5 @@ export const machinesService = {
     return response.data.data;
   },
 };
-
 
 

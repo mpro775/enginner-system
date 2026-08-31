@@ -16,6 +16,8 @@ import {
 } from '../../common/utils/pagination.util';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { AuditAction } from '../../common/enums';
+import { Role } from '../../common/enums';
+import { ForbiddenAccessException } from '../../common/exceptions';
 
 @Injectable()
 export class UsersService {
@@ -378,9 +380,43 @@ export class UsersService {
     return this.softDelete(id, currentUser);
   }
 
-  async getEngineers(): Promise<UserDocument[]> {
+  async getEngineers(
+    departmentId?: string,
+    currentUser?: { userId: string; role: string },
+  ): Promise<UserDocument[]> {
+    const filter: FilterQuery<UserDocument> = {
+      role: Role.ENGINEER,
+      isActive: true,
+      deletedAt: null,
+    };
+
+    if (departmentId) {
+      if (!Types.ObjectId.isValid(departmentId)) return [];
+      if (currentUser?.role === Role.CONSULTANT) {
+        const consultant = await this.userModel
+          .findById(currentUser.userId)
+          .select('departmentIds')
+          .lean();
+        const allowed = (consultant?.departmentIds || []).some(
+          (id) => id.toString() === departmentId,
+        );
+        if (!allowed) {
+          throw new ForbiddenAccessException(
+            'Department is outside your assigned scope',
+          );
+        }
+      }
+      filter.departmentIds = new Types.ObjectId(departmentId) as any;
+    } else if (currentUser?.role === Role.CONSULTANT) {
+      const consultant = await this.userModel
+        .findById(currentUser.userId)
+        .select('departmentIds')
+        .lean();
+      filter.departmentIds = { $in: consultant?.departmentIds || [] } as any;
+    }
+
     return this.userModel
-      .find({ role: 'engineer', isActive: true, deletedAt: null })
+      .find(filter)
       .select('name email departmentIds')
       .populate('departmentIds', 'name')
       .sort({ name: 1 });
@@ -393,6 +429,5 @@ export class UsersService {
       .sort({ name: 1 });
   }
 }
-
 
 

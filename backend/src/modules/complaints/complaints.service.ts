@@ -1,40 +1,53 @@
-import { Injectable, Inject, forwardRef } from "@nestjs/common";
+import { Inject, Injectable, forwardRef } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
-import { Model, FilterQuery, Types } from "mongoose";
+import { FilterQuery, Model, Types } from "mongoose";
+import { Complaint, ComplaintDocument } from "./schemas/complaint.schema";
 import {
-  Complaint,
-  ComplaintDocument,
-} from "./schemas/complaint.schema";
-import {
-  CreateComplaintDto,
-  UpdateComplaintDto,
-  FilterComplaintsDto,
+  AddReviewNoteDto,
   AssignComplaintDto,
-  LinkMaintenanceRequestDto,
   ChangeStatusDto,
+  CreateComplaintDto,
+  CreateComplaintMaintenanceRequestDto,
+  FilterComplaintsDto,
+  TransferDepartmentDto,
 } from "./dto";
 import {
   EntityNotFoundException,
   ForbiddenAccessException,
+  InvalidOperationException,
 } from "../../common/exceptions";
 import {
+  AuditAction,
   ComplaintStatus,
   ComplaintSubmissionLanguage,
+  MaintenanceType,
+  RequestStatus,
   Role,
-  AuditAction,
 } from "../../common/enums";
 import {
+  PaginatedResult,
   createPaginationMeta,
   getSkipAndLimit,
   getSortOptions,
-  PaginatedResult,
 } from "../../common/utils/pagination.util";
 import { NotificationsGateway } from "../notifications/notifications.gateway";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
 import { User, UserDocument } from "../users/schemas/user.schema";
-import { MaintenanceRequest, MaintenanceRequestDocument } from "../maintenance-requests/schemas/maintenance-request.schema";
+import {
+  MaintenanceRequest,
+  MaintenanceRequestDocument,
+} from "../maintenance-requests/schemas/maintenance-request.schema";
+import { Location, LocationDocument } from "../locations/schemas/location.schema";
+import { Floor, FloorDocument } from "../floors/schemas/floor.schema";
+import {
+  Department,
+  DepartmentDocument,
+} from "../departments/schemas/department.schema";
+import { System, SystemDocument } from "../systems/schemas/system.schema";
+import { Machine, MachineDocument } from "../machines/schemas/machine.schema";
 
-type NormalizedComplaintPayload = Pick<
+type ComplaintUser = { userId: string; name?: string; role: string };
+type NormalizedComplaintPayload = Partial<Pick<
   CreateComplaintDto,
   | "submissionLanguage"
   | "reporterNameAr"
@@ -45,21 +58,27 @@ type NormalizedComplaintPayload = Pick<
   | "descriptionEn"
   | "notesAr"
   | "notesEn"
->;
+  | "detailedLocation"
+  | "contactPhone"
+>>;
 
 const trimmedValue = (value?: string): string | undefined => {
   const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
+  return trimmed || undefined;
 };
 
 export function normalizeComplaintPayload(
-  createDto: CreateComplaintDto
+  createDto: Partial<CreateComplaintDto>,
 ): NormalizedComplaintPayload {
   const submissionLanguage =
     createDto.submissionLanguage ?? ComplaintSubmissionLanguage.BOTH;
-
-  const normalized: NormalizedComplaintPayload = { submissionLanguage };
-
+  const normalized: NormalizedComplaintPayload = {
+    submissionLanguage,
+  };
+  const detailedLocation = trimmedValue(createDto.detailedLocation);
+  const contactPhone = trimmedValue(createDto.contactPhone);
+  if (detailedLocation) normalized.detailedLocation = detailedLocation;
+  if (contactPhone) normalized.contactPhone = contactPhone;
   if (
     submissionLanguage === ComplaintSubmissionLanguage.AR ||
     submissionLanguage === ComplaintSubmissionLanguage.BOTH
@@ -69,7 +88,6 @@ export function normalizeComplaintPayload(
     normalized.descriptionAr = trimmedValue(createDto.descriptionAr);
     normalized.notesAr = trimmedValue(createDto.notesAr);
   }
-
   if (
     submissionLanguage === ComplaintSubmissionLanguage.EN ||
     submissionLanguage === ComplaintSubmissionLanguage.BOTH
@@ -79,7 +97,6 @@ export function normalizeComplaintPayload(
     normalized.descriptionEn = trimmedValue(createDto.descriptionEn);
     normalized.notesEn = trimmedValue(createDto.notesEn);
   }
-
   return normalized;
 }
 
@@ -92,76 +109,106 @@ export class ComplaintsService {
     private userModel: Model<UserDocument>,
     @InjectModel(MaintenanceRequest.name)
     private maintenanceRequestModel: Model<MaintenanceRequestDocument>,
+    @InjectModel(Location.name)
+    private locationModel: Model<LocationDocument>,
+    @InjectModel(Floor.name)
+    private floorModel: Model<FloorDocument>,
+    @InjectModel(Department.name)
+    private departmentModel: Model<DepartmentDocument>,
+    @InjectModel(System.name)
+    private systemModel: Model<SystemDocument>,
+    @InjectModel(Machine.name)
+    private machineModel: Model<MachineDocument>,
     @Inject(forwardRef(() => NotificationsGateway))
     private notificationsGateway: NotificationsGateway,
     @Inject(forwardRef(() => AuditLogsService))
-    private auditLogsService: AuditLogsService
+    private auditLogsService: AuditLogsService,
   ) {}
 
-  async create(
-    createDto: CreateComplaintDto,
-    user?: { userId: string; name: string }
-  ): Promise<ComplaintDocument> {
-    // Generate complaint code
+  async create(createDto: CreateComplaintDto): Promise<ComplaintDocument> {
+    await this.validateComplaintReferences(createDto);
     const complaintCode = await this.generateComplaintCode();
-    const normalizedPayload = normalizeComplaintPayload(createDto);
-
-    const complaint = new this.complaintModel({
-      ...normalizedPayload,
+    const complaint = await new this.complaintModel({
+      ...normalizeComplaintPayload(createDto),
+      locationId: new Types.ObjectId(createDto.locationId),
+      floorId: new Types.ObjectId(createDto.floorId),
+      departmentId: new Types.ObjectId(createDto.departmentId),
       complaintCode,
       status: ComplaintStatus.NEW,
-    });
-
-    const saved = await complaint.save();
-    const populated = await this.populateComplaint(saved._id.toString());
-
-    if (!populated) {
-      throw new EntityNotFoundException("Complaint", saved._id.toString());
-    }
-
-    // Send real-time notification to all logged-in users
-    this.notificationsGateway.notifyComplaintCreated(populated);
-
-    // Log the action if user is provided (for authenticated users)
-    if (user) {
-      await this.auditLogsService.create({
-        userId: user.userId,
-        userName: user.name,
-        action: AuditAction.CREATE,
-        entity: "Complaint",
-        entityId: saved._id.toString(),
-        changes: {
-          complaintCode,
-          status: ComplaintStatus.NEW,
-        },
-      });
-    }
-
+    }).save();
+    const populated = await this.requirePopulated(complaint._id.toString());
+    const targetIds = await this.getDepartmentTargetUserIds(
+      createDto.departmentId,
+      [
+        Role.ADMIN,
+        Role.ENGINEER,
+        Role.CONSULTANT,
+        Role.MAINTENANCE_MANAGER,
+      ],
+    );
+    this.notificationsGateway.notifyComplaintCreated(populated, targetIds);
     return populated;
+  }
+
+  async getPublicReferenceData() {
+    const [locations, departments] = await Promise.all([
+      this.locationModel
+        .find({ isActive: true, deletedAt: null })
+        .select("name")
+        .sort({ name: 1 })
+        .lean(),
+      this.departmentModel
+        .find({ isActive: true, deletedAt: null })
+        .select("name")
+        .sort({ name: 1 })
+        .lean(),
+    ]);
+    return {
+      locations: locations.map((item) => ({ id: item._id.toString(), name: item.name })),
+      departments: departments.map((item) => ({ id: item._id.toString(), name: item.name })),
+    };
+  }
+
+  async getPublicFloors(locationId: string) {
+    if (!Types.ObjectId.isValid(locationId)) return [];
+    const location = await this.locationModel.exists({
+      _id: locationId,
+      isActive: true,
+      deletedAt: null,
+    });
+    if (!location) return [];
+    const floors = await this.floorModel
+      .find({
+        locationId: new Types.ObjectId(locationId),
+        isActive: true,
+        deletedAt: null,
+      })
+      .select("name")
+      .sort({ name: 1 })
+      .lean();
+    return floors.map((item) => ({ id: item._id.toString(), name: item.name }));
   }
 
   async findAll(
     filterDto: FilterComplaintsDto,
-    user: { userId: string; role: string }
+    user: { userId: string; role: string },
   ): Promise<PaginatedResult<ComplaintDocument>> {
     const { skip, limit } = getSkipAndLimit(filterDto);
-    const sortOptions = getSortOptions(filterDto);
-
-    const filter = this.buildFilter(filterDto, user);
-
+    const filter = await this.buildFilter(filterDto, user);
     const [complaints, total] = await Promise.all([
       this.complaintModel
         .find(filter)
-        .populate("assignedEngineerId", "name email")
-        .populate("maintenanceRequestId", "requestCode status")
-        .populate("deletedBy", "name email")
-        .sort(sortOptions)
+        .populate("assignedEngineerId", "name email role")
+        .populate("maintenanceRequestId", "requestCode status maintenanceType")
+        .populate("locationId", "name")
+        .populate("floorId", "name")
+        .populate("departmentId", "name")
+        .sort(getSortOptions(filterDto))
         .skip(skip)
         .limit(limit)
         .exec(),
       this.complaintModel.countDocuments(filter),
     ]);
-
     return {
       data: complaints,
       meta: createPaginationMeta(total, filterDto.page || 1, limit),
@@ -170,390 +217,321 @@ export class ComplaintsService {
 
   async findOne(
     id: string,
-    user: { userId: string; role: string }
+    user: { userId: string; role: string },
   ): Promise<ComplaintDocument> {
-    const complaint = await this.populateComplaint(id);
-
-    if (!complaint) {
-      throw new EntityNotFoundException("Complaint", id);
-    }
-
-    // All authenticated users can view complaints
+    const complaint = await this.requirePopulated(id);
+    await this.assertAccess(complaint, user);
     return complaint;
   }
 
-  async update(
+  async addReviewNote(
     id: string,
-    updateDto: UpdateComplaintDto,
-    user: { userId: string; name: string; role: string }
+    dto: AddReviewNoteDto,
+    user: ComplaintUser,
   ): Promise<ComplaintDocument> {
-    const complaint = await this.complaintModel.findById(id);
-
-    if (!complaint) {
-      throw new EntityNotFoundException("Complaint", id);
-    }
-
-    // Only ENGINEER and ADMIN can update
-    if (user.role !== Role.ENGINEER && user.role !== Role.ADMIN) {
-      throw new ForbiddenAccessException(
-        "Only engineers and admins can update complaints"
-      );
-    }
-
-    // Check ownership: if assigned, only assigned engineer or admin can update
-    if (
-      complaint.assignedEngineerId &&
-      user.role !== Role.ADMIN &&
-      complaint.assignedEngineerId.toString() !== user.userId
-    ) {
-      throw new ForbiddenAccessException(
-        "Only the assigned engineer can update this complaint"
-      );
-    }
-
-    const previousValues = {
-      reporterNameAr: complaint.reporterNameAr,
-      reporterNameEn: complaint.reporterNameEn,
-      locationAr: complaint.locationAr,
-      locationEn: complaint.locationEn,
-      descriptionAr: complaint.descriptionAr,
-      descriptionEn: complaint.descriptionEn,
-      notesAr: complaint.notesAr,
-      notesEn: complaint.notesEn,
-    };
-
-    await this.complaintModel.findByIdAndUpdate(id, updateDto);
-    const updated = await this.populateComplaint(id);
-
-    if (!updated) {
-      throw new EntityNotFoundException("Complaint", id);
-    }
-
-    // Log the action
+    const complaint = await this.requireComplaint(id);
+    await this.assertAccess(complaint, user);
+    await this.complaintModel.findByIdAndUpdate(id, {
+      $push: {
+        reviewNotes: {
+          body: dto.body.trim(),
+          authorId: new Types.ObjectId(user.userId),
+          authorName: user.name || "",
+          authorRole: user.role,
+          createdAt: new Date(),
+        },
+      },
+    });
     await this.auditLogsService.create({
       userId: user.userId,
-      userName: user.name,
+      userName: user.name || "",
       action: AuditAction.UPDATE,
       entity: "Complaint",
       entityId: id,
-      changes: updateDto as Record<string, unknown>,
-      previousValues,
+      changes: { reviewNoteAdded: true },
     });
-
-    return updated;
+    return this.requirePopulated(id);
   }
 
   async assign(
     id: string,
-    assignDto: AssignComplaintDto,
-    user: { userId: string; name: string; role: string }
+    dto: AssignComplaintDto,
+    user: ComplaintUser,
   ): Promise<ComplaintDocument> {
-    const complaint = await this.complaintModel.findById(id);
-
-    if (!complaint) {
-      throw new EntityNotFoundException("Complaint", id);
+    const complaint = await this.requireComplaint(id);
+    await this.assertAccess(complaint, user);
+    if (!complaint.departmentId) {
+      throw new InvalidOperationException("Complaint has no assigned department");
     }
-
-    // Only ENGINEER and ADMIN can assign
-    if (user.role !== Role.ENGINEER && user.role !== Role.ADMIN) {
-      throw new ForbiddenAccessException(
-        "Only engineers and admins can assign complaints"
-      );
+    const engineerId = user.role === Role.ENGINEER ? user.userId : dto.engineerId;
+    if (user.role === Role.ENGINEER && dto.engineerId !== user.userId) {
+      throw new ForbiddenAccessException("Engineers may only self-assign");
     }
-
-    // Verify engineer exists
-    const engineer = await this.userModel.findById(assignDto.engineerId);
-    if (!engineer) {
-      throw new EntityNotFoundException("User", assignDto.engineerId);
-    }
-
-    // Verify engineer role
-    if (engineer.role !== Role.ENGINEER) {
-      throw new ForbiddenAccessException(
-        "Assigned user must be an engineer"
-      );
-    }
-
-    // Check ownership: if already assigned, only assigned engineer or admin can reassign
-    if (
-      complaint.assignedEngineerId &&
-      user.role !== Role.ADMIN &&
-      complaint.assignedEngineerId.toString() !== user.userId
-    ) {
-      throw new ForbiddenAccessException(
-        "Only the assigned engineer can reassign this complaint"
-      );
-    }
-
+    const engineer = await this.getValidEngineer(
+      engineerId,
+      complaint.departmentId.toString(),
+    );
     const previousEngineerId = complaint.assignedEngineerId?.toString();
-
     await this.complaintModel.findByIdAndUpdate(id, {
-      assignedEngineerId: assignDto.engineerId,
+      assignedEngineerId: engineer._id,
       status: ComplaintStatus.IN_PROGRESS,
     });
-
-    const updated = await this.populateComplaint(id);
-
-    if (!updated) {
-      throw new EntityNotFoundException("Complaint", id);
-    }
-
-    // Log the action
     await this.auditLogsService.create({
       userId: user.userId,
-      userName: user.name,
+      userName: user.name || "",
       action: AuditAction.UPDATE,
       entity: "Complaint",
       entityId: id,
-      changes: {
-        assignedEngineerId: assignDto.engineerId,
-        status: ComplaintStatus.IN_PROGRESS,
-      },
-      previousValues: {
-        assignedEngineerId: previousEngineerId,
-        status: complaint.status,
-      },
+      changes: { assignedEngineerId: engineer._id.toString(), status: ComplaintStatus.IN_PROGRESS },
+      previousValues: { assignedEngineerId: previousEngineerId, status: complaint.status },
     });
-
-    return updated;
-  }
-
-  async linkMaintenanceRequest(
-    id: string,
-    linkDto: LinkMaintenanceRequestDto,
-    user: { userId: string; name: string; role: string }
-  ): Promise<ComplaintDocument> {
-    const complaint = await this.complaintModel.findById(id);
-
-    if (!complaint) {
-      throw new EntityNotFoundException("Complaint", id);
-    }
-
-    // Only ENGINEER and ADMIN can link
-    if (user.role !== Role.ENGINEER && user.role !== Role.ADMIN) {
-      throw new ForbiddenAccessException(
-        "Only engineers and admins can link maintenance requests"
-      );
-    }
-
-    // Check ownership: if assigned, only assigned engineer or admin can link
-    if (
-      complaint.assignedEngineerId &&
-      user.role !== Role.ADMIN &&
-      complaint.assignedEngineerId.toString() !== user.userId
-    ) {
-      throw new ForbiddenAccessException(
-        "Only the assigned engineer can link maintenance requests to this complaint"
-      );
-    }
-
-    // Verify maintenance request exists
-    const maintenanceRequest = await this.maintenanceRequestModel.findById(
-      linkDto.maintenanceRequestId
-    );
-    if (!maintenanceRequest) {
-      throw new EntityNotFoundException(
-        "Maintenance Request",
-        linkDto.maintenanceRequestId
-      );
-    }
-
-    const previousRequestId = complaint.maintenanceRequestId?.toString();
-
-    // Update complaint
-    await this.complaintModel.findByIdAndUpdate(id, {
-      maintenanceRequestId: linkDto.maintenanceRequestId,
-    });
-
-    // Update maintenance request to link back to complaint
-    await this.maintenanceRequestModel.findByIdAndUpdate(
-      linkDto.maintenanceRequestId,
-      {
-        complaintId: id,
-      }
-    );
-
-    const updated = await this.populateComplaint(id);
-
-    if (!updated) {
-      throw new EntityNotFoundException("Complaint", id);
-    }
-
-    // Log the action
-    await this.auditLogsService.create({
-      userId: user.userId,
-      userName: user.name,
-      action: AuditAction.UPDATE,
-      entity: "Complaint",
-      entityId: id,
-      changes: {
-        maintenanceRequestId: linkDto.maintenanceRequestId,
-      },
-      previousValues: {
-        maintenanceRequestId: previousRequestId,
-      },
-    });
-
-    return updated;
+    return this.requirePopulated(id);
   }
 
   async changeStatus(
     id: string,
-    statusDto: ChangeStatusDto,
-    user: { userId: string; name: string; role: string }
+    dto: ChangeStatusDto,
+    user: ComplaintUser,
   ): Promise<ComplaintDocument> {
-    const complaint = await this.complaintModel.findById(id);
-
-    if (!complaint) {
-      throw new EntityNotFoundException("Complaint", id);
-    }
-
-    // Only ENGINEER and ADMIN can change status
-    if (user.role !== Role.ENGINEER && user.role !== Role.ADMIN) {
-      throw new ForbiddenAccessException(
-        "Only engineers and admins can change complaint status"
-      );
-    }
-
-    // Check ownership: if assigned, only assigned engineer or admin can change status
-    if (
-      complaint.assignedEngineerId &&
-      user.role !== Role.ADMIN &&
-      complaint.assignedEngineerId.toString() !== user.userId
-    ) {
-      throw new ForbiddenAccessException(
-        "Only the assigned engineer can change the status of this complaint"
-      );
-    }
-
-    const previousStatus = complaint.status;
-    const updateData: any = { status: statusDto.status };
-
-    // Set resolvedAt or closedAt based on status
-    if (statusDto.status === ComplaintStatus.RESOLVED) {
-      updateData.resolvedAt = new Date();
-    } else if (statusDto.status === ComplaintStatus.CLOSED) {
-      updateData.closedAt = new Date();
-    }
-
-    await this.complaintModel.findByIdAndUpdate(id, updateData);
-    const updated = await this.populateComplaint(id);
-
-    if (!updated) {
-      throw new EntityNotFoundException("Complaint", id);
-    }
-
-    // Send notification if resolved
-    if (statusDto.status === ComplaintStatus.RESOLVED) {
-      this.notificationsGateway.notifyComplaintResolved(updated);
-    }
-
-    // Log the action
+    const complaint = await this.requireComplaint(id);
+    await this.assertAccess(complaint, user);
+    const update: Record<string, unknown> = { status: dto.status };
+    if (dto.status === ComplaintStatus.RESOLVED) update.resolvedAt = new Date();
+    if (dto.status === ComplaintStatus.CLOSED) update.closedAt = new Date();
+    await this.complaintModel.findByIdAndUpdate(id, update);
     await this.auditLogsService.create({
       userId: user.userId,
-      userName: user.name,
+      userName: user.name || "",
       action: AuditAction.STATUS_CHANGE,
       entity: "Complaint",
       entityId: id,
-      changes: {
-        status: statusDto.status,
-      },
-      previousValues: {
-        status: previousStatus,
-      },
+      changes: { status: dto.status },
+      previousValues: { status: complaint.status },
     });
-
+    const updated = await this.requirePopulated(id);
+    if (dto.status === ComplaintStatus.RESOLVED) {
+      const targetIds = await this.getDepartmentTargetUserIds(
+        complaint.departmentId!.toString(),
+        [Role.ADMIN, Role.ENGINEER, Role.CONSULTANT, Role.MAINTENANCE_MANAGER],
+      );
+      if (complaint.assignedEngineerId) {
+        targetIds.push(complaint.assignedEngineerId.toString());
+      }
+      this.notificationsGateway.notifyComplaintResolved(updated, targetIds);
+    }
     return updated;
   }
 
-  private async populateComplaint(
-    id: string
-  ): Promise<ComplaintDocument | null> {
-    return this.complaintModel
-      .findById(id)
-      .populate("assignedEngineerId", "name email role")
-      .populate("maintenanceRequestId", "requestCode status maintenanceType")
-      .populate("deletedBy", "name email")
-      .exec();
-  }
-
-  private buildFilter(
-    filterDto: FilterComplaintsDto,
-    user: { userId: string; role: string }
-  ): FilterQuery<ComplaintDocument> {
-    const filter: FilterQuery<ComplaintDocument> = {
-      deletedAt: null, // استبعاد المحذوفين ناعماً
-    };
-
-    // Status filter
-    if (filterDto.status) {
-      filter.status = filterDto.status;
-    }
-
-    // Assigned engineer filter
-    if (filterDto.assignedEngineerId) {
-      filter.assignedEngineerId = filterDto.assignedEngineerId;
-    }
-
-    // Search filter - search in both languages
-    if (filterDto.search) {
-      filter.$or = [
-        { complaintCode: { $regex: filterDto.search, $options: "i" } },
-        { reporterNameAr: { $regex: filterDto.search, $options: "i" } },
-        { reporterNameEn: { $regex: filterDto.search, $options: "i" } },
-        { locationAr: { $regex: filterDto.search, $options: "i" } },
-        { locationEn: { $regex: filterDto.search, $options: "i" } },
-        { descriptionAr: { $regex: filterDto.search, $options: "i" } },
-        { descriptionEn: { $regex: filterDto.search, $options: "i" } },
-      ];
-    }
-
-    // All authenticated users can see all complaints
-    // No role-based filtering needed
-
-    return filter;
-  }
-
-  private async generateComplaintCode(): Promise<string> {
-    const date = new Date();
-    const year = date.getFullYear();
-
-    const prefix = "CMP";
-
-    // Find the last complaint of this year
-    const lastComplaint = await this.complaintModel
-      .findOne({
-        complaintCode: { $regex: `^${prefix}-${year}` },
-      })
-      .sort({ complaintCode: -1 });
-
-    let sequence = 1;
-    if (lastComplaint) {
-      const lastSequence = parseInt(
-        lastComplaint.complaintCode.split("-")[2],
-        10
-      );
-      sequence = lastSequence + 1;
-    }
-
-    return `${prefix}-${year}-${String(sequence).padStart(3, "0")}`;
-  }
-
-  async softDelete(
+  async transferDepartment(
     id: string,
-    user: { userId: string; name: string }
-  ): Promise<void> {
-    const complaint = await this.complaintModel.findById(id);
-    if (!complaint || complaint.deletedAt) {
-      throw new EntityNotFoundException("Complaint", id);
+    dto: TransferDepartmentDto,
+    user: ComplaintUser,
+  ): Promise<ComplaintDocument> {
+    const complaint = await this.requireComplaint(id);
+    await this.assertAccess(complaint, user);
+    if (complaint.maintenanceRequestId) {
+      throw new InvalidOperationException(
+        "A complaint linked to a maintenance request cannot be transferred independently",
+      );
+    }
+    if (!complaint.departmentId) {
+      throw new InvalidOperationException("Complaint has no assigned department");
+    }
+    if (complaint.departmentId.toString() === dto.toDepartmentId) {
+      throw new InvalidOperationException("The target department must be different");
+    }
+    const [fromDepartment, toDepartment] = await Promise.all([
+      this.departmentModel.findById(complaint.departmentId).lean(),
+      this.departmentModel.findOne({
+        _id: dto.toDepartmentId,
+        isActive: true,
+        deletedAt: null,
+      }).lean(),
+    ]);
+    if (!toDepartment) throw new EntityNotFoundException("Department", dto.toDepartmentId);
+    let removeAssignment = false;
+    if (complaint.assignedEngineerId) {
+      removeAssignment = !(await this.userModel.exists({
+        _id: complaint.assignedEngineerId,
+        role: Role.ENGINEER,
+        isActive: true,
+        deletedAt: null,
+        departmentIds: new Types.ObjectId(dto.toDepartmentId),
+      }));
+    }
+    const update: any = {
+      departmentId: new Types.ObjectId(dto.toDepartmentId),
+      $push: {
+        departmentTransferHistory: {
+          fromDepartmentId: complaint.departmentId,
+          fromDepartmentName: fromDepartment?.name || "",
+          toDepartmentId: toDepartment._id,
+          toDepartmentName: toDepartment.name,
+          transferredBy: new Types.ObjectId(user.userId),
+          transferredByName: user.name || "",
+          transferredByRole: user.role,
+          transferredAt: new Date(),
+          reason: trimmedValue(dto.reason),
+        },
+      },
+    };
+    if (removeAssignment) {
+      update.$unset = { assignedEngineerId: 1 };
+      if (complaint.status === ComplaintStatus.IN_PROGRESS) update.status = ComplaintStatus.NEW;
+    }
+    await this.complaintModel.findByIdAndUpdate(id, update);
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name || "",
+      action: AuditAction.UPDATE,
+      entity: "Complaint",
+      entityId: id,
+      changes: { departmentId: dto.toDepartmentId, transferReason: dto.reason },
+      previousValues: { departmentId: complaint.departmentId.toString() },
+    });
+    const updated = await this.requirePopulated(id);
+    const targetIds = await this.getDepartmentTargetUserIds(dto.toDepartmentId, [
+      Role.ADMIN,
+      Role.ENGINEER,
+      Role.CONSULTANT,
+      Role.MAINTENANCE_MANAGER,
+    ]);
+    this.notificationsGateway.notifyComplaintTransferred(updated, targetIds);
+    return updated;
+  }
+
+  async createMaintenanceRequest(
+    id: string,
+    dto: CreateComplaintMaintenanceRequestDto,
+    user: ComplaintUser,
+  ): Promise<ComplaintDocument> {
+    const complaint = await this.requireComplaint(id);
+    await this.assertAccess(complaint, user);
+    if (complaint.maintenanceRequestId) {
+      throw new InvalidOperationException("Complaint is already linked to a request");
+    }
+    if (!complaint.locationId || !complaint.floorId || !complaint.departmentId || !complaint.detailedLocation) {
+      throw new InvalidOperationException(
+        "Legacy complaint is missing the required structured location data",
+      );
+    }
+    const engineerId =
+      user.role === Role.ENGINEER
+        ? user.userId
+        : dto.engineerId || complaint.assignedEngineerId?.toString();
+    if (!engineerId) throw new InvalidOperationException("An engineer must be selected");
+    const engineer = await this.getValidEngineer(engineerId, complaint.departmentId.toString());
+    const system = await this.systemModel.findOne({
+      _id: dto.systemId,
+      isActive: true,
+      deletedAt: null,
+      departmentIds: complaint.departmentId,
+    });
+    if (!system) throw new EntityNotFoundException("System", dto.systemId);
+    const machine = await this.machineModel.findOne({
+      _id: dto.machineId,
+      systemId: system._id,
+      isActive: true,
+      deletedAt: null,
+    });
+    if (!machine) throw new EntityNotFoundException("Machine", dto.machineId);
+    const maintainAllComponents = dto.maintainAllComponents ?? true;
+    if (!maintainAllComponents) {
+      if (!dto.selectedComponents?.length) {
+        throw new InvalidOperationException("At least one component must be selected");
+      }
+      const invalid = dto.selectedComponents.filter(
+        (component) => !machine.components?.includes(component),
+      );
+      if (invalid.length) {
+        throw new InvalidOperationException(`Invalid machine components: ${invalid.join(", ")}`);
+      }
     }
 
+    let created: MaintenanceRequestDocument | null = null;
+    for (let attempt = 0; attempt < 5 && !created; attempt += 1) {
+      try {
+        created = await new this.maintenanceRequestModel({
+          requestCode: await this.generateRequestCode(dto.maintenanceType),
+          engineerId: engineer._id,
+          maintenanceType: dto.maintenanceType,
+          locationId: complaint.locationId,
+          floorId: complaint.floorId,
+          detailedLocation: complaint.detailedLocation,
+          departmentId: complaint.departmentId,
+          systemId: system._id,
+          machineId: machine._id,
+          reasonText: this.getOriginalDescription(complaint),
+          requestNeeds: trimmedValue(dto.requestNeeds),
+          maintainAllComponents,
+          selectedComponents: maintainAllComponents ? [] : dto.selectedComponents,
+          complaintId: complaint._id,
+          status: RequestStatus.IN_PROGRESS,
+          openedAt: new Date(),
+        }).save();
+      } catch (error: any) {
+        if (error?.code === 11000 && error?.keyPattern?.requestCode) continue;
+        if (error?.code === 11000 && error?.keyPattern?.complaintId) {
+          throw new InvalidOperationException("A request was already created for this complaint");
+        }
+        throw error;
+      }
+    }
+    if (!created) throw new InvalidOperationException("Could not allocate a request code");
+    const linked = await this.complaintModel.findOneAndUpdate(
+      {
+        _id: complaint._id,
+        $or: [
+          { maintenanceRequestId: { $exists: false } },
+          { maintenanceRequestId: null },
+        ],
+      },
+      {
+        maintenanceRequestId: created._id,
+        assignedEngineerId: engineer._id,
+        status: ComplaintStatus.IN_PROGRESS,
+      },
+      { new: true },
+    );
+    if (!linked) {
+      await this.maintenanceRequestModel.deleteOne({ _id: created._id });
+      throw new InvalidOperationException("A request was already created for this complaint");
+    }
+    await this.auditLogsService.create({
+      userId: user.userId,
+      userName: user.name || "",
+      action: AuditAction.CREATE,
+      entity: "MaintenanceRequest",
+      entityId: created._id.toString(),
+      changes: { complaintId: id, requestCode: created.requestCode },
+    });
+    const populatedRequest = await this.maintenanceRequestModel
+      .findById(created._id)
+      .populate("engineerId", "name email")
+      .populate("locationId", "name")
+      .populate("floorId", "name")
+      .populate("departmentId", "name")
+      .populate("systemId", "name")
+      .populate("machineId", "name components description")
+      .exec();
+    if (populatedRequest) {
+      const requestTargets = await this.getDepartmentTargetUserIds(
+        complaint.departmentId.toString(),
+        [Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER],
+      );
+      requestTargets.push(engineer._id.toString());
+      this.notificationsGateway.notifyRequestCreated(populatedRequest, requestTargets);
+    }
+    return this.requirePopulated(id);
+  }
+
+  async softDelete(id: string, user: { userId: string; name: string }): Promise<void> {
+    const complaint = await this.complaintModel.findOne({ _id: id, deletedAt: null });
+    if (!complaint) throw new EntityNotFoundException("Complaint", id);
     await this.complaintModel.findByIdAndUpdate(id, {
       deletedAt: new Date(),
       deletedBy: user.userId,
     });
-
-    // Log the action
     await this.auditLogsService.create({
       userId: user.userId,
       userName: user.name,
@@ -564,18 +542,10 @@ export class ComplaintsService {
     });
   }
 
-  async hardDelete(
-    id: string,
-    user: { userId: string; name: string }
-  ): Promise<void> {
+  async hardDelete(id: string, user: { userId: string; name: string }): Promise<void> {
     const complaint = await this.complaintModel.findById(id);
-    if (!complaint) {
-      throw new EntityNotFoundException("Complaint", id);
-    }
-
+    if (!complaint) throw new EntityNotFoundException("Complaint", id);
     await this.complaintModel.findByIdAndDelete(id);
-
-    // Log the action
     await this.auditLogsService.create({
       userId: user.userId,
       userName: user.name,
@@ -586,31 +556,12 @@ export class ComplaintsService {
     });
   }
 
-  async restore(
-    id: string,
-    user: { userId: string; name: string }
-  ): Promise<ComplaintDocument> {
-    const complaint = await this.complaintModel.findById(id);
-    if (!complaint || !complaint.deletedAt) {
-      throw new EntityNotFoundException("Complaint", id);
-    }
-
-    const restored = await this.complaintModel.findByIdAndUpdate(
-      id,
-      { $unset: { deletedAt: 1, deletedBy: 1 } },
-      { new: true }
-    );
-
-    if (!restored) {
-      throw new EntityNotFoundException("Complaint", id);
-    }
-
-    const populated = await this.populateComplaint(id);
-    if (!populated) {
-      throw new EntityNotFoundException("Complaint", id);
-    }
-
-    // Log the action
+  async restore(id: string, user: { userId: string; name: string }): Promise<ComplaintDocument> {
+    const complaint = await this.complaintModel.findOne({ _id: id, deletedAt: { $ne: null } });
+    if (!complaint) throw new EntityNotFoundException("Complaint", id);
+    await this.complaintModel.findByIdAndUpdate(id, {
+      $unset: { deletedAt: 1, deletedBy: 1 },
+    });
     await this.auditLogsService.create({
       userId: user.userId,
       userName: user.name,
@@ -619,56 +570,203 @@ export class ComplaintsService {
       entityId: id,
       changes: { complaintCode: complaint.complaintCode },
     });
-
-    return populated;
+    return this.requirePopulated(id);
   }
 
   async findDeleted(
-    filterDto: FilterComplaintsDto
+    filterDto: FilterComplaintsDto,
   ): Promise<PaginatedResult<ComplaintDocument>> {
     const { skip, limit } = getSkipAndLimit(filterDto);
-    const sortOptions = getSortOptions(filterDto);
-
-    const filter: FilterQuery<ComplaintDocument> = {
-      deletedAt: { $ne: null },
-    };
-
-    if (filterDto.status) {
-      filter.status = filterDto.status;
-    }
-
-    if (filterDto.assignedEngineerId) {
-      filter.assignedEngineerId = filterDto.assignedEngineerId;
-    }
-
-    if (filterDto.search) {
-      filter.$or = [
-        { complaintCode: { $regex: filterDto.search, $options: "i" } },
-        { reporterNameAr: { $regex: filterDto.search, $options: "i" } },
-        { reporterNameEn: { $regex: filterDto.search, $options: "i" } },
-        { locationAr: { $regex: filterDto.search, $options: "i" } },
-        { locationEn: { $regex: filterDto.search, $options: "i" } },
-        { descriptionAr: { $regex: filterDto.search, $options: "i" } },
-        { descriptionEn: { $regex: filterDto.search, $options: "i" } },
-      ];
-    }
-
-    const [complaints, total] = await Promise.all([
+    const filter: FilterQuery<ComplaintDocument> = { deletedAt: { $ne: null } };
+    this.applyCommonFilters(filter, filterDto);
+    const [data, total] = await Promise.all([
       this.complaintModel
         .find(filter)
         .populate("assignedEngineerId", "name email role")
         .populate("maintenanceRequestId", "requestCode status maintenanceType")
+        .populate("locationId", "name")
+        .populate("floorId", "name")
+        .populate("departmentId", "name")
         .populate("deletedBy", "name email")
-        .sort({ deletedAt: -1, ...sortOptions })
+        .sort({ deletedAt: -1, ...getSortOptions(filterDto) })
         .skip(skip)
         .limit(limit)
         .exec(),
       this.complaintModel.countDocuments(filter),
     ]);
+    return { data, meta: createPaginationMeta(total, filterDto.page || 1, limit) };
+  }
 
-    return {
-      data: complaints,
-      meta: createPaginationMeta(total, filterDto.page || 1, limit),
-    };
+  private async buildFilter(
+    dto: FilterComplaintsDto,
+    user: { userId: string; role: string },
+  ): Promise<FilterQuery<ComplaintDocument>> {
+    const filter: FilterQuery<ComplaintDocument> = { deletedAt: null };
+    this.applyCommonFilters(filter, dto);
+    if (user.role === Role.ENGINEER || user.role === Role.CONSULTANT) {
+      const departmentIds = await this.getUserDepartmentIds(user.userId);
+      if (dto.departmentId && !departmentIds.includes(dto.departmentId)) {
+        throw new ForbiddenAccessException("Department is outside your assigned scope");
+      }
+      filter.departmentId = dto.departmentId
+        ? new Types.ObjectId(dto.departmentId)
+        : ({ $in: departmentIds.map((item) => new Types.ObjectId(item)) } as any);
+    } else if (dto.departmentId) {
+      filter.departmentId = new Types.ObjectId(dto.departmentId);
+    }
+    if (
+      ![Role.ADMIN, Role.MAINTENANCE_MANAGER, Role.ENGINEER, Role.CONSULTANT].includes(
+        user.role as Role,
+      )
+    ) {
+      filter._id = { $in: [] } as any;
+    }
+    return filter;
+  }
+
+  private applyCommonFilters(
+    filter: FilterQuery<ComplaintDocument>,
+    dto: FilterComplaintsDto,
+  ) {
+    if (dto.status) filter.status = dto.status;
+    if (dto.assignedEngineerId) filter.assignedEngineerId = dto.assignedEngineerId as any;
+    if (dto.search) {
+      filter.$or = [
+        { complaintCode: { $regex: dto.search, $options: "i" } },
+        { reporterNameAr: { $regex: dto.search, $options: "i" } },
+        { reporterNameEn: { $regex: dto.search, $options: "i" } },
+        { detailedLocation: { $regex: dto.search, $options: "i" } },
+        { descriptionAr: { $regex: dto.search, $options: "i" } },
+        { descriptionEn: { $regex: dto.search, $options: "i" } },
+      ];
+    }
+  }
+
+  private async assertAccess(
+    complaint: ComplaintDocument,
+    user: { userId: string; role: string },
+  ): Promise<void> {
+    if (user.role === Role.ADMIN || user.role === Role.MAINTENANCE_MANAGER) return;
+    if (user.role !== Role.ENGINEER && user.role !== Role.CONSULTANT) {
+      throw new ForbiddenAccessException("You do not have access to complaints");
+    }
+    const departmentId = complaint.departmentId?.toString();
+    const departmentIds = await this.getUserDepartmentIds(user.userId);
+    if (!departmentId || !departmentIds.includes(departmentId)) {
+      throw new ForbiddenAccessException("Complaint is outside your assigned departments");
+    }
+  }
+
+  private async getUserDepartmentIds(userId: string): Promise<string[]> {
+    const user = await this.userModel.findById(userId).select("departmentIds").lean();
+    return (user?.departmentIds || []).map((item) => item.toString());
+  }
+
+  private async getDepartmentTargetUserIds(
+    departmentId: string,
+    roles: Role[],
+  ): Promise<string[]> {
+    const users = await this.userModel
+      .find({
+        role: { $in: roles },
+        isActive: true,
+        deletedAt: null,
+        $or: [
+          { role: { $in: [Role.ADMIN, Role.MAINTENANCE_MANAGER] } },
+          { departmentIds: new Types.ObjectId(departmentId) },
+        ],
+      })
+      .select("_id")
+      .lean();
+    return users.map((item) => item._id.toString());
+  }
+
+  private async validateComplaintReferences(dto: CreateComplaintDto) {
+    const [location, floor, department] = await Promise.all([
+      this.locationModel.exists({ _id: dto.locationId, isActive: true, deletedAt: null }),
+      this.floorModel.findOne({
+        _id: dto.floorId,
+        locationId: dto.locationId,
+        isActive: true,
+        deletedAt: null,
+      }),
+      this.departmentModel.exists({
+        _id: dto.departmentId,
+        isActive: true,
+        deletedAt: null,
+      }),
+    ]);
+    if (!location) throw new EntityNotFoundException("Location", dto.locationId);
+    if (!floor) {
+      throw new InvalidOperationException("Floor does not belong to the selected location");
+    }
+    if (!department) throw new EntityNotFoundException("Department", dto.departmentId);
+  }
+
+  private async getValidEngineer(engineerId: string, departmentId: string) {
+    const engineer = await this.userModel.findOne({
+      _id: engineerId,
+      role: Role.ENGINEER,
+      isActive: true,
+      deletedAt: null,
+      departmentIds: new Types.ObjectId(departmentId),
+    });
+    if (!engineer) {
+      throw new InvalidOperationException(
+        "Engineer must be active and belong to the complaint department",
+      );
+    }
+    return engineer;
+  }
+
+  private async requireComplaint(id: string): Promise<ComplaintDocument> {
+    const complaint = await this.complaintModel.findOne({ _id: id, deletedAt: null });
+    if (!complaint) throw new EntityNotFoundException("Complaint", id);
+    return complaint;
+  }
+
+  private async requirePopulated(id: string): Promise<ComplaintDocument> {
+    const complaint = await this.complaintModel
+      .findOne({ _id: id, deletedAt: null })
+      .populate("assignedEngineerId", "name email role")
+      .populate("maintenanceRequestId", "requestCode status maintenanceType")
+      .populate("locationId", "name")
+      .populate("floorId", "name")
+      .populate("departmentId", "name")
+      .populate("deletedBy", "name email")
+      .exec();
+    if (!complaint) throw new EntityNotFoundException("Complaint", id);
+    return complaint;
+  }
+
+  private getOriginalDescription(complaint: ComplaintDocument): string {
+    return complaint.descriptionAr || complaint.descriptionEn || "بلاغ صيانة";
+  }
+
+  private async generateComplaintCode(): Promise<string> {
+    const year = new Date().getFullYear();
+    const prefix = `CMP-${year}`;
+    const last = await this.complaintModel
+      .findOne({ complaintCode: { $regex: `^${prefix}-` } })
+      .sort({ complaintCode: -1 })
+      .lean();
+    const sequence = last
+      ? Number.parseInt(last.complaintCode.split("-")[2], 10) + 1
+      : 1;
+    return `${prefix}-${String(sequence).padStart(3, "0")}`;
+  }
+
+  private async generateRequestCode(maintenanceType: MaintenanceType): Promise<string> {
+    const now = new Date();
+    const prefix = maintenanceType === MaintenanceType.PREVENTIVE ? "PM" : "EM";
+    const period = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const last = await this.maintenanceRequestModel
+      .findOne({ requestCode: { $regex: `^${prefix}-${period}-` } })
+      .sort({ requestCode: -1 })
+      .lean();
+    const sequence = last
+      ? Number.parseInt(last.requestCode.split("-")[2], 10) + 1
+      : 1;
+    return `${prefix}-${period}-${String(sequence).padStart(4, "0")}`;
   }
 }

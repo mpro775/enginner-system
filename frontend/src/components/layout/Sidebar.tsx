@@ -6,6 +6,7 @@ import {
   Users,
   MapPin,
   Building2,
+  Layers3,
   Cog,
   Wrench,
   BarChart3,
@@ -47,6 +48,12 @@ const navItems: NavItem[] = [
     icon: AlertCircle,
     label: "البلاغات",
     href: "/app/complaints",
+    roles: [
+      Role.ADMIN,
+      Role.CONSULTANT,
+      Role.ENGINEER,
+      Role.MAINTENANCE_MANAGER,
+    ],
   },
   {
     icon: ClipboardList,
@@ -88,6 +95,12 @@ const navItems: NavItem[] = [
     icon: Building2,
     label: "الأقسام",
     href: "/app/admin/departments",
+    roles: [Role.ADMIN],
+  },
+  {
+    icon: Layers3,
+    label: "الطوابق",
+    href: "/app/admin/floors",
     roles: [Role.ADMIN],
   },
   {
@@ -170,6 +183,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       hrefs: [
         "/app/admin/users",
         "/app/admin/locations",
+        "/app/admin/floors",
         "/app/admin/departments",
         "/app/admin/systems",
         "/app/admin/machines",

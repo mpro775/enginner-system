@@ -154,6 +154,7 @@ export class StatisticsService {
     const result: DashboardStatistics = {
       totalRequests:
         (statusMap[RequestStatus.IN_PROGRESS] || 0) +
+        (statusMap[RequestStatus.PENDING_CONSULTANT_APPROVAL] || 0) +
         (statusMap[RequestStatus.COMPLETED] || 0) +
         (statusMap[RequestStatus.STOPPED] || 0),
       inProgress: statusMap[RequestStatus.IN_PROGRESS] || 0,

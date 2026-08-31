@@ -89,6 +89,7 @@ describe("analytics snapshot semantics", () => {
     expect(bucketPipeline[0].$match.createdAt).toBeUndefined();
     expect(bucketPipeline[0].$match.status.$in).toEqual([
       RequestStatus.IN_PROGRESS,
+      RequestStatus.PENDING_CONSULTANT_APPROVAL,
       RequestStatus.STOPPED,
     ]);
     expect(bucketPipeline[2].$group.fourTo24Hours.$sum.$cond[0].$and).toEqual([
@@ -104,6 +105,7 @@ describe("analytics snapshot semantics", () => {
 
   it("keeps emergency-open analytics and drill-down on the same statuses", async () => {
     const requestService = new MaintenanceRequestsService(
+      {} as never,
       {} as never,
       {} as never,
       {} as never,

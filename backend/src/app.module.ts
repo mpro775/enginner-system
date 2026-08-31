@@ -22,6 +22,7 @@ import { HealthModule } from "./modules/health/health.module";
 import { ComplaintsModule } from "./modules/complaints/complaints.module";
 import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { AdminSearchModule } from "./modules/admin-search/admin-search.module";
+import { FloorsModule } from "./modules/floors/floors.module";
 
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import { AdminSearchModule } from "./modules/admin-search/admin-search.module";
     ComplaintsModule,
     AnalyticsModule,
     AdminSearchModule,
+    FloorsModule,
   ],
 })
 export class AppModule {}

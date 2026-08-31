@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/auth';
 import { useNotificationsStore } from '@/store/notifications';
 import { useToast } from '@/hooks/use-toast';
 import { Notification } from '@/types';
+import { useQueryClient } from '@tanstack/react-query';
 
 export type BulkExportSocketPayload = {
   id: string;
@@ -28,6 +29,7 @@ export function useSocket() {
   const { accessToken, isAuthenticated } = useAuthStore();
   const { addNotification } = useNotificationsStore();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!isAuthenticated || !accessToken) {
@@ -63,6 +65,18 @@ export function useSocket() {
 
     socket.on('notification', (notification: Notification) => {
       addNotification(notification);
+      if (notification.type.startsWith('request:')) {
+        queryClient.invalidateQueries({ queryKey: ['requests'] });
+        if (notification.data.id) {
+          queryClient.invalidateQueries({ queryKey: ['request', notification.data.id] });
+        }
+      }
+      if (notification.type.startsWith('complaint:')) {
+        queryClient.invalidateQueries({ queryKey: ['complaints'] });
+        if (notification.data.id) {
+          queryClient.invalidateQueries({ queryKey: ['complaint', notification.data.id] });
+        }
+      }
       
       // Show toast notification
       const getNotificationVariant = (type: string): "default" | "info" | "success" | "destructive" => {
@@ -75,6 +89,12 @@ export function useSocket() {
             return "destructive";
           case "request:updated":
             return "default";
+          case "request:completion-pending":
+            return "info";
+          case "request:completion-approved":
+            return "success";
+          case "request:completion-rejected":
+            return "destructive";
           default:
             return "default";
         }
@@ -90,6 +110,14 @@ export function useSocket() {
             return "تم إيقاف الطلب";
           case "request:updated":
             return "تم تحديث الطلب";
+          case "request:completion-pending":
+            return "بانتظار الاعتماد";
+          case "request:completion-approved":
+            return "تم اعتماد الإكمال";
+          case "request:completion-rejected":
+            return "أُعيد الطلب للمهندس";
+          case "complaint:transferred":
+            return "تم تحويل البلاغ";
           default:
             return "إشعار جديد";
         }
@@ -134,9 +162,8 @@ export function useSocket() {
       socket.off('bulk-export:progress');
       socket.close();
     };
-  }, [isAuthenticated, accessToken, addNotification, toast]);
+  }, [isAuthenticated, accessToken, addNotification, toast, queryClient]);
 
   return socketRef.current;
 }
-
 

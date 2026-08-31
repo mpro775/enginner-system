@@ -4,6 +4,26 @@ import { MaintenanceType, RequestStatus } from "../../../common/enums";
 
 export type MaintenanceRequestDocument = MaintenanceRequest & Document;
 
+@Schema({ _id: true, timestamps: false })
+export class RequestNote {
+  @Prop({ required: true, trim: true })
+  body: string;
+
+  @Prop({ type: Types.ObjectId, ref: "User", required: true })
+  authorId: Types.ObjectId;
+
+  @Prop({ required: true })
+  authorName: string;
+
+  @Prop({ required: true })
+  authorRole: string;
+
+  @Prop({ required: true, default: () => new Date() })
+  createdAt: Date;
+}
+
+const RequestNoteSchema = SchemaFactory.createForClass(RequestNote);
+
 @Schema({
   timestamps: true,
   toJSON: {
@@ -36,6 +56,12 @@ export class MaintenanceRequest {
   @Prop({ type: Types.ObjectId, ref: "Location", required: true })
   locationId: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: "Floor" })
+  floorId?: Types.ObjectId;
+
+  @Prop({ trim: true })
+  detailedLocation?: string;
+
   @Prop({ type: Types.ObjectId, ref: "Department", required: true })
   departmentId: Types.ObjectId;
 
@@ -67,6 +93,9 @@ export class MaintenanceRequest {
   @Prop({ trim: true })
   consultantNotes?: string;
 
+  @Prop({ type: [RequestNoteSchema], default: [] })
+  requestNotes?: RequestNote[];
+
   @Prop({ trim: true })
   healthSafetyNotes?: string;
 
@@ -93,6 +122,21 @@ export class MaintenanceRequest {
 
   @Prop()
   stoppedAt?: Date;
+
+  @Prop()
+  completionRequestedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: "User" })
+  completionRequestedBy?: Types.ObjectId;
+
+  @Prop()
+  completionApprovedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: "User" })
+  completionApprovedBy?: Types.ObjectId;
+
+  @Prop()
+  completionApprovedByName?: string;
 
   @Prop({ type: Types.ObjectId, ref: "ScheduledTask" })
   scheduledTaskId?: Types.ObjectId;
@@ -121,3 +165,9 @@ MaintenanceRequestSchema.index({ status: 1 });
 MaintenanceRequestSchema.index({ createdAt: -1 });
 MaintenanceRequestSchema.index({ openedAt: -1 });
 MaintenanceRequestSchema.index({ deletedAt: 1 });
+MaintenanceRequestSchema.index({ departmentId: 1, status: 1, createdAt: -1 });
+MaintenanceRequestSchema.index({ engineerId: 1, status: 1, createdAt: -1 });
+MaintenanceRequestSchema.index(
+  { complaintId: 1 },
+  { unique: true, sparse: true },
+);

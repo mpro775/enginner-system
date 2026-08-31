@@ -14,11 +14,12 @@ import {
 import { ComplaintsService } from "./complaints.service";
 import {
   CreateComplaintDto,
-  UpdateComplaintDto,
   FilterComplaintsDto,
   AssignComplaintDto,
-  LinkMaintenanceRequestDto,
   ChangeStatusDto,
+  AddReviewNoteDto,
+  TransferDepartmentDto,
+  CreateComplaintMaintenanceRequestDto,
 } from "./dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -91,26 +92,7 @@ export class ComplaintsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ENGINEER, Role.ADMIN)
-  @Patch(":id")
-  async update(
-    @Param("id") id: string,
-    @Body() updateDto: UpdateComplaintDto,
-    @CurrentUser() user: CurrentUserData
-  ) {
-    const complaint = await this.complaintsService.update(id, updateDto, {
-      userId: user.userId,
-      name: user.name,
-      role: user.role,
-    });
-    return {
-      data: complaint,
-      message: "Complaint updated successfully",
-    };
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ENGINEER, Role.ADMIN)
+  @Roles(Role.ENGINEER, Role.CONSULTANT, Role.ADMIN)
   @Patch(":id/assign")
   async assign(
     @Param("id") id: string,
@@ -129,30 +111,7 @@ export class ComplaintsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ENGINEER, Role.ADMIN)
-  @Patch(":id/link-request")
-  async linkMaintenanceRequest(
-    @Param("id") id: string,
-    @Body() linkDto: LinkMaintenanceRequestDto,
-    @CurrentUser() user: CurrentUserData
-  ) {
-    const complaint = await this.complaintsService.linkMaintenanceRequest(
-      id,
-      linkDto,
-      {
-        userId: user.userId,
-        name: user.name,
-        role: user.role,
-      }
-    );
-    return {
-      data: complaint,
-      message: "Complaint linked to maintenance request successfully",
-    };
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ENGINEER, Role.ADMIN)
+  @Roles(Role.ENGINEER, Role.CONSULTANT, Role.ADMIN)
   @Patch(":id/status")
   async changeStatus(
     @Param("id") id: string,
@@ -171,6 +130,60 @@ export class ComplaintsController {
     return {
       data: complaint,
       message: "Complaint status changed successfully",
+    };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ENGINEER, Role.CONSULTANT, Role.MAINTENANCE_MANAGER, Role.ADMIN)
+  @Post(":id/review-notes")
+  async addReviewNote(
+    @Param("id") id: string,
+    @Body() dto: AddReviewNoteDto,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    return {
+      data: await this.complaintsService.addReviewNote(id, dto, {
+        userId: user.userId,
+        name: user.name,
+        role: user.role,
+      }),
+      message: "Review note added successfully",
+    };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ENGINEER, Role.CONSULTANT, Role.ADMIN)
+  @Patch(":id/transfer-department")
+  async transferDepartment(
+    @Param("id") id: string,
+    @Body() dto: TransferDepartmentDto,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    return {
+      data: await this.complaintsService.transferDepartment(id, dto, {
+        userId: user.userId,
+        name: user.name,
+        role: user.role,
+      }),
+      message: "Complaint transferred successfully",
+    };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ENGINEER, Role.CONSULTANT, Role.ADMIN)
+  @Post(":id/create-maintenance-request")
+  async createMaintenanceRequest(
+    @Param("id") id: string,
+    @Body() dto: CreateComplaintMaintenanceRequestDto,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    return {
+      data: await this.complaintsService.createMaintenanceRequest(id, dto, {
+        userId: user.userId,
+        name: user.name,
+        role: user.role,
+      }),
+      message: "Maintenance request created from complaint successfully",
     };
   }
 
@@ -219,8 +232,6 @@ export class ComplaintsController {
     };
   }
 }
-
-
 
 
 

@@ -39,6 +39,6 @@ export const SystemSchema = SchemaFactory.createForClass(System);
 SystemSchema.index({ name: 1 }, { unique: true });
 SystemSchema.index({ isActive: 1 });
 SystemSchema.index({ deletedAt: 1 });
-
+SystemSchema.index({ departmentIds: 1, isActive: 1, deletedAt: 1 });
 
 

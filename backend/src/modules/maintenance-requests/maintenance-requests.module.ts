@@ -8,6 +8,7 @@ import {
 } from "./schemas/maintenance-request.schema";
 import { Machine, MachineSchema } from "../machines/schemas/machine.schema";
 import { User, UserSchema } from "../users/schemas/user.schema";
+import { System, SystemSchema } from "../systems/schemas/system.schema";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { AuditLogsModule } from "../audit-logs/audit-logs.module";
 import { ScheduledTasksModule } from "../scheduled-tasks/scheduled-tasks.module";
@@ -18,6 +19,7 @@ import { ScheduledTasksModule } from "../scheduled-tasks/scheduled-tasks.module"
       { name: MaintenanceRequest.name, schema: MaintenanceRequestSchema },
       { name: Machine.name, schema: MachineSchema },
       { name: User.name, schema: UserSchema },
+      { name: System.name, schema: SystemSchema },
     ]),
     forwardRef(() => NotificationsModule),
     forwardRef(() => AuditLogsModule),

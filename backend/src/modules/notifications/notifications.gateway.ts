@@ -98,13 +98,31 @@ export class NotificationsGateway
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
+  notifyUsers(
+    userIds: string[],
+    type: string,
+    data: Record<string, unknown>,
+    message: string,
+    timestamp = new Date(),
+  ): void {
+    const notification = {
+      type,
+      data,
+      message,
+      timestamp: timestamp.toISOString(),
+    };
+    for (const userId of new Set(userIds.filter(Boolean))) {
+      this.server.to(`user:${userId}`).emit("notification", notification);
+    }
+  }
+
   @SubscribeMessage("ping")
   handlePing(client: Socket): string {
     return "pong";
   }
 
   // Notify when a new request is created
-  notifyRequestCreated(request: MaintenanceRequestDocument) {
+  notifyRequestCreated(request: MaintenanceRequestDocument, userIds: string[] = []) {
     const notification = {
       type: "request:created",
       data: {
@@ -120,16 +138,15 @@ export class NotificationsGateway
       timestamp: new Date().toISOString(),
     };
 
-    // Notify consultants, maintenance managers, and admins
-    this.server.to("consultant").emit("notification", notification);
-    this.server.to("maintenance_manager").emit("notification", notification);
-    this.server.to("admin").emit("notification", notification);
+    for (const userId of new Set(userIds)) {
+      this.server.to(`user:${userId}`).emit("notification", notification);
+    }
 
     this.logger.log(`Notified about new request: ${request.requestCode}`);
   }
 
   // Notify when a request is stopped
-  notifyRequestStopped(request: MaintenanceRequestDocument) {
+  notifyRequestStopped(request: MaintenanceRequestDocument, userIds: string[] = []) {
     const notification = {
       type: "request:stopped",
       data: {
@@ -144,16 +161,15 @@ export class NotificationsGateway
       timestamp: new Date().toISOString(),
     };
 
-    // Notify consultants, maintenance managers, and admins
-    this.server.to("consultant").emit("notification", notification);
-    this.server.to("maintenance_manager").emit("notification", notification);
-    this.server.to("admin").emit("notification", notification);
+    for (const userId of new Set(userIds)) {
+      this.server.to(`user:${userId}`).emit("notification", notification);
+    }
 
     this.logger.log(`Notified about stopped request: ${request.requestCode}`);
   }
 
   // Notify when a request is completed
-  notifyRequestCompleted(request: MaintenanceRequestDocument) {
+  notifyRequestCompleted(request: MaintenanceRequestDocument, userIds: string[] = []) {
     const notification = {
       type: "request:completed",
       data: {
@@ -167,16 +183,15 @@ export class NotificationsGateway
       timestamp: new Date().toISOString(),
     };
 
-    // Notify consultants, maintenance managers, and admins
-    this.server.to("consultant").emit("notification", notification);
-    this.server.to("maintenance_manager").emit("notification", notification);
-    this.server.to("admin").emit("notification", notification);
+    for (const userId of new Set(userIds)) {
+      this.server.to(`user:${userId}`).emit("notification", notification);
+    }
 
     this.logger.log(`Notified about completed request: ${request.requestCode}`);
   }
 
   // Notify when a request is updated
-  notifyRequestUpdated(request: MaintenanceRequestDocument) {
+  notifyRequestUpdated(request: MaintenanceRequestDocument, userIds: string[] = []) {
     const notification = {
       type: "request:updated",
       data: {
@@ -189,10 +204,9 @@ export class NotificationsGateway
       timestamp: new Date().toISOString(),
     };
 
-    // Notify consultants, maintenance managers, and admins
-    this.server.to("consultant").emit("notification", notification);
-    this.server.to("maintenance_manager").emit("notification", notification);
-    this.server.to("admin").emit("notification", notification);
+    for (const userId of new Set(userIds)) {
+      this.server.to(`user:${userId}`).emit("notification", notification);
+    }
 
     this.logger.log(`Notified about updated request: ${request.requestCode}`);
   }
@@ -270,7 +284,7 @@ export class NotificationsGateway
   }
 
   // Notify when a new complaint is created
-  notifyComplaintCreated(complaint: ComplaintDocument) {
+  notifyComplaintCreated(complaint: ComplaintDocument, userIds: string[] = []) {
     const notification = {
       type: "complaint:created",
       data: {
@@ -278,7 +292,11 @@ export class NotificationsGateway
         complaintCode: complaint.complaintCode,
         reporterName:
           complaint.reporterNameAr || complaint.reporterNameEn || "",
-        location: complaint.locationAr || complaint.locationEn || "",
+        location:
+          (complaint.locationId as any)?.name ||
+          complaint.locationAr ||
+          complaint.locationEn ||
+          "",
         submissionLanguage: complaint.submissionLanguage,
         reporterNameAr: complaint.reporterNameAr,
         reporterNameEn: complaint.reporterNameEn,
@@ -291,22 +309,87 @@ export class NotificationsGateway
       timestamp: new Date().toISOString(),
     };
 
-    // Notify all logged-in users (all roles)
-    this.server.emit("notification", notification);
+    for (const userId of new Set(userIds)) {
+      this.server.to(`user:${userId}`).emit("notification", notification);
+    }
 
     this.logger.log(`Notified about new complaint: ${complaint.complaintCode}`);
   }
 
+  notifyComplaintTransferred(complaint: ComplaintDocument, userIds: string[]) {
+    this.notifyUsers(
+      userIds,
+      "complaint:transferred",
+      {
+        id: complaint._id.toString(),
+        complaintCode: complaint.complaintCode,
+        departmentId: complaint.departmentId?.toString(),
+        status: complaint.status,
+      },
+      `تم تحويل البلاغ ${complaint.complaintCode} إلى قسم جديد`,
+    );
+  }
+
+  notifyCompletionPending(request: MaintenanceRequestDocument, userIds: string[]) {
+    this.notifyUsers(
+      userIds,
+      "request:completion-pending",
+      {
+        id: request._id.toString(),
+        requestCode: request.requestCode,
+        status: request.status,
+        completionRequestedAt: request.completionRequestedAt,
+      },
+      `طلب ${request.requestCode} بانتظار اعتماد الإكمال`,
+      request.completionRequestedAt || new Date(),
+    );
+  }
+
+  notifyCompletionApproved(request: MaintenanceRequestDocument, userIds: string[]) {
+    this.notifyUsers(
+      userIds,
+      "request:completion-approved",
+      {
+        id: request._id.toString(),
+        requestCode: request.requestCode,
+        status: request.status,
+        completionApprovedAt: request.completionApprovedAt,
+        completionApprovedByName: request.completionApprovedByName,
+      },
+      `تم اعتماد إكمال الطلب ${request.requestCode}`,
+      request.completionApprovedAt || new Date(),
+    );
+  }
+
+  notifyCompletionRejected(request: MaintenanceRequestDocument, userIds: string[], reason: string) {
+    this.notifyUsers(
+      userIds,
+      "request:completion-rejected",
+      {
+        id: request._id.toString(),
+        requestCode: request.requestCode,
+        status: request.status,
+        reason,
+      },
+      `أُعيد الطلب ${request.requestCode} للمهندس: ${reason}`,
+    );
+  }
+
   // Notify when a complaint is resolved
-  notifyComplaintResolved(complaint: ComplaintDocument) {
-    const notification = {
-      type: "complaint:resolved",
-      data: {
+  notifyComplaintResolved(complaint: ComplaintDocument, userIds: string[]) {
+    this.notifyUsers(
+      userIds,
+      "complaint:resolved",
+      {
         id: complaint._id.toString(),
         complaintCode: complaint.complaintCode,
         reporterName:
           complaint.reporterNameAr || complaint.reporterNameEn || "",
-        location: complaint.locationAr || complaint.locationEn || "",
+        location:
+          (complaint.locationId as any)?.name ||
+          complaint.locationAr ||
+          complaint.locationEn ||
+          "",
         submissionLanguage: complaint.submissionLanguage,
         reporterNameAr: complaint.reporterNameAr,
         reporterNameEn: complaint.reporterNameEn,
@@ -316,14 +399,9 @@ export class NotificationsGateway
         engineerName: (complaint.assignedEngineerId as any)?.name,
         resolvedAt: complaint.resolvedAt,
       },
-      message: `تم حل البلاغ ${complaint.complaintCode}`,
-      timestamp: new Date().toISOString(),
-    };
-
-    // Notify admin, consultant, and maintenance safety monitor
-    this.server.to("admin").emit("notification", notification);
-    this.server.to("consultant").emit("notification", notification);
-    this.server.to("maintenance_safety_monitor").emit("notification", notification);
+      `تم حل البلاغ ${complaint.complaintCode}`,
+      complaint.resolvedAt || new Date(),
+    );
 
     this.logger.log(`Notified about resolved complaint: ${complaint.complaintCode}`);
   }

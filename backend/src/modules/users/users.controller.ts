@@ -57,8 +57,14 @@ export class UsersController {
 
   @Get("engineers")
   @Roles(Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER)
-  async getEngineers() {
-    const engineers = await this.usersService.getEngineers();
+  async getEngineers(
+    @Query("departmentId") departmentId: string | undefined,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    const engineers = await this.usersService.getEngineers(departmentId, {
+      userId: user.userId,
+      role: user.role,
+    });
     return {
       data: engineers,
       message: "Engineers retrieved successfully",

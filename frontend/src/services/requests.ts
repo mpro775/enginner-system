@@ -4,7 +4,6 @@ import {
   MaintenanceRequest,
   CreateRequestForm,
   UpdateRequestForm,
-  StopRequestForm,
   AddNoteForm,
   AddHealthSafetyNoteForm,
   AddProjectManagerNoteForm,
@@ -25,6 +24,7 @@ interface RequestFilters {
   locationId?: string;
   departmentId?: string;
   systemId?: string;
+  machineId?: string;
   maintenanceType?: string;
   fromDate?: string;
   toDate?: string;
@@ -67,18 +67,18 @@ export const requestsService = {
     return response.data.data;
   },
 
-  async stop(id: string, data: StopRequestForm): Promise<MaintenanceRequest> {
+  async addNote(id: string, data: AddNoteForm): Promise<MaintenanceRequest> {
     const response = await api.patch<ApiResponse<MaintenanceRequest>>(
-      `/requests/${id}/stop`,
+      `/requests/${id}/note`,
       data,
     );
     return response.data.data;
   },
 
-  async addNote(id: string, data: AddNoteForm): Promise<MaintenanceRequest> {
-    const response = await api.patch<ApiResponse<MaintenanceRequest>>(
-      `/requests/${id}/note`,
-      data,
+  async addRequestNote(id: string, body: string): Promise<MaintenanceRequest> {
+    const response = await api.post<ApiResponse<MaintenanceRequest>>(
+      `/requests/${id}/notes`,
+      { body },
     );
     return response.data.data;
   },
@@ -105,13 +105,28 @@ export const requestsService = {
     return response.data.data;
   },
 
-  async complete(
+  async submitCompletion(
     id: string,
     data: { implementedWork?: string },
   ): Promise<MaintenanceRequest> {
     const response = await api.patch<ApiResponse<MaintenanceRequest>>(
-      `/requests/${id}/complete`,
+      `/requests/${id}/submit-completion`,
       data,
+    );
+    return response.data.data;
+  },
+
+  async approveCompletion(id: string): Promise<MaintenanceRequest> {
+    const response = await api.patch<ApiResponse<MaintenanceRequest>>(
+      `/requests/${id}/approve-completion`,
+    );
+    return response.data.data;
+  },
+
+  async rejectCompletion(id: string, reason: string): Promise<MaintenanceRequest> {
+    const response = await api.patch<ApiResponse<MaintenanceRequest>>(
+      `/requests/${id}/reject-completion`,
+      { reason },
     );
     return response.data.data;
   },

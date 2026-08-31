@@ -4,6 +4,7 @@ import {
   departmentsService,
   systemsService,
   machinesService,
+  floorsService,
 } from "@/services/reference-data";
 
 export function LocationsPage() {
@@ -48,6 +49,30 @@ export function DepartmentsPage() {
         { name: "name", label: "اسم القسم", type: "text", required: true },
       ]}
       columns={[{ key: "name", label: "الاسم" }]}
+    />
+  );
+}
+
+export function FloorsPage() {
+  return (
+    <ReferenceDataManagement
+      title="إدارة الطوابق"
+      description="إضافة وتعديل طوابق مواقع العمل"
+      service={floorsService as never}
+      queryKey="floors"
+      fields={[
+        { name: "name", label: "اسم الطابق", type: "text", required: true },
+        { name: "locationId", label: "الموقع", type: "select", required: true },
+      ]}
+      columns={[
+        { key: "name", label: "الاسم" },
+        { key: "locationId", label: "الموقع" },
+      ]}
+      relatedService={{
+        getAll: locationsService.getAll,
+        queryKey: "locations",
+        fieldName: "locationId",
+      }}
     />
   );
 }

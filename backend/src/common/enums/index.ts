@@ -14,12 +14,14 @@ export enum MaintenanceType {
 
 export enum RequestStatus {
   IN_PROGRESS = "in_progress",
+  PENDING_CONSULTANT_APPROVAL = "pending_consultant_approval",
   COMPLETED = "completed",
   STOPPED = "stopped",
 }
 
 export const OPEN_REQUEST_STATUSES = [
   RequestStatus.IN_PROGRESS,
+  RequestStatus.PENDING_CONSULTANT_APPROVAL,
   RequestStatus.STOPPED,
 ] as const;
 

@@ -3,15 +3,24 @@ import { validate } from "class-validator";
 import { ComplaintSubmissionLanguage } from "../../common/enums";
 import { normalizeComplaintPayload } from "./complaints.service";
 import { CreateComplaintDto } from "./dto";
+import { normalizeSaudiMobile } from "./dto/create-complaint.dto";
 
 const validatePayload = (payload: Partial<CreateComplaintDto>) => {
   const dto = Object.assign(new CreateComplaintDto(), payload);
   return validate(dto);
 };
 
+const structuredLocation = {
+  locationId: "64b000000000000000000001",
+  floorId: "64b000000000000000000002",
+  detailedLocation: "مكتب 205",
+  departmentId: "64b000000000000000000003",
+};
+
 describe("complaint submission language contract", () => {
   it("accepts an Arabic-only complaint", async () => {
     const errors = await validatePayload({
+      ...structuredLocation,
       submissionLanguage: ComplaintSubmissionLanguage.AR,
       reporterNameAr: "محمد أحمد",
       locationAr: "كلية الهندسة - مكتب 205",
@@ -23,6 +32,7 @@ describe("complaint submission language contract", () => {
 
   it("accepts an English-only complaint", async () => {
     const errors = await validatePayload({
+      ...structuredLocation,
       submissionLanguage: ComplaintSubmissionLanguage.EN,
       reporterNameEn: "Mohammed Ahmed",
       locationEn: "Engineering College - Office 205",
@@ -53,6 +63,7 @@ describe("complaint submission language contract", () => {
 
   it("accepts the legacy bilingual payload", async () => {
     const errors = await validatePayload({
+      ...structuredLocation,
       reporterNameAr: "محمد أحمد",
       reporterNameEn: "Mohammed Ahmed",
       locationAr: "كلية الهندسة",
@@ -66,6 +77,7 @@ describe("complaint submission language contract", () => {
 
   it("rejects a legacy payload containing only one language", async () => {
     const errors = await validatePayload({
+      ...structuredLocation,
       reporterNameAr: "محمد أحمد",
       locationAr: "كلية الهندسة",
       descriptionAr: "يوجد تسرب مياه واضح داخل المكتب",
@@ -108,5 +120,14 @@ describe("complaint submission language contract", () => {
     expect(normalized.submissionLanguage).toBe(
       ComplaintSubmissionLanguage.BOTH
     );
+  });
+
+  it.each([
+    ["0551234567", "+966551234567"],
+    ["551234567", "+966551234567"],
+    ["966551234567", "+966551234567"],
+    ["+966 55-123-4567", "+966551234567"],
+  ])("normalizes supported Saudi mobile format %s", (input, expected) => {
+    expect(normalizeSaudiMobile(input)).toBe(expected);
   });
 });

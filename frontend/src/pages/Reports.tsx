@@ -576,6 +576,7 @@ export default function Reports() {
                 <SelectContent>
                   <SelectItem value="all">جميع الحالات</SelectItem>
                   <SelectItem value={RequestStatus.IN_PROGRESS}>قيد التنفيذ</SelectItem>
+                  <SelectItem value={RequestStatus.PENDING_CONSULTANT_APPROVAL}>بانتظار اعتماد الاستشاري</SelectItem>
                   <SelectItem value={RequestStatus.COMPLETED}>مكتمل</SelectItem>
                   <SelectItem value={RequestStatus.STOPPED}>متوقف</SelectItem>
                 </SelectContent>
