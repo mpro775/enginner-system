@@ -698,25 +698,38 @@ export class ComplaintsService {
   }
 
   private async validateComplaintReferences(dto: CreateComplaintDto) {
+    const locationId = new Types.ObjectId(dto.locationId);
+    const floorId = new Types.ObjectId(dto.floorId);
+    const departmentId = new Types.ObjectId(dto.departmentId);
+
     const [location, floor, department] = await Promise.all([
-      this.locationModel.exists({ _id: dto.locationId, isActive: true, deletedAt: null }),
-      this.floorModel.findOne({
-        _id: dto.floorId,
-        locationId: dto.locationId,
+      this.locationModel.exists({
+        _id: locationId,
+        isActive: true,
+        deletedAt: null,
+      }),
+      this.floorModel.exists({
+        _id: floorId,
+        locationId,
         isActive: true,
         deletedAt: null,
       }),
       this.departmentModel.exists({
-        _id: dto.departmentId,
+        _id: departmentId,
         isActive: true,
         deletedAt: null,
       }),
     ]);
-    if (!location) throw new EntityNotFoundException("Location", dto.locationId);
+
+    if (!location) {
+      throw new EntityNotFoundException("Location", dto.locationId);
+    }
     if (!floor) {
       throw new InvalidOperationException("Floor does not belong to the selected location");
     }
-    if (!department) throw new EntityNotFoundException("Department", dto.departmentId);
+    if (!department) {
+      throw new EntityNotFoundException("Department", dto.departmentId);
+    }
   }
 
   private async getValidEngineer(engineerId: string, departmentId: string) {
