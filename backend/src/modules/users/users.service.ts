@@ -17,7 +17,11 @@ import {
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { AuditAction } from '../../common/enums';
 import { Role } from '../../common/enums';
-import { ForbiddenAccessException } from '../../common/exceptions';
+import {
+  AccessScopedUser,
+  assertDepartmentAccess,
+  getDepartmentMatchValues,
+} from '../../common/utils/access-scope.util';
 
 @Injectable()
 export class UsersService {
@@ -382,7 +386,7 @@ export class UsersService {
 
   async getEngineers(
     departmentId?: string,
-    currentUser?: { userId: string; role: string },
+    currentUser?: AccessScopedUser,
   ): Promise<UserDocument[]> {
     const filter: FilterQuery<UserDocument> = {
       role: Role.ENGINEER,
@@ -393,26 +397,11 @@ export class UsersService {
     if (departmentId) {
       if (!Types.ObjectId.isValid(departmentId)) return [];
       if (currentUser?.role === Role.CONSULTANT) {
-        const consultant = await this.userModel
-          .findById(currentUser.userId)
-          .select('departmentIds')
-          .lean();
-        const allowed = (consultant?.departmentIds || []).some(
-          (id) => id.toString() === departmentId,
-        );
-        if (!allowed) {
-          throw new ForbiddenAccessException(
-            'Department is outside your assigned scope',
-          );
-        }
+        assertDepartmentAccess(currentUser, departmentId);
       }
       filter.departmentIds = new Types.ObjectId(departmentId) as any;
     } else if (currentUser?.role === Role.CONSULTANT) {
-      const consultant = await this.userModel
-        .findById(currentUser.userId)
-        .select('departmentIds')
-        .lean();
-      filter.departmentIds = { $in: consultant?.departmentIds || [] } as any;
+      filter.departmentIds = { $in: getDepartmentMatchValues(currentUser) } as any;
     }
 
     return this.userModel
@@ -429,5 +418,3 @@ export class UsersService {
       .sort({ name: 1 });
   }
 }
-
-

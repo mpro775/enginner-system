@@ -25,8 +25,7 @@ export class NotificationsController {
     @CurrentUser() user: CurrentUserData,
   ) {
     const notifications = await this.notificationsService.getNotifications(
-      user.userId,
-      user.role,
+      user,
       query.limit,
     );
 
@@ -36,7 +35,6 @@ export class NotificationsController {
     };
   }
 }
-
 
 
 

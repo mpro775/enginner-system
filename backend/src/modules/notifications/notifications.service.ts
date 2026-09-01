@@ -8,7 +8,8 @@ import {
 import { ScheduledTask, ScheduledTaskDocument } from '../scheduled-tasks/schemas/scheduled-task.schema';
 import { Complaint, ComplaintDocument } from '../complaints/schemas/complaint.schema';
 import { Role, RequestStatus, ComplaintStatus } from '../../common/enums';
-import { User, UserDocument } from '../users/schemas/user.schema';
+import { CurrentUserData } from '../../common/decorators/current-user.decorator';
+import { getDepartmentMatchValues } from '../../common/utils/access-scope.util';
 
 export interface NotificationResponse {
   type: string;
@@ -26,15 +27,13 @@ export class NotificationsService {
     private taskModel: Model<ScheduledTaskDocument>,
     @InjectModel(Complaint.name)
     private complaintModel: Model<ComplaintDocument>,
-    @InjectModel(User.name)
-    private userModel: Model<UserDocument>,
   ) {}
 
   async getNotifications(
-    userId: string,
-    role: string,
+    user: CurrentUserData,
     limit: number = 50,
   ): Promise<NotificationResponse[]> {
+    const { userId, role } = user;
     const notifications: NotificationResponse[] = [];
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -45,11 +44,7 @@ export class NotificationsService {
       deletedAt: null,
     };
 
-    const scopedUser = await this.userModel
-      .findById(userId)
-      .select('departmentIds')
-      .lean();
-    const departmentIds = scopedUser?.departmentIds || [];
+    const departmentIds = getDepartmentMatchValues(user);
 
     // Engineers can only see their own requests
     if (role === Role.ENGINEER) {
@@ -184,7 +179,6 @@ export class NotificationsService {
       const engineerObjId = Types.ObjectId.isValid(userId)
         ? new Types.ObjectId(userId)
         : userId;
-      const formattedDeptIds = departmentIds.map((id: any) => new Types.ObjectId(id));
       const taskFilter: any = {
         createdAt: { $gte: sevenDaysAgo },
         deletedAt: null,
@@ -193,11 +187,11 @@ export class NotificationsService {
           { engineerId: userId },
           {
             engineerId: null,
-            departmentId: { $in: formattedDeptIds },
+            departmentId: { $in: departmentIds },
           },
           {
             engineerId: { $exists: false },
-            departmentId: { $in: formattedDeptIds },
+            departmentId: { $in: departmentIds },
           },
         ],
       };

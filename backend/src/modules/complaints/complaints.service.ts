@@ -45,8 +45,13 @@ import {
 } from "../departments/schemas/department.schema";
 import { System, SystemDocument } from "../systems/schemas/system.schema";
 import { Machine, MachineDocument } from "../machines/schemas/machine.schema";
+import {
+  AccessScopedUser,
+  assertDepartmentAccess,
+  getDepartmentMatchValues,
+} from "../../common/utils/access-scope.util";
 
-type ComplaintUser = { userId: string; name?: string; role: string };
+type ComplaintUser = AccessScopedUser & { name?: string };
 type NormalizedComplaintPayload = Partial<Pick<
   CreateComplaintDto,
   | "submissionLanguage"
@@ -207,7 +212,7 @@ export class ComplaintsService {
 
   async findAll(
     filterDto: FilterComplaintsDto,
-    user: { userId: string; role: string },
+    user: AccessScopedUser,
   ): Promise<PaginatedResult<ComplaintDocument>> {
     const { skip, limit } = getSkipAndLimit(filterDto);
     const filter = await this.buildFilter(filterDto, user);
@@ -233,7 +238,7 @@ export class ComplaintsService {
 
   async findOne(
     id: string,
-    user: { userId: string; role: string },
+    user: AccessScopedUser,
   ): Promise<ComplaintDocument> {
     const complaint = await this.requirePopulated(id);
     await this.assertAccess(complaint, user);
@@ -345,6 +350,9 @@ export class ComplaintsService {
   ): Promise<ComplaintDocument> {
     const complaint = await this.requireComplaint(id);
     await this.assertAccess(complaint, user);
+    if (user.role === Role.ENGINEER || user.role === Role.CONSULTANT) {
+      assertDepartmentAccess(user, dto.toDepartmentId);
+    }
     if (complaint.maintenanceRequestId) {
       throw new InvalidOperationException(
         "A complaint linked to a maintenance request cannot be transferred independently",
@@ -631,18 +639,15 @@ export class ComplaintsService {
 
   private async buildFilter(
     dto: FilterComplaintsDto,
-    user: { userId: string; role: string },
+    user: AccessScopedUser,
   ): Promise<FilterQuery<ComplaintDocument>> {
     const filter: FilterQuery<ComplaintDocument> = { deletedAt: null };
     this.applyCommonFilters(filter, dto);
     if (user.role === Role.ENGINEER || user.role === Role.CONSULTANT) {
-      const departmentIds = await this.getUserDepartmentIds(user.userId);
-      if (dto.departmentId && !departmentIds.includes(dto.departmentId)) {
-        throw new ForbiddenAccessException("Department is outside your assigned scope");
-      }
+      if (dto.departmentId) assertDepartmentAccess(user, dto.departmentId);
       filter.departmentId = dto.departmentId
         ? new Types.ObjectId(dto.departmentId)
-        : ({ $in: departmentIds.map((item) => new Types.ObjectId(item)) } as any);
+        : ({ $in: getDepartmentMatchValues(user) } as any);
     } else if (dto.departmentId) {
       filter.departmentId = new Types.ObjectId(dto.departmentId);
     }
@@ -676,7 +681,7 @@ export class ComplaintsService {
 
   private async assertAccess(
     complaint: ComplaintDocument,
-    user: { userId: string; role: string },
+    user: AccessScopedUser,
   ): Promise<void> {
     if (user.role === Role.ADMIN || user.role === Role.MAINTENANCE_MANAGER) return;
     if (user.role !== Role.ENGINEER && user.role !== Role.CONSULTANT) {
@@ -684,16 +689,11 @@ export class ComplaintsService {
     }
     const rawDepartmentId =
       (complaint.departmentId as any)?._id ?? complaint.departmentId;
-    const departmentId = rawDepartmentId?.toString();
-    const departmentIds = await this.getUserDepartmentIds(user.userId);
-    if (!departmentId || !departmentIds.includes(departmentId)) {
-      throw new ForbiddenAccessException("Complaint is outside your assigned departments");
-    }
-  }
-
-  private async getUserDepartmentIds(userId: string): Promise<string[]> {
-    const user = await this.userModel.findById(userId).select("departmentIds").lean();
-    return (user?.departmentIds || []).map((item) => item.toString());
+    assertDepartmentAccess(
+      user,
+      rawDepartmentId,
+      "Complaint is outside your assigned departments",
+    );
   }
 
   private async getDepartmentTargetUserIds(

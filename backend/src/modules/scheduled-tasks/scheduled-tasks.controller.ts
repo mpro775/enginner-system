@@ -42,10 +42,7 @@ export class ScheduledTasksController {
     @Body() createDto: CreateScheduledTaskDto,
     @CurrentUser() user: CurrentUserData
   ) {
-    const task = await this.scheduledTasksService.create(createDto, {
-      userId: user.userId,
-      name: user.name,
-    });
+    const task = await this.scheduledTasksService.create(createDto, user);
     return {
       data: task,
       message: "Scheduled task created successfully",
@@ -56,10 +53,7 @@ export class ScheduledTasksController {
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.CONSULTANT)
   async findAll(@Query() filterDto: FilterScheduledTasksDto, @CurrentUser() user: CurrentUserData) {
-    const result = await this.scheduledTasksService.findAll(filterDto, {
-      userId: user.userId,
-      role: user.role,
-    });
+    const result = await this.scheduledTasksService.findAll(filterDto, user);
     return {
       data: result.data,
       meta: result.meta,
@@ -72,7 +66,7 @@ export class ScheduledTasksController {
   @Roles(Role.ENGINEER)
   async findPending(@CurrentUser() user: CurrentUserData) {
     const tasks = await this.scheduledTasksService.findPendingByEngineer(
-      user.userId
+      user
     );
     return {
       data: tasks,
@@ -84,7 +78,7 @@ export class ScheduledTasksController {
   @UseGuards(RolesGuard)
   @Roles(Role.ENGINEER)
   async getAvailableTasks(@CurrentUser() user: CurrentUserData) {
-    const tasks = await this.scheduledTasksService.getAvailableTasks(user.userId);
+    const tasks = await this.scheduledTasksService.getAvailableTasks(user);
     return {
       data: tasks,
       message: "Available scheduled tasks retrieved successfully",
@@ -100,10 +94,7 @@ export class ScheduledTasksController {
     @Body() acceptDto: AcceptTaskDto,
     @CurrentUser() user: CurrentUserData
   ) {
-    const task = await this.scheduledTasksService.acceptTask(id, user.userId, {
-      userId: user.userId,
-      name: user.name,
-    });
+    const task = await this.scheduledTasksService.acceptTask(id, user);
     return {
       data: task,
       message: "Task accepted successfully",
@@ -141,8 +132,11 @@ export class ScheduledTasksController {
   }
 
   @Get(":id")
-  async findOne(@Param("id") id: string) {
-    const task = await this.scheduledTasksService.findById(id);
+  async findOne(
+    @Param("id") id: string,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    const task = await this.scheduledTasksService.findById(id, user);
     return {
       data: task,
       message: "Scheduled task retrieved successfully",
@@ -157,10 +151,7 @@ export class ScheduledTasksController {
     @Body() updateDto: UpdateScheduledTaskDto,
     @CurrentUser() user: CurrentUserData
   ) {
-    const task = await this.scheduledTasksService.update(id, updateDto, {
-      userId: user.userId,
-      name: user.name,
-    });
+    const task = await this.scheduledTasksService.update(id, updateDto, user);
     return {
       data: task,
       message: "Scheduled task updated successfully",
@@ -172,11 +163,7 @@ export class ScheduledTasksController {
   @Roles(Role.ADMIN, Role.CONSULTANT)
   @HttpCode(HttpStatus.OK)
   async softDelete(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
-    await this.scheduledTasksService.softDelete(id, {
-      userId: user.userId,
-      name: user.name,
-      role: user.role,
-    });
+    await this.scheduledTasksService.softDelete(id, user);
     return {
       data: null,
       message: "Scheduled task deleted successfully (soft delete)",

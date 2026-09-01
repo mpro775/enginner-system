@@ -26,6 +26,14 @@ import {
 } from "../../common/utils/pagination.util";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
 import { NotificationsGateway } from "../notifications/notifications.gateway";
+import { CurrentUserData } from "../../common/decorators/current-user.decorator";
+import {
+  AccessScopedUser,
+  assertDepartmentAccess,
+  getDepartmentMatchValues,
+} from "../../common/utils/access-scope.util";
+
+type ScopedActor = AccessScopedUser & { name: string };
 
 @Injectable()
 export class ScheduledTasksService {
@@ -44,8 +52,11 @@ export class ScheduledTasksService {
 
   async create(
     createDto: CreateScheduledTaskDto,
-    user: { userId: string; name: string }
+    user: ScopedActor,
   ): Promise<ScheduledTaskDocument> {
+    if (user.role === Role.CONSULTANT) {
+      assertDepartmentAccess(user, createDto.departmentId);
+    }
     // Validate components if maintainAllComponents is false
     if (createDto.maintainAllComponents === false) {
       if (
@@ -150,14 +161,11 @@ export class ScheduledTasksService {
 
   async findAll(
     filterDto: FilterScheduledTasksDto,
-    user: { userId: string; role: string }
+    user: AccessScopedUser,
   ): Promise<PaginatedResult<ScheduledTaskDocument>> {
     const filter = await this.buildFilter(filterDto, user);
     const { skip, limit } = getSkipAndLimit(filterDto);
     const sortOptions = getSortOptions(filterDto);
-
-    // Update overdue tasks
-    await this.updateOverdueTasks();
 
     const [tasks, total] = await Promise.all([
       this.taskModel
@@ -186,18 +194,10 @@ export class ScheduledTasksService {
   }
 
   async findPendingByEngineer(
-    engineerId: string
+    user: AccessScopedUser,
   ): Promise<ScheduledTaskDocument[]> {
-    // Update overdue tasks first
-    await this.updateOverdueTasks();
-
-    const user = await this.userModel
-      .findById(engineerId)
-      .select("departmentIds")
-      .lean();
-    const departmentIds = (user?.departmentIds || []).map(
-      (id) => new Types.ObjectId(id)
-    );
+    const engineerId = user.userId;
+    const departmentIds = getDepartmentMatchValues(user);
 
     const engineerObjId = Types.ObjectId.isValid(engineerId)
       ? new Types.ObjectId(engineerId)
@@ -253,9 +253,6 @@ export class ScheduledTasksService {
       filter.status = filterDto.status;
     }
 
-    // Update overdue tasks
-    await this.updateOverdueTasks();
-
     const { skip, limit } = getSkipAndLimit(filterDto);
     const sortOptions = getSortOptions(filterDto);
 
@@ -282,10 +279,37 @@ export class ScheduledTasksService {
     };
   }
 
-  async findById(id: string): Promise<ScheduledTaskDocument> {
+  async findById(
+    id: string,
+    user?: AccessScopedUser,
+  ): Promise<ScheduledTaskDocument> {
     const task = await this.populateTask(id);
     if (!task) {
       throw new EntityNotFoundException("Scheduled Task", id);
+    }
+    if (user?.role === Role.CONSULTANT) {
+      assertDepartmentAccess(
+        user,
+        task.departmentId,
+        "This scheduled task is outside your assigned departments",
+      );
+    }
+    if (user?.role === Role.ENGINEER) {
+      const assignedEngineerId =
+        (task.engineerId as any)?._id?.toString?.() ||
+        task.engineerId?.toString();
+      if (assignedEngineerId && assignedEngineerId !== user.userId) {
+        throw new ForbiddenAccessException(
+          "This scheduled task is assigned to another engineer",
+        );
+      }
+      if (!assignedEngineerId) {
+        assertDepartmentAccess(
+          user,
+          task.departmentId,
+          "This scheduled task is outside your assigned departments",
+        );
+      }
     }
     return task;
   }
@@ -293,11 +317,21 @@ export class ScheduledTasksService {
   async update(
     id: string,
     updateDto: UpdateScheduledTaskDto,
-    user: { userId: string; name: string }
+    user: ScopedActor,
   ): Promise<ScheduledTaskDocument> {
     const task = await this.taskModel.findById(id);
     if (!task) {
       throw new EntityNotFoundException("Scheduled Task", id);
+    }
+    if (user.role === Role.CONSULTANT) {
+      assertDepartmentAccess(
+        user,
+        task.departmentId,
+        "This scheduled task is outside your assigned departments",
+      );
+      if (updateDto.departmentId) {
+        assertDepartmentAccess(user, updateDto.departmentId);
+      }
     }
 
     // Validate components if maintainAllComponents is false
@@ -386,11 +420,19 @@ export class ScheduledTasksService {
 
   async softDelete(
     id: string,
-    user: { userId: string; name: string; role: string }
+    user: ScopedActor,
   ): Promise<void> {
     const task = await this.taskModel.findById(id);
     if (!task || task.deletedAt) {
       throw new EntityNotFoundException("Scheduled Task", id);
+    }
+
+    if (user.role === Role.CONSULTANT) {
+      assertDepartmentAccess(
+        user,
+        task.departmentId,
+        "This scheduled task is outside your assigned departments",
+      );
     }
 
     // Check if consultant is trying to delete a task they didn't create
@@ -576,7 +618,7 @@ export class ScheduledTasksService {
   // Keep for backward compatibility
   async delete(
     id: string,
-    user: { userId: string; name: string; role: string }
+    user: ScopedActor,
   ): Promise<void> {
     return this.softDelete(id, user);
   }
@@ -694,7 +736,7 @@ export class ScheduledTasksService {
 
   private async buildFilter(
     filterDto: FilterScheduledTasksDto,
-    user: { userId: string; role: string }
+    user: AccessScopedUser,
   ): Promise<FilterQuery<ScheduledTaskDocument>> {
     const filter: FilterQuery<ScheduledTaskDocument> = {
       deletedAt: null, // استبعاد المحذوفين ناعماً
@@ -702,29 +744,12 @@ export class ScheduledTasksService {
 
     // Consultants can only see tasks from their departments
     if (user.role === Role.CONSULTANT) {
-      const consultant = (await this.userModel
-        .findById(user.userId)
-        .select("departmentIds +departmentId")
-        .lean()) as { departmentIds?: unknown[]; departmentId?: unknown } | null;
-      const deptIds = Array.isArray(consultant?.departmentIds)
-        ? consultant.departmentIds
-        : consultant?.departmentId
-          ? [consultant.departmentId]
-          : [];
-      if (deptIds.length > 0) {
-        const inValues: (Types.ObjectId | string)[] = [];
-        for (const id of deptIds) {
-          if (!id) continue;
-          const str = String(id);
-          if (Types.ObjectId.isValid(str)) {
-            inValues.push(str);
-            inValues.push(new Types.ObjectId(str));
-          }
-        }
-        if (inValues.length > 0) {
-          filter.departmentId = { $in: inValues } as any;
-        }
+      if (filterDto.departmentId) {
+        assertDepartmentAccess(user, filterDto.departmentId);
       }
+      filter.departmentId = filterDto.departmentId
+        ? new Types.ObjectId(filterDto.departmentId)
+        : ({ $in: getDepartmentMatchValues(user) } as any);
     }
 
     if (filterDto.status) {
@@ -810,10 +835,7 @@ export class ScheduledTasksService {
       .exec();
   }
 
-  async getAvailableTasks(userId?: string): Promise<ScheduledTaskDocument[]> {
-    // Update overdue tasks first
-    await this.updateOverdueTasks();
-
+  async getAvailableTasks(user: CurrentUserData): Promise<ScheduledTaskDocument[]> {
     const filter: FilterQuery<ScheduledTaskDocument> = {
       $or: [
         { engineerId: { $exists: false } },
@@ -823,16 +845,7 @@ export class ScheduledTasksService {
       deletedAt: null, // استبعاد المحذوفين ناعماً
     };
 
-    if (userId) {
-      const user = await this.userModel
-        .findById(userId)
-        .select("departmentIds")
-        .lean();
-      const departmentIds = (user?.departmentIds || []).map(
-        (id) => new Types.ObjectId(id)
-      );
-      filter.departmentId = { $in: departmentIds };
-    }
+    filter.departmentId = { $in: getDepartmentMatchValues(user) };
 
     const tasks = await this.taskModel
       .find(filter)
@@ -849,9 +862,9 @@ export class ScheduledTasksService {
 
   async acceptTask(
     taskId: string,
-    engineerId: string,
-    user: { userId: string; name: string }
+    user: CurrentUserData,
   ): Promise<ScheduledTaskDocument> {
+    const engineerId = user.userId;
     const task = await this.taskModel.findById(taskId);
     if (!task) {
       throw new EntityNotFoundException("Scheduled Task", taskId);
@@ -863,6 +876,12 @@ export class ScheduledTasksService {
         "This task has already been assigned to an engineer"
       );
     }
+
+    assertDepartmentAccess(
+      user,
+      task.departmentId,
+      "This scheduled task is outside your assigned departments",
+    );
 
 
     // Assign the task to the engineer

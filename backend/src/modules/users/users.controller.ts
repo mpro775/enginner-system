@@ -61,10 +61,7 @@ export class UsersController {
     @Query("departmentId") departmentId: string | undefined,
     @CurrentUser() user: CurrentUserData,
   ) {
-    const engineers = await this.usersService.getEngineers(departmentId, {
-      userId: user.userId,
-      role: user.role,
-    });
+    const engineers = await this.usersService.getEngineers(departmentId, user);
     return {
       data: engineers,
       message: "Engineers retrieved successfully",

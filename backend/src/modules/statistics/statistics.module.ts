@@ -6,13 +6,11 @@ import {
   MaintenanceRequest,
   MaintenanceRequestSchema,
 } from '../maintenance-requests/schemas/maintenance-request.schema';
-import { User, UserSchema } from '../users/schemas/user.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: MaintenanceRequest.name, schema: MaintenanceRequestSchema },
-      { name: User.name, schema: UserSchema },
     ]),
   ],
   controllers: [StatisticsController],
@@ -20,7 +18,6 @@ import { User, UserSchema } from '../users/schemas/user.schema';
   exports: [StatisticsService],
 })
 export class StatisticsModule {}
-
 
 
 

@@ -7,13 +7,20 @@ import {
   MaintenanceRequest,
   MaintenanceRequestDocument,
 } from "../maintenance-requests/schemas/maintenance-request.schema";
-import { User, UserDocument } from "../users/schemas/user.schema";
 import {
   StatisticsFilterDto,
   TrendsFilterDto,
 } from "./dto/statistics-filter.dto";
 import { RequestStatus, MaintenanceType, Role } from "../../common/enums";
 import { normalizedReferenceIdExpression } from "../../common/utils/reference-id.util";
+import { CurrentUserData } from "../../common/decorators/current-user.decorator";
+import {
+  assertDepartmentAccess,
+  getDepartmentMatchValues,
+  getScopeCacheKey,
+  stableSerialize,
+} from "../../common/utils/access-scope.util";
+import { ForbiddenAccessException } from "../../common/exceptions";
 
 const CACHE_TTL = 60000; // 1 minute
 
@@ -70,21 +77,18 @@ export class StatisticsService {
   constructor(
     @InjectModel(MaintenanceRequest.name)
     private requestModel: Model<MaintenanceRequestDocument>,
-    @InjectModel(User.name)
-    private userModel: Model<UserDocument>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   async getDashboardStatistics(
     filter: StatisticsFilterDto,
-    userRole: string,
-    userId?: string,
+    user: CurrentUserData,
   ): Promise<DashboardStatistics> {
-    const cacheKey = `stats:dashboard:${JSON.stringify(filter)}:${userRole}:${userId}`;
+    const cacheKey = this.buildStatisticsCacheKey("dashboard", filter, user);
     const cached = await this.cacheManager.get<DashboardStatistics>(cacheKey);
     if (cached) return cached;
 
-    const matchStage = await this.buildMatchStage(filter, userRole, userId);
+    const matchStage = await this.buildMatchStage(filter, user);
     const now = new Date();
     const todayStart = new Date(now);
     todayStart.setHours(0, 0, 0, 0);
@@ -182,12 +186,13 @@ export class StatisticsService {
 
   async getByEngineer(
     filter: StatisticsFilterDto,
+    user: CurrentUserData,
   ): Promise<EngineerStatistics[]> {
-    const cacheKey = `stats:byEngineer:${JSON.stringify(filter)}`;
+    const cacheKey = this.buildStatisticsCacheKey("byEngineer", filter, user);
     const cached = await this.cacheManager.get<EngineerStatistics[]>(cacheKey);
     if (cached) return cached;
 
-    const matchStage = await this.buildMatchStage(filter);
+    const matchStage = await this.buildMatchStage(filter, user);
 
     const stats = await this.requestModel.aggregate([
       { $match: matchStage },
@@ -314,8 +319,9 @@ export class StatisticsService {
 
   async getByStatus(
     filter: StatisticsFilterDto,
+    user: CurrentUserData,
   ): Promise<Record<string, number>> {
-    const matchStage = await this.buildMatchStage(filter);
+    const matchStage = await this.buildMatchStage(filter, user);
     const stats = await this.requestModel.aggregate([
       { $match: matchStage },
       { $group: { _id: "$status", count: { $sum: 1 } } },
@@ -329,8 +335,9 @@ export class StatisticsService {
 
   async getByMaintenanceType(
     filter: StatisticsFilterDto,
+    user: CurrentUserData,
   ): Promise<Record<string, number>> {
-    const matchStage = await this.buildMatchStage(filter);
+    const matchStage = await this.buildMatchStage(filter, user);
     const stats = await this.requestModel.aggregate([
       { $match: matchStage },
       { $group: { _id: "$maintenanceType", count: { $sum: 1 } } },
@@ -639,53 +646,45 @@ export class StatisticsService {
 
   private async buildMatchStage(
     filter: StatisticsFilterDto,
-    userRole?: string,
-    userId?: string,
+    user?: CurrentUserData,
   ): Promise<Record<string, any>> {
     const matchStage: Record<string, any> = { deletedAt: null };
 
     // Engineers can only see their own statistics
-    if (userRole === Role.ENGINEER && userId) {
+    if (user?.role === Role.ENGINEER) {
       // Support both String and ObjectId formats
       matchStage.engineerId = {
         $in: [
-          userId,
-          Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : null,
+          user.userId,
+          Types.ObjectId.isValid(user.userId)
+            ? new Types.ObjectId(user.userId)
+            : null,
         ].filter(Boolean),
       } as any;
     }
 
     // Consultants can only see statistics from their departments
-    if (userRole === Role.CONSULTANT && userId) {
-      const consultant = (await this.userModel
-        .findById(userId)
-        .select("departmentIds +departmentId")
-        .lean()) as {
-        departmentIds?: unknown[];
-        departmentId?: unknown;
-      } | null;
-      const deptIds = Array.isArray(consultant?.departmentIds)
-        ? consultant.departmentIds
-        : consultant?.departmentId
-          ? [consultant.departmentId]
-          : [];
-      if (deptIds.length > 0) {
-        const inValues: (Types.ObjectId | string)[] = [];
-        for (const id of deptIds) {
-          if (!id) continue;
-          const str = String(id);
-          if (Types.ObjectId.isValid(str)) {
-            inValues.push(str);
-            inValues.push(new Types.ObjectId(str));
+    if (user?.role === Role.CONSULTANT) {
+      if (filter.departmentId) assertDepartmentAccess(user, filter.departmentId);
+      matchStage.departmentId = filter.departmentId
+        ? {
+            $in: [
+              filter.departmentId,
+              new Types.ObjectId(filter.departmentId),
+            ],
           }
-        }
-        if (inValues.length > 0) {
-          matchStage.departmentId = { $in: inValues };
-        }
-      }
+        : { $in: getDepartmentMatchValues(user) };
     }
 
     if (filter.engineerId) {
+      if (
+        user?.role === Role.ENGINEER &&
+        filter.engineerId !== user.userId
+      ) {
+        throw new ForbiddenAccessException(
+          "Engineer is outside your assigned scope",
+        );
+      }
       // Support both String and ObjectId formats
       matchStage.engineerId = {
         $in: [
@@ -709,7 +708,7 @@ export class StatisticsService {
       } as any;
     }
 
-    if (filter.departmentId) {
+    if (filter.departmentId && user?.role !== Role.CONSULTANT) {
       // Support both String and ObjectId formats
       matchStage.departmentId = {
         $in: [
@@ -748,5 +747,13 @@ export class StatisticsService {
     }
 
     return matchStage;
+  }
+
+  private buildStatisticsCacheKey(
+    namespace: string,
+    filter: StatisticsFilterDto,
+    user: CurrentUserData,
+  ): string {
+    return `stats:${namespace}:${getScopeCacheKey(user)}:${stableSerialize(filter)}`;
   }
 }

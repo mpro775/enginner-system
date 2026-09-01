@@ -5,6 +5,7 @@ export interface CurrentUserData {
   email: string;
   role: string;
   name: string;
+  departmentIds: string[];
 }
 
 export const CurrentUser = createParamDecorator(

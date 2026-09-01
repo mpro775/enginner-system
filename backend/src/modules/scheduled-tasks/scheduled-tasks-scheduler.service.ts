@@ -25,5 +25,13 @@ export class ScheduledTasksSchedulerService {
       console.error("Error checking recurring tasks:", error);
     }
   }
-}
 
+  @Cron(CronExpression.EVERY_HOUR)
+  async handleOverdueTasksUpdate() {
+    try {
+      await this.scheduledTasksService.updateOverdueTasks();
+    } catch (error) {
+      console.error("Error updating overdue scheduled tasks:", error);
+    }
+  }
+}

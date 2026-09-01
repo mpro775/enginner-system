@@ -61,10 +61,7 @@ export class MaintenanceRequestsController {
     @Query() filterDto: FilterRequestsDto,
     @CurrentUser() user: CurrentUserData
   ) {
-    const result = await this.maintenanceRequestsService.findAll(filterDto, {
-      userId: user.userId,
-      role: user.role,
-    });
+    const result = await this.maintenanceRequestsService.findAll(filterDto, user);
     return {
       data: result.data,
       meta: result.meta,
@@ -86,10 +83,7 @@ export class MaintenanceRequestsController {
 
   @Get(":id")
   async findOne(@Param("id") id: string, @CurrentUser() user: CurrentUserData) {
-    const request = await this.maintenanceRequestsService.findOne(id, {
-      userId: user.userId,
-      role: user.role,
-    });
+    const request = await this.maintenanceRequestsService.findOne(id, user);
     return {
       data: request,
       message: "Maintenance request retrieved successfully",
@@ -199,11 +193,7 @@ export class MaintenanceRequestsController {
     @CurrentUser() user: CurrentUserData,
   ) {
     return {
-      data: await this.maintenanceRequestsService.addRequestNote(id, noteDto, {
-        userId: user.userId,
-        name: user.name,
-        role: user.role,
-      }),
+      data: await this.maintenanceRequestsService.addRequestNote(id, noteDto, user),
       message: "Request note added successfully",
     };
   }
@@ -216,11 +206,7 @@ export class MaintenanceRequestsController {
     @CurrentUser() user: CurrentUserData,
   ) {
     return {
-      data: await this.maintenanceRequestsService.approveCompletion(id, {
-        userId: user.userId,
-        name: user.name,
-        role: user.role,
-      }),
+      data: await this.maintenanceRequestsService.approveCompletion(id, user),
       message: "Completion approved successfully",
     };
   }
@@ -234,11 +220,7 @@ export class MaintenanceRequestsController {
     @CurrentUser() user: CurrentUserData,
   ) {
     return {
-      data: await this.maintenanceRequestsService.rejectCompletion(id, dto, {
-        userId: user.userId,
-        name: user.name,
-        role: user.role,
-      }),
+      data: await this.maintenanceRequestsService.rejectCompletion(id, dto, user),
       message: "Completion returned to engineer",
     };
   }

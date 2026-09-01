@@ -22,6 +22,11 @@ import { EntityNotFoundException } from "../../common/exceptions/business.except
 import { RequestStatus, MaintenanceType, Role } from "../../common/enums";
 import { CurrentUserData } from "../../common/decorators/current-user.decorator";
 import { NotificationsGateway } from "../notifications/notifications.gateway";
+import {
+  assertDepartmentAccess,
+  getDepartmentMatchValues,
+} from "../../common/utils/access-scope.util";
+import { ForbiddenAccessException } from "../../common/exceptions";
 
 // Convert logo to base64 for embedding in HTML
 function convertLogoToBase64(): string {
@@ -734,9 +739,10 @@ export class ReportsService {
   }
 
   async getRequestsReport(
-    filter: ReportFilterDto
+    filter: ReportFilterDto,
+    user: CurrentUserData,
   ): Promise<RequestReportData[]> {
-    const matchStage = this.buildMatchStage(filter);
+    const matchStage = this.buildMatchStage(filter, user);
 
     const requests = await this.requestModel
       .find(matchStage)
@@ -773,9 +779,10 @@ export class ReportsService {
 
   async generateExcelReport(
     filter: ReportFilterDto,
-    res: Response
+    res: Response,
+    user: CurrentUserData,
   ): Promise<void> {
-    const data = await this.getRequestsReport(filter);
+    const data = await this.getRequestsReport(filter, user);
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "Maintenance System";
@@ -848,8 +855,11 @@ export class ReportsService {
     await workbook.xlsx.write(res);
   }
 
-  async generatePdfBuffer(filter: ReportFilterDto): Promise<Buffer> {
-    const data = await this.getRequestsReport(filter);
+  async generatePdfBuffer(
+    filter: ReportFilterDto,
+    user: CurrentUserData,
+  ): Promise<Buffer> {
+    const data = await this.getRequestsReport(filter, user);
     const maxPdfExportRows = getMaxPdfExportRows();
 
     if (data.length > maxPdfExportRows) {
@@ -871,7 +881,7 @@ export class ReportsService {
 
     const stats = await this.statisticsService.getDashboardStatistics(
       statsFilter as any,
-      "admin"
+      user,
     );
 
     const logoBase64 = convertLogoToBase64();
@@ -895,10 +905,11 @@ export class ReportsService {
 
   async generatePdfReport(
     filter: ReportFilterDto,
-    res: Response
+    res: Response,
+    user: CurrentUserData,
   ): Promise<void> {
     try {
-      const pdfBuffer = await this.generatePdfBuffer(filter);
+      const pdfBuffer = await this.generatePdfBuffer(filter, user);
 
       // Set response headers
       res.setHeader("Content-Type", "application/pdf");
@@ -926,14 +937,21 @@ export class ReportsService {
 
   async getEngineerReport(
     engineerId: string,
-    filter: ReportFilterDto
+    filter: ReportFilterDto,
+    user: CurrentUserData,
   ): Promise<{
     engineer: { id: string; name: string; email: string };
     statistics: any;
     requests: RequestReportData[];
   }> {
+    const engineerMatch: FilterQuery<UserDocument> = { _id: engineerId };
+    if (user.role === Role.CONSULTANT) {
+      engineerMatch.departmentIds = {
+        $in: getDepartmentMatchValues(user),
+      } as any;
+    }
     const engineer = await this.userModel
-      .findById(engineerId)
+      .findOne(engineerMatch)
       .select("name email");
 
     if (!engineer) {
@@ -952,10 +970,10 @@ export class ReportsService {
     };
 
     const [requests, statistics] = await Promise.all([
-      this.getRequestsReport(engineerFilter),
+      this.getRequestsReport(engineerFilter, user),
       this.statisticsService.getDashboardStatistics(
         statsFilter as any,
-        "admin"
+        user,
       ),
     ]);
 
@@ -970,7 +988,10 @@ export class ReportsService {
     };
   }
 
-  async getSummaryReport(filter: ReportFilterDto): Promise<{
+  async getSummaryReport(
+    filter: ReportFilterDto,
+    user: CurrentUserData,
+  ): Promise<{
     overview: any;
     byStatus: Record<string, number>;
     byType: Record<string, number>;
@@ -999,10 +1020,10 @@ export class ReportsService {
     ] = await Promise.all([
       this.statisticsService.getDashboardStatistics(
         statsFilter as any,
-        "admin"
+        user,
       ),
-      this.statisticsService.getByStatus(statsFilter as any),
-      this.statisticsService.getByMaintenanceType(statsFilter as any),
+      this.statisticsService.getByStatus(statsFilter as any, user),
+      this.statisticsService.getByMaintenanceType(statsFilter as any, user),
       this.statisticsService.getByLocation(statsFilter as any),
       this.statisticsService.getByDepartment(statsFilter as any),
       this.statisticsService.getTopFailingMachines(statsFilter as any, 5),
@@ -1145,7 +1166,8 @@ export class ReportsService {
   }
 
   private buildMatchStage(
-    filter: ReportFilterDto
+    filter: ReportFilterDto,
+    user?: CurrentUserData,
   ): FilterQuery<MaintenanceRequestDocument> {
     const matchStage: FilterQuery<MaintenanceRequestDocument> = {};
 
@@ -1219,11 +1241,16 @@ export class ReportsService {
       }
     }
 
-    return matchStage;
+    if (filter.departmentId && user?.role === Role.CONSULTANT) {
+      assertDepartmentAccess(user, filter.departmentId);
+    }
+
+    return this.applyUserScope(matchStage, user);
   }
 
   async getSingleRequestDetails(
-    requestId: string
+    requestId: string,
+    user?: CurrentUserData,
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel
       .findById(requestId)
@@ -1244,14 +1271,33 @@ export class ReportsService {
       throw new EntityNotFoundException("Maintenance Request", requestId);
     }
 
+    if (user?.role === Role.ENGINEER) {
+      const engineerId =
+        (request.engineerId as any)?._id?.toString?.() ||
+        request.engineerId?.toString();
+      if (engineerId !== user.userId) {
+        throw new ForbiddenAccessException(
+          "ليس لديك صلاحية للوصول إلى هذا التقرير",
+        );
+      }
+    }
+    if (user?.role === Role.CONSULTANT) {
+      assertDepartmentAccess(
+        user,
+        request.departmentId,
+        "ليس لديك صلاحية للوصول إلى هذا التقرير",
+      );
+    }
+
     return request as MaintenanceRequestDocument;
   }
 
   async generateSingleRequestPdfBuffer(
     requestId: string,
+    user?: CurrentUserData,
     browser?: Browser
   ): Promise<Buffer> {
-    const request = await this.getSingleRequestDetails(requestId);
+    const request = await this.getSingleRequestDetails(requestId, user);
     return this.generateSingleRequestPdfBufferFromRequest(request, browser);
   }
 
@@ -1339,6 +1385,15 @@ export class ReportsService {
       };
     }
 
+    if (user?.role === Role.CONSULTANT) {
+      return {
+        ...matchStage,
+        departmentId:
+          matchStage.departmentId ??
+          ({ $in: getDepartmentMatchValues(user) } as any),
+      };
+    }
+
     return matchStage;
   }
 
@@ -1379,7 +1434,7 @@ export class ReportsService {
     filter: ReportFilterDto,
     user?: CurrentUserData
   ): Promise<MaintenanceRequestDocument[]> {
-    const matchStage = this.applyUserScope(this.buildMatchStage(filter), user);
+    const matchStage = this.buildMatchStage(filter, user);
     const requests = await this.requestModel
       .find(matchStage)
       .populate("engineerId", "name email")

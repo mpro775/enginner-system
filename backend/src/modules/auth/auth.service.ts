@@ -90,7 +90,12 @@ export class AuthService {
 
     // Notify about pending tasks for engineers
     if (user.role === Role.ENGINEER) {
-      this.notifyPendingTasks(user._id.toString());
+      this.notifyPendingTasks(
+        user._id.toString(),
+        ((user.departmentIds as unknown[]) || []).map((department) =>
+          String((department as any)?._id ?? department),
+        ),
+      );
     }
 
     const departmentIds = (user.departmentIds as { _id?: unknown; name?: string }[] | null | undefined) ?? [];
@@ -238,10 +243,17 @@ export class AuthService {
     return value * (units[unit] || 60);
   }
 
-  private async notifyPendingTasks(engineerId: string): Promise<void> {
+  private async notifyPendingTasks(
+    engineerId: string,
+    departmentIds: string[],
+  ): Promise<void> {
     try {
       const tasks =
-        await this.scheduledTasksService.findPendingByEngineer(engineerId);
+        await this.scheduledTasksService.findPendingByEngineer({
+          userId: engineerId,
+          role: Role.ENGINEER,
+          departmentIds,
+        });
 
       if (tasks.length > 0) {
         const overdueTasks = tasks.filter((task) => task.status === "overdue");

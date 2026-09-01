@@ -113,3 +113,4 @@ ScheduledTaskSchema.index({ parentTaskId: 1 });
 ScheduledTaskSchema.index({ repetitionInterval: 1 });
 ScheduledTaskSchema.index({ engineerId: 1 }, { sparse: true }); // Sparse index for unassigned tasks
 ScheduledTaskSchema.index({ deletedAt: 1 });
+ScheduledTaskSchema.index({ departmentId: 1, deletedAt: 1, createdAt: -1 });

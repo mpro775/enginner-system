@@ -26,8 +26,7 @@ export class StatisticsController {
   ) {
     const stats = await this.statisticsService.getDashboardStatistics(
       filter,
-      user.role,
-      user.userId
+      user
     );
     return {
       data: stats,
@@ -38,8 +37,11 @@ export class StatisticsController {
   @Get("by-engineer")
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER)
-  async getByEngineer(@Query() filter: StatisticsFilterDto) {
-    const stats = await this.statisticsService.getByEngineer(filter);
+  async getByEngineer(
+    @Query() filter: StatisticsFilterDto,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    const stats = await this.statisticsService.getByEngineer(filter, user);
     return {
       data: stats,
       message: "Engineer statistics retrieved successfully",
@@ -47,8 +49,11 @@ export class StatisticsController {
   }
 
   @Get("by-status")
-  async getByStatus(@Query() filter: StatisticsFilterDto) {
-    const stats = await this.statisticsService.getByStatus(filter);
+  async getByStatus(
+    @Query() filter: StatisticsFilterDto,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    const stats = await this.statisticsService.getByStatus(filter, user);
     return {
       data: stats,
       message: "Status statistics retrieved successfully",
@@ -56,8 +61,11 @@ export class StatisticsController {
   }
 
   @Get("by-maintenance-type")
-  async getByMaintenanceType(@Query() filter: StatisticsFilterDto) {
-    const stats = await this.statisticsService.getByMaintenanceType(filter);
+  async getByMaintenanceType(
+    @Query() filter: StatisticsFilterDto,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    const stats = await this.statisticsService.getByMaintenanceType(filter, user);
     return {
       data: stats,
       message: "Maintenance type statistics retrieved successfully",

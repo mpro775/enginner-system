@@ -60,16 +60,17 @@ function createService(atomicResult: unknown, departmentId = ids.department) {
 }
 
 describe("consultant completion approval", () => {
-  const user = {
+  const user = (departmentId = ids.department) => ({
     userId: ids.consultant,
     name: "Consultant",
     role: Role.CONSULTANT,
-  };
+    departmentIds: [departmentId],
+  });
 
   it("uses an atomic pending-status condition and records the approver", async () => {
     const { service, requestModel, gateway, audit } = createService({});
 
-    await service.approveCompletion(ids.request, user);
+    await service.approveCompletion(ids.request, user());
 
     expect(requestModel.findOneAndUpdate).toHaveBeenCalledWith(
       {
@@ -90,7 +91,7 @@ describe("consultant completion approval", () => {
   it("rejects an already-processed approval without auditing it", async () => {
     const { service, audit } = createService(null);
 
-    await expect(service.approveCompletion(ids.request, user)).rejects.toBeInstanceOf(
+    await expect(service.approveCompletion(ids.request, user())).rejects.toBeInstanceOf(
       InvalidOperationException,
     );
     expect(audit.create).not.toHaveBeenCalled();
@@ -99,7 +100,9 @@ describe("consultant completion approval", () => {
   it("rejects a consultant outside the request department", async () => {
     const { service, requestModel } = createService({}, ids.otherDepartment);
 
-    await expect(service.approveCompletion(ids.request, user)).rejects.toBeInstanceOf(
+    await expect(
+      service.approveCompletion(ids.request, user(ids.otherDepartment)),
+    ).rejects.toBeInstanceOf(
       ForbiddenAccessException,
     );
     expect(requestModel.findOneAndUpdate).not.toHaveBeenCalled();

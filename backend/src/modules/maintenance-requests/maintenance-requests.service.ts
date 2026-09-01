@@ -40,6 +40,13 @@ import { AuditLogsService } from "../audit-logs/audit-logs.service";
 import { ScheduledTasksService } from "../scheduled-tasks/scheduled-tasks.service";
 import { User, UserDocument } from "../users/schemas/user.schema";
 import { System, SystemDocument } from "../systems/schemas/system.schema";
+import {
+  AccessScopedUser,
+  assertDepartmentAccess,
+  getDepartmentMatchValues,
+} from "../../common/utils/access-scope.util";
+
+type ScopedActor = AccessScopedUser & { name: string };
 
 @Injectable()
 export class MaintenanceRequestsService {
@@ -220,7 +227,7 @@ export class MaintenanceRequestsService {
 
   async findAll(
     filterDto: FilterRequestsDto,
-    user: { userId: string; role: string },
+    user: AccessScopedUser,
   ): Promise<PaginatedResult<MaintenanceRequestDocument>> {
     const { skip, limit } = getSkipAndLimit(filterDto);
     const sortOptions = getSortOptions(filterDto);
@@ -255,7 +262,7 @@ export class MaintenanceRequestsService {
 
   async findOne(
     id: string,
-    user: { userId: string; role: string },
+    user: AccessScopedUser,
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.populateRequest(id);
 
@@ -274,12 +281,11 @@ export class MaintenanceRequestsService {
     if (user.role === Role.CONSULTANT) {
       const departmentId = (request.departmentId as any)?._id?.toString?.() ||
         request.departmentId?.toString();
-      const departmentIds = await this.getUserDepartmentIds(user.userId);
-      if (!departmentId || !departmentIds.includes(departmentId)) {
-        throw new ForbiddenAccessException(
-          "This request is outside your assigned departments",
-        );
-      }
+      assertDepartmentAccess(
+        user,
+        departmentId,
+        "This request is outside your assigned departments",
+      );
     }
 
     return request;
@@ -649,7 +655,7 @@ export class MaintenanceRequestsService {
   async addRequestNote(
     id: string,
     dto: AddRequestNoteDto,
-    user: { userId: string; name: string; role: string },
+    user: ScopedActor,
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findOne({ _id: id, deletedAt: null });
     if (!request) throw new EntityNotFoundException("Maintenance Request", id);
@@ -661,10 +667,11 @@ export class MaintenanceRequestsService {
       throw new ForbiddenAccessException("You can only add notes to your own requests");
     }
     if (user.role === Role.CONSULTANT) {
-      const departmentIds = await this.getUserDepartmentIds(user.userId);
-      if (!departmentIds.includes(request.departmentId.toString())) {
-        throw new ForbiddenAccessException("This request is outside your assigned departments");
-      }
+      assertDepartmentAccess(
+        user,
+        request.departmentId,
+        "This request is outside your assigned departments",
+      );
     }
     if (
       user.role === Role.ENGINEER &&
@@ -705,14 +712,15 @@ export class MaintenanceRequestsService {
 
   async approveCompletion(
     id: string,
-    user: { userId: string; name: string; role: string },
+    user: ScopedActor,
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findOne({ _id: id, deletedAt: null });
     if (!request) throw new EntityNotFoundException("Maintenance Request", id);
-    const departmentIds = await this.getUserDepartmentIds(user.userId);
-    if (!departmentIds.includes(request.departmentId.toString())) {
-      throw new ForbiddenAccessException("This request is outside your assigned departments");
-    }
+    assertDepartmentAccess(
+      user,
+      request.departmentId,
+      "This request is outside your assigned departments",
+    );
     const approvedAt = new Date();
     const approved = await this.requestModel.findOneAndUpdate(
       { _id: id, status: RequestStatus.PENDING_CONSULTANT_APPROVAL },
@@ -750,14 +758,15 @@ export class MaintenanceRequestsService {
   async rejectCompletion(
     id: string,
     dto: RejectCompletionDto,
-    user: { userId: string; name: string; role: string },
+    user: ScopedActor,
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findOne({ _id: id, deletedAt: null });
     if (!request) throw new EntityNotFoundException("Maintenance Request", id);
-    const departmentIds = await this.getUserDepartmentIds(user.userId);
-    if (!departmentIds.includes(request.departmentId.toString())) {
-      throw new ForbiddenAccessException("This request is outside your assigned departments");
-    }
+    assertDepartmentAccess(
+      user,
+      request.departmentId,
+      "This request is outside your assigned departments",
+    );
     const updatedRaw = await this.requestModel.findOneAndUpdate(
       { _id: id, status: RequestStatus.PENDING_CONSULTANT_APPROVAL },
       {
@@ -832,7 +841,7 @@ export class MaintenanceRequestsService {
 
   private async buildFilter(
     filterDto: FilterRequestsDto,
-    user: { userId: string; role: string },
+    user: AccessScopedUser,
   ): Promise<FilterQuery<MaintenanceRequestDocument>> {
     const filter: FilterQuery<MaintenanceRequestDocument> = {
       deletedAt: null, // استبعاد المحذوفين ناعماً
@@ -853,18 +862,12 @@ export class MaintenanceRequestsService {
 
     // Consultants can only see requests from their departments.
     if (user.role === Role.CONSULTANT) {
-      const departmentIds = await this.getUserDepartmentIds(user.userId);
-      if (
-        filterDto.departmentId &&
-        !departmentIds.includes(filterDto.departmentId)
-      ) {
-        throw new ForbiddenAccessException(
-          "Department is outside your assigned scope",
-        );
+      if (filterDto.departmentId) {
+        assertDepartmentAccess(user, filterDto.departmentId);
       }
       filter.departmentId = filterDto.departmentId
         ? new Types.ObjectId(filterDto.departmentId)
-        : { $in: departmentIds.map((id) => new Types.ObjectId(id)) } as any;
+        : ({ $in: getDepartmentMatchValues(user) } as any);
     }
 
     if (filterDto.openOnly) {
@@ -998,14 +1001,6 @@ export class MaintenanceRequestsService {
       .populate("completionApprovedBy", "name email")
       .populate("deletedBy", "name email")
       .exec() as Promise<MaintenanceRequestDocument>;
-  }
-
-  private async getUserDepartmentIds(userId: string): Promise<string[]> {
-    const user = await this.userModel
-      .findById(userId)
-      .select("departmentIds")
-      .lean();
-    return (user?.departmentIds || []).map((id) => id.toString());
   }
 
   private async getDepartmentNotificationUserIds(

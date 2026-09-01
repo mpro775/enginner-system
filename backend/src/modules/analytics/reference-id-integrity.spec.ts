@@ -168,7 +168,6 @@ describe("reference ID integrity hardening", () => {
     const statistics = new StatisticsService(
       requestModel as never,
       {} as never,
-      {} as never,
     );
 
     await statistics.getByLocation({});

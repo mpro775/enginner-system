@@ -20,7 +20,6 @@ import {
   CurrentUser,
   CurrentUserData,
 } from "../../common/decorators/current-user.decorator";
-import { ForbiddenAccessException } from "../../common/exceptions";
 
 @Controller("reports")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -66,29 +65,16 @@ export class ReportsController {
     @Res() res: Response,
     @Query("format") format?: string,
     @Query("preview") preview?: string,
-    @CurrentUser() user?: CurrentUserData
+    @CurrentUser() user?: CurrentUserData,
   ) {
     try {
-      // التحقق من أن المهندس يمكنه فقط الوصول إلى طلباته الخاصة
-      if (user?.role === Role.ENGINEER) {
-        const request = await this.reportsService.getSingleRequestDetails(id);
-        // التحقق من أن الطلب مخصص لهذا المهندس
-        // engineerId يكون populated object بعد populate
-        const engineerId =
-          (request.engineerId as any)?._id?.toString() ||
-          (request.engineerId as any)?.id?.toString() ||
-          request.engineerId?.toString();
-        if (engineerId !== user.userId) {
-          throw new ForbiddenAccessException(
-            "ليس لديك صلاحية للوصول إلى هذا التقرير"
-          );
-        }
-      }
-
       const reportFormat = format || "pdf";
 
       if (reportFormat === "pdf") {
-        const buffer = await this.reportsService.generateSingleRequestPdfBuffer(id);
+        const buffer = await this.reportsService.generateSingleRequestPdfBuffer(
+          id,
+          user,
+        );
         const isPreview = preview === "true";
 
         res.set({
@@ -107,7 +93,7 @@ export class ReportsController {
       }
 
       // JSON Response
-      const request = await this.reportsService.getSingleRequestDetails(id);
+      const request = await this.reportsService.getSingleRequestDetails(id, user);
       res.json({
         success: true,
         statusCode: 200,
@@ -118,7 +104,7 @@ export class ReportsController {
     } catch (error) {
       console.error("Single Request Report Error:", error);
       if (!res.headersSent) {
-        if (error instanceof ForbiddenAccessException) {
+        if ((error as any)?.status === 403) {
           res.status(403).json({ message: error.message });
         } else {
           res.status(500).json({ message: "Failed to generate report" });
@@ -130,16 +116,17 @@ export class ReportsController {
   @Get("requests")
   async getRequestsReport(
     @Query() filter: ReportFilterDto,
-    @Res() res: Response // لاحظ: أزلنا passthrough: true للتحكم الكامل
+    @Res() res: Response, // لاحظ: أزلنا passthrough: true للتحكم الكامل
+    @CurrentUser() user: CurrentUserData,
   ) {
     try {
       if (filter.format === "excel") {
-        await this.reportsService.generateExcelReport(filter, res);
+        await this.reportsService.generateExcelReport(filter, res, user);
         return; // ExcelJS يغلق الرد بنفسه
       }
 
       if (filter.format === "pdf") {
-        const buffer = await this.reportsService.generatePdfBuffer(filter);
+        const buffer = await this.reportsService.generatePdfBuffer(filter, user);
 
         res.set({
           "Content-Type": "application/pdf",
@@ -156,7 +143,7 @@ export class ReportsController {
       }
 
       // JSON Response
-      const data = await this.reportsService.getRequestsReport(filter);
+      const data = await this.reportsService.getRequestsReport(filter, user);
       res.json({
         success: true,
         statusCode: 200,
@@ -299,11 +286,13 @@ export class ReportsController {
   @Get("engineer/:id")
   async getEngineerReport(
     @Param("id") engineerId: string,
-    @Query() filter: ReportFilterDto
+    @Query() filter: ReportFilterDto,
+    @CurrentUser() user: CurrentUserData,
   ) {
     const report = await this.reportsService.getEngineerReport(
       engineerId,
-      filter
+      filter,
+      user,
     );
     return {
       data: report,
@@ -313,8 +302,11 @@ export class ReportsController {
 
   @Get("summary")
   @Roles(Role.ADMIN)
-  async getSummaryReport(@Query() filter: ReportFilterDto) {
-    const report = await this.reportsService.getSummaryReport(filter);
+  async getSummaryReport(
+    @Query() filter: ReportFilterDto,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    const report = await this.reportsService.getSummaryReport(filter, user);
     return {
       data: report,
       message: "Summary report generated successfully",

@@ -52,10 +52,7 @@ export class ComplaintsController {
     @Query() filterDto: FilterComplaintsDto,
     @CurrentUser() user: CurrentUserData
   ) {
-    const result = await this.complaintsService.findAll(filterDto, {
-      userId: user.userId,
-      role: user.role,
-    });
+    const result = await this.complaintsService.findAll(filterDto, user);
     return {
       data: result.data,
       meta: result.meta,
@@ -81,10 +78,7 @@ export class ComplaintsController {
     @Param("id") id: string,
     @CurrentUser() user: CurrentUserData
   ) {
-    const complaint = await this.complaintsService.findOne(id, {
-      userId: user.userId,
-      role: user.role,
-    });
+    const complaint = await this.complaintsService.findOne(id, user);
     return {
       data: complaint,
       message: "Complaint retrieved successfully",
@@ -99,11 +93,7 @@ export class ComplaintsController {
     @Body() assignDto: AssignComplaintDto,
     @CurrentUser() user: CurrentUserData
   ) {
-    const complaint = await this.complaintsService.assign(id, assignDto, {
-      userId: user.userId,
-      name: user.name,
-      role: user.role,
-    });
+    const complaint = await this.complaintsService.assign(id, assignDto, user);
     return {
       data: complaint,
       message: "Complaint assigned successfully",
@@ -121,11 +111,7 @@ export class ComplaintsController {
     const complaint = await this.complaintsService.changeStatus(
       id,
       statusDto,
-      {
-        userId: user.userId,
-        name: user.name,
-        role: user.role,
-      }
+      user
     );
     return {
       data: complaint,
@@ -142,11 +128,7 @@ export class ComplaintsController {
     @CurrentUser() user: CurrentUserData,
   ) {
     return {
-      data: await this.complaintsService.addReviewNote(id, dto, {
-        userId: user.userId,
-        name: user.name,
-        role: user.role,
-      }),
+      data: await this.complaintsService.addReviewNote(id, dto, user),
       message: "Review note added successfully",
     };
   }
@@ -160,11 +142,7 @@ export class ComplaintsController {
     @CurrentUser() user: CurrentUserData,
   ) {
     return {
-      data: await this.complaintsService.transferDepartment(id, dto, {
-        userId: user.userId,
-        name: user.name,
-        role: user.role,
-      }),
+      data: await this.complaintsService.transferDepartment(id, dto, user),
       message: "Complaint transferred successfully",
     };
   }
@@ -178,11 +156,7 @@ export class ComplaintsController {
     @CurrentUser() user: CurrentUserData,
   ) {
     return {
-      data: await this.complaintsService.createMaintenanceRequest(id, dto, {
-        userId: user.userId,
-        name: user.name,
-        role: user.role,
-      }),
+      data: await this.complaintsService.createMaintenanceRequest(id, dto, user),
       message: "Maintenance request created from complaint successfully",
     };
   }
@@ -232,7 +206,6 @@ export class ComplaintsController {
     };
   }
 }
-
 
 
 
