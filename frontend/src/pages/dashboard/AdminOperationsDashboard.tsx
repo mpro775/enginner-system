@@ -393,9 +393,18 @@ export default function AdminOperationsDashboard() {
           context={`قيد التنفيذ: ${Math.max(
             0,
             data.openRequests -
-              data.stoppedRequests,
-          )} · متوقفة: ${data.stoppedRequests}`}
-          help="تشمل الطلبات قيد التنفيذ والمتوقفة لأنها لم تُغلق بعد."
+              data.stoppedRequests -
+              data.pendingConsultantApproval,
+          )} · بانتظار الاعتماد: ${data.pendingConsultantApproval} · متوقفة: ${data.stoppedRequests}`}
+          help="تشمل الطلبات قيد التنفيذ وبانتظار اعتماد الاستشاري والمتوقفة لأنها لم تُغلق بعد."
+        />
+
+        <KpiCard
+          title="بانتظار اعتماد الاستشاري"
+          value={data.pendingConsultantApproval}
+          icon={Clock3}
+          scope="current"
+          context="طلبات أرسلها المهندسون وتنتظر قرار الاستشاري"
         />
 
         <KpiCard

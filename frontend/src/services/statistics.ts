@@ -21,6 +21,7 @@ interface TrendData {
   emergency: number;
   preventive: number;
   completed: number;
+  pendingConsultantApproval: number;
 }
 
 interface LocationStats {
@@ -132,7 +133,6 @@ export const statisticsService = {
     return response.data.data;
   },
 };
-
 
 
 

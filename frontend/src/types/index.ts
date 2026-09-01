@@ -217,6 +217,7 @@ export interface AuthResponse {
 export interface DashboardStatistics {
   totalRequests: number;
   inProgress: number;
+  pendingConsultantApproval: number;
   completed: number;
   stopped: number;
   emergencyRequests: number;
@@ -233,6 +234,7 @@ export interface EngineerStatistics {
   totalRequests: number;
   byStatus: {
     inProgress: number;
+    pendingConsultantApproval: number;
     completed: number;
     stopped: number;
   };

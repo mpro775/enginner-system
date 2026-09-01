@@ -552,6 +552,13 @@ export default function AnalyticsCenter() {
             <div className="space-y-6">
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <Metric
+                  title="بانتظار اعتماد الاستشاري"
+                  value={data.kpis.pendingConsultantApproval}
+                  hint="طلبات غير مغلقة أرسلها المهندسون وتنتظر قرار الاستشاري."
+                  scope="current"
+                />
+
+                <Metric
                   title="متوسط زمن إنجاز الطلب"
                   value={formatDuration(
                     data.kpis.avgCompletionTimeHours,

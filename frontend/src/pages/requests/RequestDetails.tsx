@@ -493,8 +493,13 @@ export default function RequestDetails() {
     !request.complaintId;
   const canComplete = isOwner && request.status === RequestStatus.IN_PROGRESS;
   const canAddNote =
-    (isEngineer || isConsultant || isMaintenanceManager || isAdmin) &&
-    request.status !== RequestStatus.STOPPED;
+    (isEngineer &&
+      isOwner &&
+      (request.status === RequestStatus.IN_PROGRESS ||
+        request.status === RequestStatus.PENDING_CONSULTANT_APPROVAL)) ||
+    isConsultant ||
+    isMaintenanceManager ||
+    isAdmin;
   const canApprove =
     isConsultant &&
     request.status === RequestStatus.PENDING_CONSULTANT_APPROVAL;
@@ -1107,11 +1112,14 @@ export default function RequestDetails() {
                     <p className="font-medium">
                       {typeof request.complaintId === "string"
                         ? request.complaintId
-                        : (request.complaintId as any).complaintCode}
+                        : request.complaintId.complaintCode}
                     </p>
                     {typeof request.complaintId !== "string" && (
                       <p className="text-sm text-muted-foreground">
-                        مقدم البلاغ: {(request.complaintId as any).reporterName}
+                        مقدم البلاغ:{" "}
+                        {request.complaintId.reporterNameAr ||
+                          request.complaintId.reporterNameEn ||
+                          "—"}
                       </p>
                     )}
                   </div>
@@ -1123,7 +1131,7 @@ export default function RequestDetails() {
                         `/app/complaints/${
                           typeof request.complaintId === "string"
                             ? request.complaintId
-                            : (request.complaintId as any).id
+                            : request.complaintId?.id || ""
                         }`,
                       )
                     }

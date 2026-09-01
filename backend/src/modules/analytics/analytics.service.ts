@@ -64,6 +64,7 @@ export interface RequestMetrics {
   emergencyRequests: number;
   emergencyOpen: number;
   stoppedRequests: number;
+  pendingConsultantApproval: number;
   completedRequests: number;
   preventiveRequests: number;
   avgCompletionTimeHours: number;
@@ -88,6 +89,7 @@ interface CurrentRequestSnapshot {
   openRequests: number;
   emergencyOpen: number;
   stoppedRequests: number;
+  pendingConsultantApproval: number;
   openRequestAverageAgeHours: number;
 }
 
@@ -169,6 +171,8 @@ export class AnalyticsService {
         openRequests: requestSnapshot.openRequests,
         emergencyOpen: requestSnapshot.emergencyOpen,
         stoppedRequests: requestSnapshot.stoppedRequests,
+        pendingConsultantApproval:
+          requestSnapshot.pendingConsultantApproval,
         overduePreventive,
         upcomingPreventive7Days,
         unresolvedComplaints,
@@ -1070,6 +1074,20 @@ export class AnalyticsService {
               $cond: [{ $eq: ["$status", RequestStatus.STOPPED] }, 1, 0],
             },
           },
+          pendingConsultantApproval: {
+            $sum: {
+              $cond: [
+                {
+                  $eq: [
+                    "$status",
+                    RequestStatus.PENDING_CONSULTANT_APPROVAL,
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
           completedRequests: {
             $sum: {
               $cond: [{ $eq: ["$status", RequestStatus.COMPLETED] }, 1, 0],
@@ -1154,6 +1172,7 @@ export class AnalyticsService {
       emergencyRequests: emergency,
       emergencyOpen: row.emergencyOpen || 0,
       stoppedRequests: row.stoppedRequests || 0,
+      pendingConsultantApproval: row.pendingConsultantApproval || 0,
       completedRequests: row.completedRequests || 0,
       preventiveRequests: preventive,
       avgCompletionTimeHours: this.toHours(row.avgCompletionMs),
@@ -1193,6 +1212,20 @@ export class AnalyticsService {
               $cond: [{ $eq: ["$status", RequestStatus.STOPPED] }, 1, 0],
             },
           },
+          pendingConsultantApproval: {
+            $sum: {
+              $cond: [
+                {
+                  $eq: [
+                    "$status",
+                    RequestStatus.PENDING_CONSULTANT_APPROVAL,
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
           avgOpenAgeMs: {
             $avg: { $subtract: [now, "$openedAt"] },
           },
@@ -1204,6 +1237,7 @@ export class AnalyticsService {
       openRequests: row.openRequests || 0,
       emergencyOpen: row.emergencyOpen || 0,
       stoppedRequests: row.stoppedRequests || 0,
+      pendingConsultantApproval: row.pendingConsultantApproval || 0,
       openRequestAverageAgeHours: this.toHours(row.avgOpenAgeMs),
     };
   }

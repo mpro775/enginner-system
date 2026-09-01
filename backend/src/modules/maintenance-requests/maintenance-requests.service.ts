@@ -133,11 +133,6 @@ export class MaintenanceRequestsService {
     // Set default value for maintainAllComponents if not provided
     const maintainAllComponents = createDto.maintainAllComponents ?? true;
 
-    // Generate request code
-    const requestCode = await this.generateRequestCode(
-      createDto.maintenanceType,
-    );
-
     // Ensure engineerId is converted to ObjectId for consistent storage and querying
     const engineerId = Types.ObjectId.isValid(user.userId)
       ? new Types.ObjectId(user.userId)
@@ -152,26 +147,42 @@ export class MaintenanceRequestsService {
 
     const { engineerNotes, ...requestData } = createDto;
     const initialNote = engineerNotes?.trim();
-    const request = new this.requestModel({
-      ...requestData,
-      ...referenceIds,
-      maintainAllComponents,
-      requestCode,
-      engineerId,
-      requestNotes: initialNote
-        ? [{
-            body: initialNote,
-            authorId: engineerId,
-            authorName: user.name,
-            authorRole: Role.ENGINEER,
-            createdAt: new Date(),
-          }]
-        : [],
-      status: RequestStatus.IN_PROGRESS,
-      openedAt: new Date(),
-    });
-
-    const saved = await request.save();
+    let saved: MaintenanceRequestDocument | null = null;
+    let requestCode = "";
+    for (let attempt = 0; attempt < 5 && !saved; attempt += 1) {
+      requestCode = await this.generateRequestCode(createDto.maintenanceType);
+      try {
+        saved = await new this.requestModel({
+          ...requestData,
+          ...referenceIds,
+          maintainAllComponents,
+          requestCode,
+          engineerId,
+          requestNotes: initialNote
+            ? [{
+                body: initialNote,
+                authorId: engineerId,
+                authorName: user.name,
+                authorRole: Role.ENGINEER,
+                createdAt: new Date(),
+              }]
+            : [],
+          status: RequestStatus.IN_PROGRESS,
+          openedAt: new Date(),
+        }).save();
+      } catch (error: any) {
+        const duplicateRequestCode =
+          error?.code === 11000 &&
+          (error?.keyPattern?.requestCode ||
+            error?.keyValue?.requestCode ||
+            String(error?.message || "").includes("requestCode"));
+        if (duplicateRequestCode) continue;
+        throw error;
+      }
+    }
+    if (!saved) {
+      throw new InvalidOperationException("Could not allocate a request code");
+    }
     const populated = await this.populateRequest(saved._id.toString());
 
     // If scheduledTaskId is provided, mark the task as completed

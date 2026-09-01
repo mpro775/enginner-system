@@ -127,15 +127,31 @@ export class ComplaintsService {
 
   async create(createDto: CreateComplaintDto): Promise<ComplaintDocument> {
     await this.validateComplaintReferences(createDto);
-    const complaintCode = await this.generateComplaintCode();
-    const complaint = await new this.complaintModel({
-      ...normalizeComplaintPayload(createDto),
-      locationId: new Types.ObjectId(createDto.locationId),
-      floorId: new Types.ObjectId(createDto.floorId),
-      departmentId: new Types.ObjectId(createDto.departmentId),
-      complaintCode,
-      status: ComplaintStatus.NEW,
-    }).save();
+    let complaint: ComplaintDocument | null = null;
+    for (let attempt = 0; attempt < 5 && !complaint; attempt += 1) {
+      const complaintCode = await this.generateComplaintCode();
+      try {
+        complaint = await new this.complaintModel({
+          ...normalizeComplaintPayload(createDto),
+          locationId: new Types.ObjectId(createDto.locationId),
+          floorId: new Types.ObjectId(createDto.floorId),
+          departmentId: new Types.ObjectId(createDto.departmentId),
+          complaintCode,
+          status: ComplaintStatus.NEW,
+        }).save();
+      } catch (error: any) {
+        const duplicateComplaintCode =
+          error?.code === 11000 &&
+          (error?.keyPattern?.complaintCode ||
+            error?.keyValue?.complaintCode ||
+            String(error?.message || "").includes("complaintCode"));
+        if (duplicateComplaintCode) continue;
+        throw error;
+      }
+    }
+    if (!complaint) {
+      throw new InvalidOperationException("Could not allocate a complaint code");
+    }
     const populated = await this.requirePopulated(complaint._id.toString());
     const targetIds = await this.getDepartmentTargetUserIds(
       createDto.departmentId,

@@ -20,6 +20,7 @@ const CACHE_TTL = 60000; // 1 minute
 export interface DashboardStatistics {
   totalRequests: number;
   inProgress: number;
+  pendingConsultantApproval: number;
   completed: number;
   stopped: number;
   emergencyRequests: number;
@@ -36,6 +37,7 @@ export interface EngineerStatistics {
   totalRequests: number;
   byStatus: {
     inProgress: number;
+    pendingConsultantApproval: number;
     completed: number;
     stopped: number;
   };
@@ -60,6 +62,7 @@ export interface TrendData {
   emergency: number;
   preventive: number;
   completed: number;
+  pendingConsultantApproval: number;
 }
 
 @Injectable()
@@ -158,6 +161,8 @@ export class StatisticsService {
         (statusMap[RequestStatus.COMPLETED] || 0) +
         (statusMap[RequestStatus.STOPPED] || 0),
       inProgress: statusMap[RequestStatus.IN_PROGRESS] || 0,
+      pendingConsultantApproval:
+        statusMap[RequestStatus.PENDING_CONSULTANT_APPROVAL] || 0,
       completed: statusMap[RequestStatus.COMPLETED] || 0,
       stopped: statusMap[RequestStatus.STOPPED] || 0,
       emergencyRequests: typeMap[MaintenanceType.EMERGENCY] || 0,
@@ -193,6 +198,20 @@ export class StatisticsService {
           inProgress: {
             $sum: {
               $cond: [{ $eq: ["$status", RequestStatus.IN_PROGRESS] }, 1, 0],
+            },
+          },
+          pendingConsultantApproval: {
+            $sum: {
+              $cond: [
+                {
+                  $eq: [
+                    "$status",
+                    RequestStatus.PENDING_CONSULTANT_APPROVAL,
+                  ],
+                },
+                1,
+                0,
+              ],
             },
           },
           completed: {
@@ -277,6 +296,7 @@ export class StatisticsService {
         totalRequests: stat.total,
         byStatus: {
           inProgress: stat.inProgress,
+          pendingConsultantApproval: stat.pendingConsultantApproval,
           completed: stat.completed,
           stopped: stat.stopped,
         },
@@ -545,6 +565,20 @@ export class StatisticsService {
               $cond: [{ $eq: ["$status", RequestStatus.COMPLETED] }, 1, 0],
             },
           },
+          pendingConsultantApproval: {
+            $sum: {
+              $cond: [
+                {
+                  $eq: [
+                    "$status",
+                    RequestStatus.PENDING_CONSULTANT_APPROVAL,
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
         },
       },
       { $sort: { _id: 1 } },
@@ -558,6 +592,7 @@ export class StatisticsService {
       emergency: stat.emergency,
       preventive: stat.preventive,
       completed: stat.completed,
+      pendingConsultantApproval: stat.pendingConsultantApproval,
     }));
   }
 

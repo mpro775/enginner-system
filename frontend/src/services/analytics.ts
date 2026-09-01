@@ -182,6 +182,7 @@ export interface OperationsDashboard {
   openRequests: number;
   emergencyOpen: number;
   stoppedRequests: number;
+  pendingConsultantApproval: number;
   overduePreventive: number;
   upcomingPreventive7Days: number;
   unresolvedComplaints: number;
@@ -217,6 +218,7 @@ export interface AnalyticsOverview {
     emergencyRequests: number;
     emergencyOpen: number;
     stoppedRequests: number;
+    pendingConsultantApproval: number;
     completedRequests: number;
     preventiveRequests: number;
     avgCompletionTimeHours: number;

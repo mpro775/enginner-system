@@ -7,6 +7,7 @@ import {
   Wrench,
   TrendingUp,
   Calendar,
+  Clock3,
   StopCircle,
 } from "lucide-react";
 import {
@@ -27,6 +28,7 @@ import { Role } from "@/types";
 // KSU Brand Colors palette
 const STATUS_COLORS = {
   in_progress: "#0099B7", // KSU Teal - in progress
+  pending_consultant_approval: "#8b5cf6", // Purple - awaiting approval
   completed: "#22c55e", // Green - completed
   stopped: "#f97316", // Orange - stopped
 };
@@ -138,6 +140,11 @@ export default function StandardDashboard() {
       color: STATUS_COLORS.in_progress,
     },
     {
+      name: "بانتظار اعتماد الاستشاري",
+      value: stats?.pendingConsultantApproval || 0,
+      color: STATUS_COLORS.pending_consultant_approval,
+    },
+    {
       name: "منتهي",
       value: stats?.completed || 0,
       color: STATUS_COLORS.completed,
@@ -185,7 +192,7 @@ export default function StandardDashboard() {
       </div>
 
       {/* Stats Cards - KSU Brand Colors */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-5">
         <StatCard
           title="إجمالي الطلبات"
           value={stats?.totalRequests || 0}
@@ -198,6 +205,12 @@ export default function StandardDashboard() {
           value={stats?.inProgress || 0}
           icon={Activity}
           iconClassName="bg-[#0099B7]/10 text-[#007A94] dark:bg-[#0099B7]/30 dark:text-[#00B8DB]"
+        />
+        <StatCard
+          title="بانتظار اعتماد الاستشاري"
+          value={stats?.pendingConsultantApproval || 0}
+          icon={Clock3}
+          iconClassName="bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400"
         />
         <StatCard
           title="مكتملة"

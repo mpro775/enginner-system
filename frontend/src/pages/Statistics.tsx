@@ -119,7 +119,9 @@ const ExternalLegend = ({
     value: number;
     color: string;
     completed?: number;
-    pending?: number;
+    inProgress?: number;
+    pendingConsultantApproval?: number;
+    stopped?: number;
   }>;
 }) => {
   if (!data || data.length === 0) return null;
@@ -203,7 +205,10 @@ export default function Statistics() {
         name: stat.engineerName,
         value: stat.totalRequests,
         completed: stat.byStatus.completed,
-        pending: stat.byStatus.inProgress,
+        inProgress: stat.byStatus.inProgress,
+        pendingConsultantApproval:
+          stat.byStatus.pendingConsultantApproval,
+        stopped: stat.byStatus.stopped,
         color: COLORS[index % COLORS.length],
       })) || [],
     [engineerStats],
@@ -239,6 +244,26 @@ export default function Statistics() {
 
   const trendsChartData = trends || [];
   const isFewTrendPoints = trendsChartData.length <= 2;
+  const statusSummary = useMemo(
+    () =>
+      (engineerStats || []).reduce(
+        (summary, stat) => ({
+          inProgress: summary.inProgress + stat.byStatus.inProgress,
+          pendingConsultantApproval:
+            summary.pendingConsultantApproval +
+            stat.byStatus.pendingConsultantApproval,
+          completed: summary.completed + stat.byStatus.completed,
+          stopped: summary.stopped + stat.byStatus.stopped,
+        }),
+        {
+          inProgress: 0,
+          pendingConsultantApproval: 0,
+          completed: 0,
+          stopped: 0,
+        },
+      ),
+    [engineerStats],
+  );
 
   if (isLoading) {
     return <PageLoader />;
@@ -249,6 +274,27 @@ export default function Statistics() {
       <div>
         <h2 className="text-3xl font-bold tracking-tight">الإحصائيات</h2>
         <p className="text-muted-foreground">تحليل تفصيلي لطلبات الصيانة</p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          ["قيد التنفيذ", statusSummary.inProgress],
+          [
+            "بانتظار اعتماد الاستشاري",
+            statusSummary.pendingConsultantApproval,
+          ],
+          ["مكتمل", statusSummary.completed],
+          ["متوقف", statusSummary.stopped],
+        ].map(([label, value]) => (
+          <Card key={String(label)}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground">
+                {label}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-2xl font-bold">{value}</CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* Engineer Stats */}
@@ -287,9 +333,11 @@ export default function Statistics() {
                         const { payload } = props || {};
                         return [
                           value,
-                          `إجمالي (${payload?.completed || 0} مكتمل / ${
-                            payload?.pending || 0
-                          } قيد التنفيذ)`,
+                          `إجمالي (${payload?.inProgress || 0} قيد التنفيذ / ${
+                            payload?.pendingConsultantApproval || 0
+                          } بانتظار الاعتماد / ${payload?.completed || 0} مكتمل / ${
+                            payload?.stopped || 0
+                          } متوقف)`,
                         ];
                       }}
                       contentStyle={{
@@ -491,6 +539,12 @@ export default function Statistics() {
                       radius={[4, 4, 0, 0]}
                     />
                     <Bar
+                      dataKey="pendingConsultantApproval"
+                      name="بانتظار اعتماد الاستشاري"
+                      fill="#8b5cf6"
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
                       dataKey="emergency"
                       name="طارئ"
                       fill="#ef4444"
@@ -552,6 +606,15 @@ export default function Statistics() {
                       dataKey="completed"
                       name="مكتمل"
                       stroke="#22c55e"
+                      strokeWidth={2}
+                      dot={{ r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="pendingConsultantApproval"
+                      name="بانتظار اعتماد الاستشاري"
+                      stroke="#8b5cf6"
                       strokeWidth={2}
                       dot={{ r: 4 }}
                       activeDot={{ r: 6 }}

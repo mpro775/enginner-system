@@ -115,6 +115,10 @@ function generateReportContent(data: RequestReportData[], stats: any): string {
           <div class="summary-label">قيد التنفيذ</div>
         </div>
         <div class="summary-card">
+          <div class="summary-value">${escapeHtml(String(stats?.pendingConsultantApproval || 0))}</div>
+          <div class="summary-label">بانتظار اعتماد الاستشاري</div>
+        </div>
+        <div class="summary-card">
           <div class="summary-value">${escapeHtml(String(stats?.completed || 0))}</div>
           <div class="summary-label">مكتملة</div>
         </div>

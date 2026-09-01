@@ -9,13 +9,31 @@ import {
 } from "../../common/exceptions";
 import { AuditLogsService } from "../audit-logs/audit-logs.service";
 import { AuditAction } from "../../common/enums";
+import {
+  Location,
+  LocationDocument,
+} from "../locations/schemas/location.schema";
 
 @Injectable()
 export class FloorsService {
   constructor(
     @InjectModel(Floor.name) private floorModel: Model<FloorDocument>,
+    @InjectModel(Location.name) private locationModel: Model<LocationDocument>,
     private auditLogsService: AuditLogsService,
   ) {}
+
+  private async assertActiveLocation(locationId: string): Promise<void> {
+    if (
+      !Types.ObjectId.isValid(locationId) ||
+      !(await this.locationModel.exists({
+        _id: new Types.ObjectId(locationId),
+        isActive: true,
+        deletedAt: null,
+      }))
+    ) {
+      throw new EntityNotFoundException("Active Location", locationId);
+    }
+  }
 
   private async assertUniqueName(
     name: string,
@@ -34,6 +52,7 @@ export class FloorsService {
   }
 
   async create(dto: CreateFloorDto): Promise<FloorDocument> {
+    await this.assertActiveLocation(dto.locationId);
     await this.assertUniqueName(dto.name, dto.locationId);
     return new this.floorModel({
       name: dto.name.trim(),
@@ -71,6 +90,9 @@ export class FloorsService {
     if (!floor) throw new EntityNotFoundException("Floor", id);
     const locationId = dto.locationId || floor.locationId.toString();
     const name = dto.name?.trim() || floor.name;
+    if (dto.locationId !== undefined) {
+      await this.assertActiveLocation(dto.locationId);
+    }
     if (dto.name !== undefined || dto.locationId !== undefined) {
       await this.assertUniqueName(name, locationId, id);
     }
@@ -147,4 +169,3 @@ export class FloorsService {
       .sort({ deletedAt: -1 });
   }
 }
-
