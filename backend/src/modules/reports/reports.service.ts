@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { HttpException, Injectable } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, FilterQuery, Types } from "mongoose";
 import * as ExcelJS from "exceljs";
@@ -686,13 +686,29 @@ export class ReportsService {
     }
   }
 
-  getBulkExportJob(jobId: string): BulkExportJobSnapshot {
+  getBulkExportJob(
+    jobId: string,
+    user: CurrentUserData,
+  ): BulkExportJobSnapshot {
     const job = this.bulkExportJobs.get(jobId);
     if (!job) {
       throw new Error("Bulk export job not found");
     }
 
+    this.assertBulkExportJobAccess(job, user);
+
     return this.toBulkJobSnapshot(job);
+  }
+
+  private assertBulkExportJobAccess(
+    job: BulkExportJob,
+    user: CurrentUserData,
+  ): void {
+    if (user.role === Role.ADMIN) return;
+    if (job.ownerUserId && job.ownerUserId === user.userId) return;
+    throw new ForbiddenAccessException(
+      "You do not have access to this bulk export job",
+    );
   }
 
   private emitBulkExportProgress(job: BulkExportJob): void {
@@ -706,11 +722,17 @@ export class ReportsService {
     );
   }
 
-  async downloadBulkExportJob(jobId: string, res: Response): Promise<void> {
+  async downloadBulkExportJob(
+    jobId: string,
+    res: Response,
+    user: CurrentUserData,
+  ): Promise<void> {
     const job = this.bulkExportJobs.get(jobId);
     if (!job) {
       throw new Error("Bulk export job not found");
     }
+
+    this.assertBulkExportJobAccess(job, user);
 
     if (job.status !== "completed" || !job.filePath || !job.fileName) {
       throw new Error("Bulk export file is not ready yet");
@@ -923,6 +945,7 @@ export class ReportsService {
       res.send(pdfBuffer);
     } catch (error) {
       console.error("Error generating PDF report:", error);
+      if (!res.headersSent && error instanceof HttpException) throw error;
       if (!res.headersSent) {
         res.status(500).json({
           message: "Failed to generate PDF report",
@@ -1665,6 +1688,7 @@ export class ReportsService {
     filter: ReportFilterDto,
     user?: CurrentUserData
   ): Promise<BulkExportJobSnapshot> {
+    this.buildMatchStage(filter, user);
     const chunkSize = getBulkZipPartSize();
     const job = this.createBulkExportJob("filtered", 0, chunkSize, user?.userId);
     this.emitBulkExportProgress(job);

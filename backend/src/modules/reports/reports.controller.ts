@@ -7,6 +7,7 @@ import {
   Query,
   Res,
   UseGuards,
+  HttpException,
 } from "@nestjs/common";
 import { Response } from "express";
 import { ReportsService } from "./reports.service";
@@ -52,6 +53,7 @@ export class ReportsController {
 
       res.end(buffer);
     } catch (error) {
+      if (!res.headersSent && error instanceof HttpException) throw error;
       console.error("Empty Request Template Error:", error);
       if (!res.headersSent) {
         res.status(500).json({ message: "Failed to generate template" });
@@ -102,13 +104,10 @@ export class ReportsController {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (!res.headersSent && error instanceof HttpException) throw error;
       console.error("Single Request Report Error:", error);
       if (!res.headersSent) {
-        if ((error as any)?.status === 403) {
-          res.status(403).json({ message: error.message });
-        } else {
-          res.status(500).json({ message: "Failed to generate report" });
-        }
+        res.status(500).json({ message: "Failed to generate report" });
       }
     }
   }
@@ -152,6 +151,7 @@ export class ReportsController {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (!res.headersSent && error instanceof HttpException) throw error;
       console.error("Report Generation Error:", error);
       if (!res.headersSent) {
         const errorMessage =
@@ -180,6 +180,7 @@ export class ReportsController {
         user
       );
     } catch (error) {
+      if (!res.headersSent && error instanceof HttpException) throw error;
       console.error("Bulk Selected Export Error:", error);
       if (!res.headersSent) {
         const errorMessage =
@@ -205,6 +206,7 @@ export class ReportsController {
     try {
       await this.reportsService.streamBulkRequestsZipByFilter(filter, res, user);
     } catch (error) {
+      if (!res.headersSent && error instanceof HttpException) throw error;
       console.error("Bulk Filtered Export Error:", error);
       if (!res.headersSent) {
         const errorMessage =
@@ -253,8 +255,11 @@ export class ReportsController {
   }
 
   @Get("requests/bulk-export/jobs/:jobId")
-  async getBulkExportJob(@Param("jobId") jobId: string) {
-    const job = this.reportsService.getBulkExportJob(jobId);
+  async getBulkExportJob(
+    @Param("jobId") jobId: string,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    const job = this.reportsService.getBulkExportJob(jobId, user);
     return {
       data: job,
       message: "Bulk export job status retrieved",
@@ -264,11 +269,13 @@ export class ReportsController {
   @Get("requests/bulk-export/jobs/:jobId/download")
   async downloadBulkExportJob(
     @Param("jobId") jobId: string,
-    @Res() res: Response
+    @Res() res: Response,
+    @CurrentUser() user: CurrentUserData,
   ) {
     try {
-      await this.reportsService.downloadBulkExportJob(jobId, res);
+      await this.reportsService.downloadBulkExportJob(jobId, res, user);
     } catch (error) {
+      if (!res.headersSent && error instanceof HttpException) throw error;
       if (!res.headersSent) {
         const errorMessage =
           error instanceof Error ? error.message : "Failed to download export";
