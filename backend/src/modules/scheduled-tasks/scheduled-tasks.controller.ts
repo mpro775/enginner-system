@@ -83,8 +83,8 @@ export class ScheduledTasksController {
   @Get("available")
   @UseGuards(RolesGuard)
   @Roles(Role.ENGINEER)
-  async getAvailableTasks() {
-    const tasks = await this.scheduledTasksService.getAvailableTasks();
+  async getAvailableTasks(@CurrentUser() user: CurrentUserData) {
+    const tasks = await this.scheduledTasksService.getAvailableTasks(user.userId);
     return {
       data: tasks,
       message: "Available scheduled tasks retrieved successfully",

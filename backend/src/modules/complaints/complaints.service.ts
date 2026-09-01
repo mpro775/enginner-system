@@ -666,7 +666,9 @@ export class ComplaintsService {
     if (user.role !== Role.ENGINEER && user.role !== Role.CONSULTANT) {
       throw new ForbiddenAccessException("You do not have access to complaints");
     }
-    const departmentId = complaint.departmentId?.toString();
+    const rawDepartmentId =
+      (complaint.departmentId as any)?._id ?? complaint.departmentId;
+    const departmentId = rawDepartmentId?.toString();
     const departmentIds = await this.getUserDepartmentIds(user.userId);
     if (!departmentId || !departmentIds.includes(departmentId)) {
       throw new ForbiddenAccessException("Complaint is outside your assigned departments");

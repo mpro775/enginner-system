@@ -49,10 +49,15 @@ export default function ComplaintDetails() {
   const [statusOpen, setStatusOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<ComplaintStatus>(ComplaintStatus.NEW);
 
-  const { data: complaint, isLoading } = useQuery({
-    queryKey: ["complaint", id],
+  const {
+    data: complaint,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ["complaint", user?.id, id],
     queryFn: () => complaintsService.getById(id!),
-    enabled: Boolean(id),
+    enabled: Boolean(id && user?.id),
   });
 
   const departmentId = complaint?.departmentId?.id;
@@ -89,7 +94,7 @@ export default function ComplaintDetails() {
   }, [complaint?.assignedEngineerId, isEngineer, requestOpen, user?.id]);
 
   const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: ["complaint", id] });
+    queryClient.invalidateQueries({ queryKey: ["complaint", user?.id, id] });
     queryClient.invalidateQueries({ queryKey: ["complaints"] });
   };
   const mutationOptions = (message: string, close: () => void) => ({
@@ -135,6 +140,27 @@ export default function ComplaintDetails() {
     [complaint?.descriptionAr, complaint?.descriptionEn],
   );
   if (isLoading) return <PageLoader />;
+  if (isError) {
+    const errorMsg =
+      (error as any)?.response?.data?.message ||
+      (error as any)?.message ||
+      "تعذر تحميل تفاصيل البلاغ أو ليس لديك صلاحية الوصول إليه";
+    return (
+      <div className="py-16 text-center space-y-4">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+          <AlertCircle className="h-6 w-6" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold">تعذر عرض البلاغ</h2>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">{errorMsg}</p>
+        </div>
+        <Button variant="outline" onClick={() => navigate("/app/complaints")}>
+          <ArrowRight className="ml-2 h-4 w-4" />
+          العودة لقائمة البلاغات
+        </Button>
+      </div>
+    );
+  }
   if (!complaint) return <p className="py-12 text-center text-muted-foreground">البلاغ غير موجود</p>;
 
   const canOperate = isAdmin || isConsultant || isEngineer;

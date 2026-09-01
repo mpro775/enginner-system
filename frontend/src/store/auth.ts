@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Role } from '@/types';
+import { queryClient } from '@/lib/queryClient';
+import { useNotificationsStore } from './notifications';
 
 interface User {
   id: string;
@@ -34,21 +36,27 @@ export const useAuthStore = create<AuthState>()(
       setTokens: (accessToken, refreshToken) =>
         set({ accessToken, refreshToken }),
 
-      login: (user, accessToken, refreshToken) =>
+      login: (user, accessToken, refreshToken) => {
+        useNotificationsStore.getState().clearNotifications();
+        queryClient.clear();
         set({
           user,
           accessToken,
           refreshToken,
           isAuthenticated: true,
-        }),
+        });
+      },
 
-      logout: () =>
+      logout: () => {
+        useNotificationsStore.getState().clearNotifications();
+        queryClient.clear();
         set({
           user: null,
           accessToken: null,
           refreshToken: null,
           isAuthenticated: false,
-        }),
+        });
+      },
     }),
     {
       name: 'auth-storage',

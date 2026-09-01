@@ -25,9 +25,9 @@ export const useNotificationsStore = create<NotificationsState>((set) => ({
 
   addNotification: (notification) =>
     set((state) => {
-      // Check if notification already exists (by timestamp and type)
+      const key = `${notification.timestamp}-${notification.type}`;
       const exists = state.notifications.some(
-        (n) => n.timestamp === notification.timestamp && n.type === notification.type
+        (n) => n.id === key || (n.timestamp === notification.timestamp && n.type === notification.type)
       );
       if (exists) {
         return state;
@@ -35,7 +35,7 @@ export const useNotificationsStore = create<NotificationsState>((set) => ({
 
       const newNotification: NotificationWithRead = {
         ...notification,
-        id: `${notification.timestamp}-${Math.random()}`,
+        id: key,
         read: false,
       };
       return {
@@ -64,37 +64,39 @@ export const useNotificationsStore = create<NotificationsState>((set) => ({
       unreadCount: 0,
     })),
 
-  clearNotifications: () => set({ notifications: [], unreadCount: 0 }),
+  clearNotifications: () => set({ notifications: [], unreadCount: 0, isLoading: false }),
 
   fetchNotifications: async (limit = 50) => {
     set({ isLoading: true });
     try {
-      const notifications = await notificationsService.getAll(limit);
-      
-      // Convert to NotificationWithRead format
-      const notificationsWithRead: NotificationWithRead[] = notifications.map((notification) => ({
-        ...notification,
-        id: `${notification.timestamp}-${notification.type}-${Math.random()}`,
-        read: false, // All fetched notifications are considered unread initially
-      }));
+      const serverNotifications = await notificationsService.getAll(limit);
 
-      // Merge with existing notifications, avoiding duplicates
       set((state) => {
-        const existingIds = new Set(state.notifications.map((n) => `${n.timestamp}-${n.type}`));
-        const newNotifications = notificationsWithRead.filter(
-          (n) => !existingIds.has(`${n.timestamp}-${n.type}`)
+        const readKeys = new Set(
+          state.notifications
+            .filter((n) => n.read)
+            .map((n) => n.id || `${n.timestamp}-${n.type}`)
         );
 
-        // Combine and sort by timestamp
-        const allNotifications = [...newNotifications, ...state.notifications]
+        const currentNotifications: NotificationWithRead[] = serverNotifications.map(
+          (notification) => {
+            const key = `${notification.timestamp}-${notification.type}`;
+            return {
+              ...notification,
+              id: key,
+              read: readKeys.has(key),
+            };
+          }
+        );
+
+        const sortedNotifications = currentNotifications
           .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
           .slice(0, 50);
 
-        // Calculate unread count
-        const unreadCount = allNotifications.filter((n) => !n.read).length;
+        const unreadCount = sortedNotifications.filter((n) => !n.read).length;
 
         return {
-          notifications: allNotifications,
+          notifications: sortedNotifications,
           unreadCount,
           isLoading: false,
         };

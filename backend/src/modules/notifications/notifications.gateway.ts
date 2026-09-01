@@ -242,7 +242,8 @@ export class NotificationsGateway
   // Notify when a new scheduled task is created
   notifyScheduledTaskCreated(
     task: ScheduledTaskDocument,
-    isAvailableToAll: boolean = false
+    isAvailableToAll: boolean = false,
+    targetUserIds: string[] = []
   ) {
     const notification = {
       type: "task:created",
@@ -258,13 +259,20 @@ export class NotificationsGateway
         createdAt: (task as any).createdAt,
       },
       message: isAvailableToAll
-        ? `تم إضافة صيانة وقائية جديدة متاحة لجميع المهندسين: ${task.taskCode}`
+        ? `تم إضافة صيانة وقائية جديدة متاحة لمهندسي القسم: ${task.taskCode}`
         : `تم إضافة صيانة وقائية جديدة: ${task.taskCode}`,
       timestamp: new Date().toISOString(),
     };
 
-    if (isAvailableToAll) {
-      // Notify all engineers
+    if (targetUserIds && targetUserIds.length > 0) {
+      for (const userId of new Set(targetUserIds.filter(Boolean))) {
+        this.server.to(`user:${userId}`).emit("notification", notification);
+      }
+      this.logger.log(
+        `Notified target users (${targetUserIds.length}) about new task: ${task.taskCode}`
+      );
+    } else if (isAvailableToAll) {
+      // Fallback if no target users provided
       this.server.to("engineer").emit("notification", notification);
       this.logger.log(
         `Notified all engineers about new available task: ${task.taskCode}`
@@ -273,7 +281,8 @@ export class NotificationsGateway
       // Notify specific engineer
       const engineerId =
         (task.engineerId as any)?._id?.toString() ||
-        (task.engineerId as any)?.id;
+        (task.engineerId as any)?.id ||
+        task.engineerId.toString();
       if (engineerId) {
         this.server.to(`user:${engineerId}`).emit("notification", notification);
         this.logger.log(

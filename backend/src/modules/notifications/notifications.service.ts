@@ -181,9 +181,25 @@ export class NotificationsService {
 
     // Get recent scheduled tasks for engineers
     if (role === Role.ENGINEER) {
+      const engineerObjId = Types.ObjectId.isValid(userId)
+        ? new Types.ObjectId(userId)
+        : userId;
+      const formattedDeptIds = departmentIds.map((id: any) => new Types.ObjectId(id));
       const taskFilter: any = {
         createdAt: { $gte: sevenDaysAgo },
-        $or: [{ engineerId: userId }, { engineerId: null }],
+        deletedAt: null,
+        $or: [
+          { engineerId: engineerObjId },
+          { engineerId: userId },
+          {
+            engineerId: null,
+            departmentId: { $in: formattedDeptIds },
+          },
+          {
+            engineerId: { $exists: false },
+            departmentId: { $in: formattedDeptIds },
+          },
+        ],
       };
 
       const recentTasks = await this.taskModel
@@ -213,7 +229,7 @@ export class NotificationsService {
             createdAt: createdAt,
           },
           message: !task.engineerId
-            ? `تم إضافة صيانة وقائية جديدة متاحة لجميع المهندسين: ${task.taskCode}`
+            ? `تم إضافة صيانة وقائية جديدة متاحة لمهندسي القسم: ${task.taskCode}`
             : `تم إضافة صيانة وقائية جديدة: ${task.taskCode}`,
           timestamp: createdAt?.toISOString() || new Date().toISOString(),
         });

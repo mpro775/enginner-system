@@ -126,7 +126,24 @@ export class ScheduledTasksService {
 
     // Send notification
     const isAvailableToAll = !createDto.engineerId;
-    this.notificationsGateway.notifyScheduledTaskCreated(populated, isAvailableToAll);
+    let targetUserIds: string[] = [];
+    if (isAvailableToAll) {
+      targetUserIds = await this.getDepartmentTargetUserIds(
+        createDto.departmentId,
+        [Role.ADMIN, Role.MAINTENANCE_MANAGER, Role.ENGINEER],
+      );
+    } else if (createDto.engineerId) {
+      const adminManagerIds = await this.getDepartmentTargetUserIds(
+        createDto.departmentId,
+        [Role.ADMIN, Role.MAINTENANCE_MANAGER],
+      );
+      targetUserIds = Array.from(new Set([createDto.engineerId, ...adminManagerIds]));
+    }
+    this.notificationsGateway.notifyScheduledTaskCreated(
+      populated,
+      isAvailableToAll,
+      targetUserIds,
+    );
 
     return populated;
   }
@@ -174,17 +191,31 @@ export class ScheduledTasksService {
     // Update overdue tasks first
     await this.updateOverdueTasks();
 
-      const tasks = await this.taskModel
+    const user = await this.userModel
+      .findById(engineerId)
+      .select("departmentIds")
+      .lean();
+    const departmentIds = (user?.departmentIds || []).map(
+      (id) => new Types.ObjectId(id)
+    );
+
+    const engineerObjId = Types.ObjectId.isValid(engineerId)
+      ? new Types.ObjectId(engineerId)
+      : null;
+
+    const tasks = await this.taskModel
       .find({
         $or: [
           { engineerId: engineerId }, // Match string
+          ...(engineerObjId ? [{ engineerId: engineerObjId }] : []),
           {
-            engineerId: Types.ObjectId.isValid(engineerId)
-              ? new Types.ObjectId(engineerId)
-              : null,
-          }, // Match ObjectId
-          { engineerId: { $exists: false } }, // Unassigned tasks
-          { engineerId: null }, // Unassigned tasks
+            engineerId: null,
+            departmentId: { $in: departmentIds },
+          },
+          {
+            engineerId: { $exists: false },
+            departmentId: { $in: departmentIds },
+          },
         ],
         status: { $in: [TaskStatus.PENDING, TaskStatus.OVERDUE] },
         deletedAt: null, // استبعاد المحذوفين ناعماً
@@ -779,19 +810,32 @@ export class ScheduledTasksService {
       .exec();
   }
 
-  async getAvailableTasks(): Promise<ScheduledTaskDocument[]> {
+  async getAvailableTasks(userId?: string): Promise<ScheduledTaskDocument[]> {
     // Update overdue tasks first
     await this.updateOverdueTasks();
 
+    const filter: FilterQuery<ScheduledTaskDocument> = {
+      $or: [
+        { engineerId: { $exists: false } },
+        { engineerId: null },
+      ],
+      status: { $in: [TaskStatus.PENDING, TaskStatus.OVERDUE] },
+      deletedAt: null, // استبعاد المحذوفين ناعماً
+    };
+
+    if (userId) {
+      const user = await this.userModel
+        .findById(userId)
+        .select("departmentIds")
+        .lean();
+      const departmentIds = (user?.departmentIds || []).map(
+        (id) => new Types.ObjectId(id)
+      );
+      filter.departmentId = { $in: departmentIds };
+    }
+
     const tasks = await this.taskModel
-      .find({
-        $or: [
-          { engineerId: { $exists: false } },
-          { engineerId: null },
-        ],
-        status: { $in: [TaskStatus.PENDING, TaskStatus.OVERDUE] },
-        deletedAt: null, // استبعاد المحذوفين ناعماً
-      })
+      .find(filter)
       .sort({ scheduledYear: 1, scheduledMonth: 1, scheduledDay: 1 })
       .populate("locationId", "name")
       .populate("departmentId", "name")
@@ -912,10 +956,24 @@ export class ScheduledTasksService {
             lastGeneratedAt: now,
           });
 
-          // Send notification - recurring tasks are always available to all engineers
+          // Send notification - recurring tasks are available to engineers in the same department
           const populatedNewTask = await this.populateTask(newTask._id.toString());
           if (populatedNewTask) {
-            this.notificationsGateway.notifyScheduledTaskCreated(populatedNewTask, true);
+            const rawDeptId =
+              (task.departmentId as any)?._id?.toString() ??
+              task.departmentId?.toString();
+            const targetUserIds = rawDeptId
+              ? await this.getDepartmentTargetUserIds(rawDeptId, [
+                  Role.ADMIN,
+                  Role.MAINTENANCE_MANAGER,
+                  Role.ENGINEER,
+                ])
+              : [];
+            this.notificationsGateway.notifyScheduledTaskCreated(
+              populatedNewTask,
+              true,
+              targetUserIds,
+            );
           }
         }
       }
@@ -956,7 +1014,7 @@ export class ScheduledTasksService {
           const newTask = new this.taskModel({
             taskCode,
             title: task.title,
-            // engineerId: undefined - المهام المتكررة متاحة لجميع المهندسين
+            // engineerId: undefined - المهام المتكررة متاحة لمهندسي القسم
             locationId: task.locationId,
             departmentId: task.departmentId,
             systemId: task.systemId,
@@ -978,14 +1036,47 @@ export class ScheduledTasksService {
             lastGeneratedAt: now,
           });
 
-          // Send notification - recurring tasks are always available to all engineers
+          // Send notification - recurring tasks are available to engineers in the same department
           const populatedNewTask = await this.populateTask(newTask._id.toString());
           if (populatedNewTask) {
-            this.notificationsGateway.notifyScheduledTaskCreated(populatedNewTask, true);
+            const rawDeptId =
+              (task.departmentId as any)?._id?.toString() ??
+              task.departmentId?.toString();
+            const targetUserIds = rawDeptId
+              ? await this.getDepartmentTargetUserIds(rawDeptId, [
+                  Role.ADMIN,
+                  Role.MAINTENANCE_MANAGER,
+                  Role.ENGINEER,
+                ])
+              : [];
+            this.notificationsGateway.notifyScheduledTaskCreated(
+              populatedNewTask,
+              true,
+              targetUserIds,
+            );
           }
         }
       }
     }
+  }
+
+  private async getDepartmentTargetUserIds(
+    departmentId: string,
+    roles: Role[],
+  ): Promise<string[]> {
+    const users = await this.userModel
+      .find({
+        role: { $in: roles },
+        isActive: true,
+        deletedAt: null,
+        $or: [
+          { role: { $in: [Role.ADMIN, Role.MAINTENANCE_MANAGER] } },
+          { departmentIds: new Types.ObjectId(departmentId) },
+        ],
+      })
+      .select("_id")
+      .lean();
+    return users.map((item) => item._id.toString());
   }
 
   private calculateNextDate(
