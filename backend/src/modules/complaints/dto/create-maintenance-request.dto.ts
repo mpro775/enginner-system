@@ -34,5 +34,13 @@ export class CreateComplaintMaintenanceRequestDto {
   @IsOptional()
   @IsString()
   requestNeeds?: string;
+
+  @IsOptional()
+  @IsString()
+  reviewerNotes?: string;
+
+  @IsOptional()
+  @IsString()
+  reviewNote?: string;
 }
 

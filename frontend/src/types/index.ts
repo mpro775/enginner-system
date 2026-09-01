@@ -435,4 +435,6 @@ export interface CreateComplaintRequestForm {
   maintainAllComponents?: boolean;
   selectedComponents?: string[];
   requestNeeds?: string;
+  reviewerNotes?: string;
 }
+

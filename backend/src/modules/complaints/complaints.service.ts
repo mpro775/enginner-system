@@ -494,6 +494,26 @@ export class ComplaintsService {
       }
     }
     if (!created) throw new InvalidOperationException("Could not allocate a request code");
+    const reviewerNoteText = (dto.reviewerNotes || dto.reviewNote)?.trim();
+    const updatePayload: any = {
+      $set: {
+        maintenanceRequestId: created._id,
+        assignedEngineerId: engineer._id,
+        status: ComplaintStatus.IN_PROGRESS,
+      },
+    };
+    if (reviewerNoteText) {
+      updatePayload.$push = {
+        reviewNotes: {
+          body: reviewerNoteText,
+          authorId: new Types.ObjectId(user.userId),
+          authorName: user.name || "",
+          authorRole: user.role,
+          createdAt: new Date(),
+        },
+      };
+    }
+
     const linked = await this.complaintModel.findOneAndUpdate(
       {
         _id: complaint._id,
@@ -502,11 +522,7 @@ export class ComplaintsService {
           { maintenanceRequestId: null },
         ],
       },
-      {
-        maintenanceRequestId: created._id,
-        assignedEngineerId: engineer._id,
-        status: ComplaintStatus.IN_PROGRESS,
-      },
+      updatePayload,
       { new: true },
     );
     if (!linked) {

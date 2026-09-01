@@ -5,7 +5,6 @@ import { AlertCircle, ArrowRight, CheckCircle2, Loader2, MapPin, MessageSquarePl
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,6 +25,7 @@ const emptyRequest: CreateComplaintRequestForm = {
   maintainAllComponents: true,
   selectedComponents: [],
   requestNeeds: "",
+  reviewerNotes: "",
 };
 
 export default function ComplaintDetails() {
@@ -242,26 +242,254 @@ export default function ComplaintDetails() {
 
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}><DialogContent><DialogHeader><DialogTitle>إسناد مهندس من القسم</DialogTitle></DialogHeader><Select value={selectedEngineerId} onValueChange={setSelectedEngineerId}><SelectTrigger><SelectValue placeholder="اختر المهندس" /></SelectTrigger><SelectContent>{engineers?.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select><DialogFooter><Button variant="outline" onClick={() => setAssignOpen(false)}>إلغاء</Button><Button onClick={() => assignMutation.mutate(selectedEngineerId)} disabled={!selectedEngineerId || assignMutation.isPending}>إسناد</Button></DialogFooter></DialogContent></Dialog>
 
-      <Dialog open={requestOpen} onOpenChange={setRequestOpen}><DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto"><DialogHeader><DialogTitle>إنشاء طلب صيانة من البلاغ</DialogTitle><DialogDescription>الموقع والطابق والقسم وسبب الطلب ستُنقل تلقائيًا من البلاغ.</DialogDescription></DialogHeader><div className="grid gap-4 sm:grid-cols-2">
-        <Field label="نوع الصيانة"><Select value={requestForm.maintenanceType} onValueChange={(value) => setRequestForm((f) => ({ ...f, maintenanceType: value as MaintenanceType }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value={MaintenanceType.EMERGENCY}>طارئة</SelectItem><SelectItem value={MaintenanceType.PREVENTIVE}>وقائية</SelectItem></SelectContent></Select></Field>
-        {(isAdmin || isConsultant) && <Field label="المهندس"><Select value={requestForm.engineerId} onValueChange={(value) => setRequestForm((f) => ({ ...f, engineerId: value }))}><SelectTrigger><SelectValue placeholder="اختر المهندس" /></SelectTrigger><SelectContent>{engineers?.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></Field>}
-        <Field label="النظام"><Select value={requestForm.systemId} onValueChange={(value) => setRequestForm((f) => ({ ...f, systemId: value, machineId: "", selectedComponents: [], maintainAllComponents: true }))}><SelectTrigger><SelectValue placeholder="اختر النظام" /></SelectTrigger><SelectContent>{systems?.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></Field>
-        <Field label="الآلة"><Select value={requestForm.machineId} disabled={!requestForm.systemId} onValueChange={(value) => setRequestForm((f) => ({ ...f, machineId: value, selectedComponents: [], maintainAllComponents: true }))}><SelectTrigger><SelectValue placeholder="اختر الآلة" /></SelectTrigger><SelectContent>{machines?.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></Field>
-        <Field label="احتياجات الطلب"><Input value={requestForm.requestNeeds || ""} onChange={(e) => setRequestForm((f) => ({ ...f, requestNeeds: e.target.value }))} /></Field>
-        {selectedMachine?.components?.length ? <div className="sm:col-span-2 space-y-2"><Label>نطاق الصيانة</Label><Select value={requestForm.maintainAllComponents ? "all" : "selected"} onValueChange={(value) => setRequestForm((f) => ({ ...f, maintainAllComponents: value === "all", selectedComponents: [] }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">جميع المكونات</SelectItem><SelectItem value="selected">مكونات محددة</SelectItem></SelectContent></Select>{!requestForm.maintainAllComponents && <div className="flex flex-wrap gap-2">{selectedMachine.components.map((component) => { const checked = requestForm.selectedComponents?.includes(component); return <Button key={component} type="button" size="sm" variant={checked ? "default" : "outline"} onClick={() => setRequestForm((f) => ({ ...f, selectedComponents: checked ? f.selectedComponents?.filter((item) => item !== component) : [...(f.selectedComponents || []), component] }))}>{component}</Button>; })}</div>}</div> : null}
-      </div><DialogFooter><Button variant="outline" onClick={() => setRequestOpen(false)}>إلغاء</Button><Button onClick={() => requestMutation.mutate()} disabled={!requestReady || requestMutation.isPending}>{requestMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إنشاء الطلب</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={requestOpen} onOpenChange={setRequestOpen}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>إنشاء طلب صيانة من البلاغ</DialogTitle>
+            <DialogDescription>
+              الموقع والطابق والقسم وسبب الطلب ستُنقل تلقائيًا من البلاغ.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-2">
+            {/* 1. بيانات البلاغ (Read-only) */}
+            <Card className="bg-muted/30 border-muted">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-primary" />
+                  بيانات البلاغ
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  سيتم نقل هذه البيانات تلقائيًا إلى طلب الصيانة
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-3 pt-0">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Info label="الموقع" value={complaint.locationId?.name || complaint.locationAr || complaint.locationEn} />
+                  <Info label="الطابق" value={complaint.floorId?.name} />
+                </div>
+                <Info label="الموقع التفصيلي" value={complaint.detailedLocation} />
+                <Info label="القسم" value={complaint.departmentId?.name} />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Info label="مقدم البلاغ" value={complaint.reporterNameAr || complaint.reporterNameEn} />
+                  <Info label="رقم التواصل" value={complaint.contactPhone} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground font-medium">سبب تقديم البلاغ</Label>
+                  <Textarea
+                    readOnly
+                    value={complaint.descriptionAr || complaint.descriptionEn || originalDescription.join("\n\n") || ""}
+                    rows={4}
+                    className="resize-none bg-background/80 text-foreground cursor-default focus-visible:ring-0 leading-relaxed font-normal"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="border-t border-border" />
+
+            {/* 2. إعداد طلب الصيانة */}
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-base font-semibold text-foreground">إعداد طلب الصيانة</h3>
+                <p className="text-xs text-muted-foreground">
+                  حدد بيانات المهندس والآلة واحتياجات الطلب
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="نوع الصيانة">
+                  <Select
+                    value={requestForm.maintenanceType}
+                    onValueChange={(value) =>
+                      setRequestForm((f) => ({ ...f, maintenanceType: value as MaintenanceType }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={MaintenanceType.EMERGENCY}>طارئة</SelectItem>
+                      <SelectItem value={MaintenanceType.PREVENTIVE}>وقائية</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                {(isAdmin || isConsultant) && (
+                  <Field label="المهندس">
+                    <Select
+                      value={requestForm.engineerId}
+                      onValueChange={(value) => setRequestForm((f) => ({ ...f, engineerId: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر المهندس" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {engineers?.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+
+                <Field label="النظام">
+                  <Select
+                    value={requestForm.systemId}
+                    onValueChange={(value) =>
+                      setRequestForm((f) => ({
+                        ...f,
+                        systemId: value,
+                        machineId: "",
+                        selectedComponents: [],
+                        maintainAllComponents: true,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر النظام" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {systems?.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field label="الآلة">
+                  <Select
+                    value={requestForm.machineId}
+                    disabled={!requestForm.systemId}
+                    onValueChange={(value) =>
+                      setRequestForm((f) => ({
+                        ...f,
+                        machineId: value,
+                        selectedComponents: [],
+                        maintainAllComponents: true,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر الآلة" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {machines?.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                {selectedMachine?.components?.length ? (
+                  <div className="sm:col-span-2 space-y-2">
+                    <Label>نطاق الصيانة</Label>
+                    <Select
+                      value={requestForm.maintainAllComponents ? "all" : "selected"}
+                      onValueChange={(value) =>
+                        setRequestForm((f) => ({
+                          ...f,
+                          maintainAllComponents: value === "all",
+                          selectedComponents: [],
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">جميع المكونات</SelectItem>
+                        <SelectItem value="selected">مكونات محددة</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {!requestForm.maintainAllComponents && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {selectedMachine.components.map((component) => {
+                          const checked = requestForm.selectedComponents?.includes(component);
+                          return (
+                            <Button
+                              key={component}
+                              type="button"
+                              size="sm"
+                              variant={checked ? "default" : "outline"}
+                              onClick={() =>
+                                setRequestForm((f) => ({
+                                  ...f,
+                                  selectedComponents: checked
+                                    ? f.selectedComponents?.filter((item) => item !== component)
+                                    : [...(f.selectedComponents || []), component],
+                                }))
+                              }
+                            >
+                              {component}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                <Field label="احتياجات الطلب" className="sm:col-span-2">
+                  <Textarea
+                    value={requestForm.requestNeeds || ""}
+                    onChange={(e) =>
+                      setRequestForm((f) => ({ ...f, requestNeeds: e.target.value }))
+                    }
+                    rows={4}
+                    placeholder="اكتب احتياجات الطلب أو أي تعليمات لازمة للمهندس..."
+                    className="w-full min-h-[100px] resize-y"
+                  />
+                </Field>
+
+                <Field label="ملاحظات معتمد البلاغ" className="sm:col-span-2">
+                  <Textarea
+                    value={requestForm.reviewerNotes || ""}
+                    onChange={(e) =>
+                      setRequestForm((f) => ({ ...f, reviewerNotes: e.target.value }))
+                    }
+                    rows={3}
+                    placeholder="أضف أي ملاحظات أو توجيهات من معتمد البلاغ (اختياري)..."
+                    className="w-full min-h-[80px] resize-y"
+                  />
+                </Field>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
+            <Button variant="outline" type="button" onClick={() => setRequestOpen(false)}>
+              إلغاء
+            </Button>
+            <Button
+              type="button"
+              onClick={() => requestMutation.mutate()}
+              disabled={!requestReady || requestMutation.isPending}
+            >
+              {requestMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+              إنشاء الطلب
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={statusOpen} onOpenChange={setStatusOpen}><DialogContent><DialogHeader><DialogTitle>تغيير حالة البلاغ</DialogTitle></DialogHeader><Select value={selectedStatus} onValueChange={(value) => setSelectedStatus(value as ComplaintStatus)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value={ComplaintStatus.NEW}>جديد</SelectItem><SelectItem value={ComplaintStatus.IN_PROGRESS}>قيد العمل</SelectItem><SelectItem value={ComplaintStatus.RESOLVED}>تم الحل</SelectItem><SelectItem value={ComplaintStatus.CLOSED}>مغلق</SelectItem></SelectContent></Select><DialogFooter><Button variant="outline" onClick={() => setStatusOpen(false)}>إلغاء</Button><Button onClick={() => statusMutation.mutate()} disabled={statusMutation.isPending}>حفظ</Button></DialogFooter></DialogContent></Dialog>
     </div>
   );
 }
 
-function Info({ label, value }: { label: string; value?: string }) {
-  return <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-medium">{value || "—"}</p></div>;
+function Info({ label, value, className }: { label: string; value?: string; className?: string }) {
+  return <div className={`rounded-lg border p-3 ${className || ""}`}><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-medium">{value || "—"}</p></div>;
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="space-y-2"><Label>{label}</Label>{children}</div>;
+function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
+  return <div className={`space-y-2 ${className || ""}`}><Label>{label}</Label>{children}</div>;
 }
 
 function ComplaintStatusBadge({ status }: { status: ComplaintStatus }) {
@@ -273,3 +501,4 @@ function ComplaintStatusBadge({ status }: { status: ComplaintStatus }) {
   };
   return <span className="rounded-full border bg-muted px-3 py-1 text-sm font-medium">{labels[status]}</span>;
 }
+
