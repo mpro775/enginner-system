@@ -92,6 +92,77 @@
         background-color: #e3f2fd;
       }
 
+      .details-table tr,
+      .timeline-entry {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .details-table .label-cell {
+        width: 190px;
+        font-weight: 700;
+        background-color: #f8f9fa;
+      }
+
+      .approval-section {
+        border: 1px solid #b9d5df;
+        border-radius: 6px;
+        padding: 10px;
+      }
+
+      .timeline {
+        border-right: 3px solid #0f5b7a;
+        padding-right: 14px;
+      }
+
+      .timeline-entry {
+        position: relative;
+        margin: 0 0 14px;
+        padding: 10px 12px;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        background: #fff;
+      }
+
+      .timeline-entry::before {
+        content: "";
+        position: absolute;
+        right: -21px;
+        top: 16px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #0f5b7a;
+      }
+
+      .timeline-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        color: #5b6770;
+        font-size: 9px;
+      }
+
+      .timeline-author {
+        color: #0f5b7a;
+        font-weight: 700;
+        margin: 4px 0 6px;
+      }
+
+      .note-type {
+        background: #e8f2f6;
+        border-radius: 10px;
+        padding: 1px 7px;
+      }
+
+      .timeline-body {
+        font-size: 10px;
+      }
+
+      .empty-state {
+        color: #6c757d;
+      }
+
       /* تنسيقات إضافية للطباعة */
       @media print {
         body {

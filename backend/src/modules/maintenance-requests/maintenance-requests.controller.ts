@@ -127,6 +127,7 @@ export class MaintenanceRequestsController {
       {
         userId: user.userId,
         name: user.name,
+        role: user.role,
       }
     );
     return {
@@ -149,6 +150,7 @@ export class MaintenanceRequestsController {
       {
         userId: user.userId,
         name: user.name,
+        role: user.role,
       }
     );
     return {

@@ -1,6 +1,10 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { Document, Types } from "mongoose";
-import { MaintenanceType, RequestStatus } from "../../../common/enums";
+import {
+  MaintenanceType,
+  RequestNoteType,
+  RequestStatus,
+} from "../../../common/enums";
 
 export type MaintenanceRequestDocument = MaintenanceRequest & Document;
 
@@ -17,6 +21,12 @@ export class RequestNote {
 
   @Prop({ required: true })
   authorRole: string;
+
+  @Prop({
+    enum: RequestNoteType,
+    default: RequestNoteType.GENERAL,
+  })
+  type?: RequestNoteType;
 
   @Prop({ required: true, default: () => new Date() })
   createdAt: Date;

@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import { StatusBadge, MaintenanceTypeBadge } from '@/components/shared/StatusBadge';
 import { PageLoader } from '@/components/shared/LoadingSpinner';
 import { reportsService } from '@/services/reports';
@@ -57,7 +58,7 @@ export default function Reports() {
 
   const rows = useMemo(() => (Array.isArray(reportData) ? reportData : []), [reportData]);
   const selectableRowIds = useMemo(
-    () => rows.map((row) => row.id).filter((id): id is string => !!id),
+    () => rows.map((row) => row.request.id).filter((id): id is string => !!id),
     [rows]
   );
   const selectedCount = selectedRequestIds.size;
@@ -876,48 +877,67 @@ export default function Reports() {
                     <th>المهندس</th>
                     <th>الاستشاري</th>
                     <th>نوع الصيانة</th>
-                    <th>الحالة</th>
+                    <th>حالة الطلب</th>
+                    <th>حالة الاعتماد</th>
+                    <th>اعتمد بواسطة</th>
+                    <th>تاريخ الاعتماد</th>
                     <th>الموقع</th>
-                    <th>القسم</th>
-                    <th>النظام</th>
-                    <th>الآلة</th>
                     <th>تاريخ الفتح</th>
-                    <th>تاريخ الإغلاق</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row, index) => (
-                    <tr key={row.id || `${row.requestCode}-${index}`}>
+                    <tr key={row.request.id || `${row.request.requestCode}-${index}`}>
                       <td>
                         <Checkbox
-                          checked={selectedRequestIds.has(row.id)}
+                          checked={selectedRequestIds.has(row.request.id)}
                           onCheckedChange={(checked) =>
-                            handleToggleRowSelection(row.id, checked)
+                            handleToggleRowSelection(row.request.id, checked)
                           }
-                          disabled={!row.id}
-                          aria-label={`تحديد الطلب ${row.requestCode}`}
+                          disabled={!row.request.id}
+                          aria-label={`تحديد الطلب ${row.request.requestCode}`}
                         />
                       </td>
-                      <td className="font-medium">{row.requestCode}</td>
-                      <td>{row.engineerName}</td>
-                      <td>{row.consultantName || '-'}</td>
+                      <td className="font-medium">{row.request.requestCode}</td>
+                      <td>{row.people.engineer?.name || '-'}</td>
+                      <td>{row.people.assignedConsultant?.name || '-'}</td>
                       <td>
                         <MaintenanceTypeBadge
-                          type={row.maintenanceType as MaintenanceType}
+                          type={row.request.maintenanceType}
                         />
                       </td>
                       <td>
-                        <StatusBadge status={row.status as RequestStatus} />
+                        <StatusBadge status={row.request.status} />
                       </td>
-                      <td>{row.locationName}</td>
-                      <td>{row.departmentName}</td>
-                      <td>{row.systemName}</td>
                       <td>
-                        {row.machineName}
-                        {row.machineNumber && ` (${row.machineNumber})`}
+                        <Badge
+                          variant={
+                            row.completion.status === 'approved'
+                              ? 'success'
+                              : row.completion.status === 'pending'
+                                ? 'warning'
+                                : 'secondary'
+                          }
+                        >
+                          {row.completion.status === 'approved'
+                            ? 'معتمد'
+                            : row.completion.status === 'pending'
+                              ? 'بانتظار الاعتماد'
+                              : 'لم يُطلب بعد'}
+                        </Badge>
                       </td>
-                      <td>{formatDateTime(row.openedAt)}</td>
-                      <td>{row.closedAt ? formatDateTime(row.closedAt) : '-'}</td>
+                      <td>{row.completion.approvedBy?.name || '-'}</td>
+                      <td>
+                        {row.completion.approvedAt
+                          ? formatDateTime(row.completion.approvedAt)
+                          : '-'}
+                      </td>
+                      <td>{row.request.locationName || '-'}</td>
+                      <td>
+                        {row.request.openedAt
+                          ? formatDateTime(row.request.openedAt)
+                          : '-'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

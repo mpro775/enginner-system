@@ -528,18 +528,12 @@ export default function RequestDetails() {
   };
 
   const handleAddHealthSafetyNote = () => {
-    const notes = request.healthSafetyNotes || "";
-    // Remove author name from the end if present
-    const { text } = parseNoteWithAuthor(notes);
-    setHealthSafetyNotes(text);
+    setHealthSafetyNotes("");
     setShowHealthSafetyNoteDialog(true);
   };
 
   const handleAddProjectManagerNote = () => {
-    const notes = request.projectManagerNotes || "";
-    // Remove author name from the end if present
-    const { text } = parseNoteWithAuthor(notes);
-    setProjectManagerNotes(text);
+    setProjectManagerNotes("");
     setShowProjectManagerNoteDialog(true);
   };
 

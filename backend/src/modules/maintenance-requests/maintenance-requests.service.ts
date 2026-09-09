@@ -27,6 +27,7 @@ import {
   Role,
   AuditAction,
   MaintenanceType,
+  RequestNoteType,
   OPEN_REQUEST_STATUSES,
 } from "../../common/enums";
 import {
@@ -171,6 +172,7 @@ export class MaintenanceRequestsService {
                 authorId: engineerId,
                 authorName: user.name,
                 authorRole: Role.ENGINEER,
+                type: RequestNoteType.ENGINEER,
                 createdAt: new Date(),
               }]
             : [],
@@ -405,6 +407,7 @@ export class MaintenanceRequestsService {
           authorId: new Types.ObjectId(user.userId),
           authorName: user.name,
           authorRole: Role.ENGINEER,
+          type: RequestNoteType.ENGINEER,
           createdAt: new Date(),
         },
       };
@@ -498,7 +501,7 @@ export class MaintenanceRequestsService {
   async addHealthSafetyNote(
     id: string,
     noteDto: AddHealthSafetyNoteDto,
-    user: { userId: string; name: string },
+    user: { userId: string; name: string; role: string },
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findById(id);
 
@@ -507,14 +510,24 @@ export class MaintenanceRequestsService {
     }
 
     const previousNotes = request.healthSafetyNotes;
-    const formattedNote = this.formatNoteWithAuthor(
-      noteDto.healthSafetyNotes,
-      user.name,
-    );
+    const noteBody = noteDto.healthSafetyNotes.trim();
+    const createdAt = new Date();
 
     await this.requestModel.findByIdAndUpdate(id, {
-      healthSafetySupervisorId: user.userId,
-      healthSafetyNotes: formattedNote,
+      $set: {
+        healthSafetySupervisorId: new Types.ObjectId(user.userId),
+        healthSafetyNotes: noteBody,
+      },
+      $push: {
+        requestNotes: {
+          body: noteBody,
+          authorId: new Types.ObjectId(user.userId),
+          authorName: user.name,
+          authorRole: user.role,
+          type: RequestNoteType.HEALTH_SAFETY,
+          createdAt,
+        },
+      },
     });
 
     // Log the action
@@ -525,7 +538,8 @@ export class MaintenanceRequestsService {
       entity: "MaintenanceRequest",
       entityId: id,
       changes: {
-        healthSafetyNotes: formattedNote,
+        healthSafetyNotes: noteBody,
+        requestNoteType: RequestNoteType.HEALTH_SAFETY,
       },
       previousValues: {
         healthSafetyNotes: previousNotes,
@@ -545,7 +559,7 @@ export class MaintenanceRequestsService {
   async addProjectManagerNote(
     id: string,
     noteDto: AddProjectManagerNoteDto,
-    user: { userId: string; name: string },
+    user: { userId: string; name: string; role: string },
   ): Promise<MaintenanceRequestDocument> {
     const request = await this.requestModel.findById(id);
 
@@ -554,14 +568,24 @@ export class MaintenanceRequestsService {
     }
 
     const previousNotes = request.projectManagerNotes;
-    const formattedNote = this.formatNoteWithAuthor(
-      noteDto.projectManagerNotes,
-      user.name,
-    );
+    const noteBody = noteDto.projectManagerNotes.trim();
+    const createdAt = new Date();
 
     await this.requestModel.findByIdAndUpdate(id, {
-      projectManagerId: user.userId,
-      projectManagerNotes: formattedNote,
+      $set: {
+        projectManagerId: new Types.ObjectId(user.userId),
+        projectManagerNotes: noteBody,
+      },
+      $push: {
+        requestNotes: {
+          body: noteBody,
+          authorId: new Types.ObjectId(user.userId),
+          authorName: user.name,
+          authorRole: user.role,
+          type: RequestNoteType.PROJECT_MANAGER,
+          createdAt,
+        },
+      },
     });
 
     // Log the action
@@ -572,7 +596,8 @@ export class MaintenanceRequestsService {
       entity: "MaintenanceRequest",
       entityId: id,
       changes: {
-        projectManagerNotes: formattedNote,
+        projectManagerNotes: noteBody,
+        requestNoteType: RequestNoteType.PROJECT_MANAGER,
       },
       previousValues: {
         projectManagerNotes: previousNotes,
@@ -693,6 +718,7 @@ export class MaintenanceRequestsService {
           authorId: new Types.ObjectId(user.userId),
           authorName: user.name,
           authorRole: user.role,
+          type: this.getRequestNoteType(user.role),
           createdAt: new Date(),
         },
       },
@@ -784,10 +810,11 @@ export class MaintenanceRequestsService {
         },
         $push: {
           requestNotes: {
-            body: `إعادة الإكمال للمهندس: ${dto.reason.trim()}`,
+            body: dto.reason.trim(),
             authorId: new Types.ObjectId(user.userId),
             authorName: user.name,
             authorRole: user.role,
+            type: RequestNoteType.COMPLETION_REJECTION,
             createdAt: new Date(),
           },
         },
@@ -984,10 +1011,16 @@ export class MaintenanceRequestsService {
     return filter;
   }
 
-  private formatNoteWithAuthor(note: string, authorName: string): string {
-    // إزالة أي اسم موجود مسبقاً في نهاية الملاحظة
-    const cleanedNote = note.replace(/\s*\([^)]+\)\s*$/, "").trim();
-    return `${cleanedNote} (${authorName})`;
+  private getRequestNoteType(role: string): RequestNoteType {
+    if (role === Role.ENGINEER) return RequestNoteType.ENGINEER;
+    if (role === Role.CONSULTANT) return RequestNoteType.CONSULTANT;
+    if (role === Role.MAINTENANCE_SAFETY_MONITOR) {
+      return RequestNoteType.HEALTH_SAFETY;
+    }
+    if (role === Role.PROJECT_MANAGER) {
+      return RequestNoteType.PROJECT_MANAGER;
+    }
+    return RequestNoteType.GENERAL;
   }
 
   private async populateRequest(
@@ -998,6 +1031,7 @@ export class MaintenanceRequestsService {
       .populate("engineerId", "name email")
       .populate("consultantId", "name email")
       .populate("healthSafetySupervisorId", "name email")
+      .populate("projectManagerId", "name email")
       .populate("locationId", "name")
       .populate("floorId", "name")
       .populate("departmentId", "name")
@@ -1005,6 +1039,7 @@ export class MaintenanceRequestsService {
       .populate("machineId", "name components description")
       .populate("complaintId", "complaintCode reporterNameAr reporterNameEn")
       .populate("completionApprovedBy", "name email")
+      .populate("completionRequestedBy", "name email role")
       .populate("deletedBy", "name email")
       .exec() as Promise<MaintenanceRequestDocument>;
   }

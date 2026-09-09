@@ -20,6 +20,15 @@ export enum RequestStatus {
   STOPPED = "stopped",
 }
 
+export enum RequestNoteType {
+  GENERAL = "general",
+  ENGINEER = "engineer",
+  CONSULTANT = "consultant",
+  HEALTH_SAFETY = "health_safety",
+  PROJECT_MANAGER = "project_manager",
+  COMPLETION_REJECTION = "completion_rejection",
+}
+
 export enum TaskStatus {
   PENDING = "pending",
   COMPLETED = "completed",
@@ -172,6 +181,7 @@ export interface RequestNote {
   authorId: User | string;
   authorName: string;
   authorRole: Role;
+  type?: RequestNoteType;
   createdAt: string;
 }
 

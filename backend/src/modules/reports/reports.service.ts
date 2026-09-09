@@ -1,8 +1,6 @@
 import { HttpException, Injectable } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, FilterQuery, Types } from "mongoose";
-import * as ExcelJS from "exceljs";
-import * as PDFDocument from "pdfkit";
 import * as puppeteer from "puppeteer";
 import type { Browser } from "puppeteer";
 import * as archiver from "archiver";
@@ -19,7 +17,7 @@ import { User, UserDocument } from "../users/schemas/user.schema";
 import { ReportFilterDto } from "./dto/report-filter.dto";
 import { StatisticsService } from "../statistics/statistics.service";
 import { EntityNotFoundException } from "../../common/exceptions/business.exception";
-import { RequestStatus, MaintenanceType, Role } from "../../common/enums";
+import { Role } from "../../common/enums";
 import { CurrentUserData } from "../../common/decorators/current-user.decorator";
 import { NotificationsGateway } from "../notifications/notifications.gateway";
 import {
@@ -27,6 +25,14 @@ import {
   getDepartmentMatchValues,
 } from "../../common/utils/access-scope.util";
 import { ForbiddenAccessException } from "../../common/exceptions";
+import {
+  buildRequestReportView,
+  ReportApprovalStatus,
+  ReportNote,
+  RequestReportView,
+} from "./request-report.contract";
+import { formatReportDate, formatReportDateTime } from "./report-date.util";
+import { buildReportsWorkbook } from "./report-excel";
 
 // Convert logo to base64 for embedding in HTML
 function convertLogoToBase64(): string {
@@ -51,14 +57,6 @@ function convertLogoToBase64(): string {
     console.error("Error converting logo to base64:", error);
     return "";
   }
-}
-
-// Convert date to English numerals format (YYYY/MM/DD)
-function formatDateEnglish(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}/${month}/${day}`;
 }
 
 // Convert font file to base64 for embedding in HTML
@@ -101,6 +99,36 @@ function escapeHtml(text: string): string {
 // CSS for multi-line text (وصف الطلب، ملاحظات، إلخ) - preserves newlines/tabs as in dashboard
 const MULTI_LINE_STYLE =
   "white-space: pre-wrap; word-wrap: break-word; line-height: 1.5; text-align: right; direction: rtl; vertical-align: top;";
+
+function getApprovalStatusLabel(status: ReportApprovalStatus): string {
+  if (status === "approved") return "معتمد";
+  if (status === "pending") return "بانتظار اعتماد الاستشاري";
+  return "لم يُطلب الاعتماد بعد";
+}
+
+function getRoleLabel(role: string | null): string {
+  const labels: Record<string, string> = {
+    admin: "مدير النظام",
+    consultant: "استشاري",
+    maintenance_manager: "مدير الصيانة",
+    engineer: "مهندس",
+    maintenance_safety_monitor: "مراقب الصيانة والسلامة",
+    project_manager: "مدير المشروع",
+  };
+  return role ? labels[role] || role : "غير متوفر";
+}
+
+function getNoteTypeLabel(type: ReportNote["type"]): string {
+  const labels: Record<string, string> = {
+    general: "ملاحظة عامة",
+    engineer: "ملاحظة مهندس",
+    consultant: "ملاحظة استشاري",
+    health_safety: "ملاحظة صحة وسلامة",
+    project_manager: "ملاحظة مدير المشروع",
+    completion_rejection: "إعادة إكمال للمهندس",
+  };
+  return labels[type] || type;
+}
 
 // Generate HTML content for the report (summary + table)
 function generateReportContent(data: RequestReportData[], stats: any): string {
@@ -154,13 +182,15 @@ function generateReportContent(data: RequestReportData[], stats: any): string {
       <table class="data-table">
         <thead>
           <tr>
-            <th>التاريخ</th>
-            <th>الموقع</th>
-            <th>الحالة</th>
+            <th>الكود</th>
             <th>النوع</th>
             <th>المهندس</th>
-            <th>الكود</th>
-            <th>سبب الطلب</th>
+            <th>الاستشاري</th>
+            <th>حالة الاعتماد</th>
+            <th>اعتمد بواسطة</th>
+            <th>الحالة</th>
+            <th>الموقع</th>
+            <th>التاريخ</th>
           </tr>
         </thead>
         <tbody>
@@ -183,27 +213,29 @@ function generateReportContent(data: RequestReportData[], stats: any): string {
 
   // Add all filtered rows
   data.forEach((row) => {
-    const statusKey = String(row.status || "")
+    const statusKey = String(row.request.status || "")
       .toLowerCase()
       .replace(/_/g, "_");
-    const statusText = statusMap[statusKey] || row.status || "N/A";
+    const statusText = statusMap[statusKey] || row.request.status || "N/A";
 
-    const typeKey = String(row.maintenanceType || "").toLowerCase();
-    const typeText = typeMap[typeKey] || row.maintenanceType || "N/A";
+    const typeKey = String(row.request.maintenanceType || "").toLowerCase();
+    const typeText = typeMap[typeKey] || row.request.maintenanceType || "N/A";
 
-    const openedDate = row.openedAt
-      ? new Date(row.openedAt).toLocaleDateString("ar-SA")
+    const openedDate = row.request.openedAt
+      ? formatReportDate(row.request.openedAt)
       : "N/A";
 
     html += `
       <tr>
-        <td>${escapeHtml(openedDate)}</td>
-        <td>${escapeHtml(row.locationName || "N/A")}</td>
-        <td>${escapeHtml(statusText)}</td>
+        <td>${escapeHtml(row.request.requestCode || "N/A")}</td>
         <td>${escapeHtml(typeText)}</td>
-        <td>${escapeHtml(row.engineerName || "N/A")}</td>
-        <td>${escapeHtml(row.requestCode || "N/A")}</td>
-        <td style="${MULTI_LINE_STYLE}">${escapeHtml(row.reasonText || "-")}</td>
+        <td>${escapeHtml(row.people.engineer?.name || "غير متوفر")}</td>
+        <td>${escapeHtml(row.people.assignedConsultant?.name || "غير معيّن")}</td>
+        <td>${escapeHtml(getApprovalStatusLabel(row.completion.status))}</td>
+        <td>${escapeHtml(row.completion.approvedBy?.name || "-")}</td>
+        <td>${escapeHtml(statusText)}</td>
+        <td>${escapeHtml(row.request.locationName || "N/A")}</td>
+        <td>${escapeHtml(openedDate)}</td>
       </tr>
     `;
   });
@@ -220,184 +252,104 @@ function generateReportContent(data: RequestReportData[], stats: any): string {
   return html;
 }
 
-// Generate HTML content for single request details
-function generateSingleRequestContent(request: MaintenanceRequestDocument): string {
-  let html = "";
-
-  // Status translation map
+export function generateSingleRequestReportContent(
+  view: RequestReportView,
+): string {
+  const request = view.request;
   const statusMap: Record<string, string> = {
     in_progress: "قيد التنفيذ",
     pending_consultant_approval: "بانتظار اعتماد الاستشاري",
     completed: "مكتملة",
     stopped: "متوقفة",
-    pending: "معلقة",
   };
-
-  // Maintenance type translation map
   const typeMap: Record<string, string> = {
     emergency: "طارئة",
     preventive: "وقائية",
   };
+  const row = (label: string, value: string | null | undefined) => `
+    <tr>
+      <td class="label-cell">${escapeHtml(label)}</td>
+      <td style="${MULTI_LINE_STYLE}">${escapeHtml(value || "-")}</td>
+    </tr>`;
+  const personRow = (
+    label: string,
+    person: RequestReportView["people"]["engineer"],
+  ) => (person?.name ? row(label, person.name) : "");
 
-  const statusText = statusMap[request.status] || request.status;
-  const typeText = typeMap[request.maintenanceType] || request.maintenanceType;
-  
-  const engineer = request.engineerId as any;
-  const consultant = request.consultantId as any;
-  const healthSafety = request.healthSafetySupervisorId as any;
-  const location = request.locationId as any;
-  const department = request.departmentId as any;
-  const system = request.systemId as any;
-  const machine = request.machineId as any;
-
-  html += `
-    <div class="content-section">
-      <h2 class="section-title">بيانات الطلب</h2>
-      
-      <div style="margin-bottom: 20px;">
-        <table class="data-table" style="width: 100%;">
-          <tr>
-            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">كود الطلب</td>
-            <td>${escapeHtml(request.requestCode)}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">النوع</td>
-            <td>${escapeHtml(typeText)}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ الفتح</td>
-            <td>${request.openedAt ? formatDateEnglish(new Date(request.openedAt)) : "-"}</td>
-          </tr>
-          ${request.stoppedAt ? `
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ التوقف</td>
-            <td>${formatDateEnglish(new Date(request.stoppedAt))}</td>
-          </tr>
-          ` : ""}
-        </table>
-      </div>
-
-      <div style="margin-bottom: 20px;">
-        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">تفاصيل الطلب</h3>
-        <table class="data-table" style="width: 100%;">
-          <tr>
-            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">الموقع</td>
-            <td>${escapeHtml(location?.name || "-")}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">القسم</td>
-            <td>${escapeHtml(department?.name || "-")}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">الفرع</td>
-            <td>${escapeHtml(system?.name || "-")}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">البند</td>
-            <td>${escapeHtml(machine?.name || "-")}</td>
-          </tr>
-          ${request.machineNumber ? `
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">رقم/توصيف البند</td>
-            <td>${escapeHtml(request.machineNumber)}</td>
-          </tr>
-          ` : ""}
-        </table>
-      </div>
-
-      <div style="margin-bottom: 20px;">
-        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">وصف الطلب</h3>
-        <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; min-height: 40px; ${MULTI_LINE_STYLE}">
-          ${escapeHtml(request.reasonText || "-")}
+  const notes = view.notes.length
+    ? view.notes
+        .map(
+          (note) => `
+      <article class="timeline-entry">
+        <div class="timeline-meta">
+          <span>${escapeHtml(formatReportDateTime(note.createdAt))}</span>
+          <span class="note-type">${escapeHtml(getNoteTypeLabel(note.type))}</span>
         </div>
-      </div>
-
-      <div style="margin-bottom: 20px;">
-        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">معلومات مباشرة العمل</h3>
-        <table class="data-table" style="width: 100%;">
-          <tr>
-            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">المهندس المباشر للطلب</td>
-            <td>${escapeHtml(engineer?.name || "-")}</td>
-          </tr>
-          ${request.requestNeeds ? `
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">احتياجات الطلب</td>
-            <td style="${MULTI_LINE_STYLE}">${escapeHtml(request.requestNeeds)}</td>
-          </tr>
-          ` : ""}
-        </table>
-      </div>
-
-      ${request.healthSafetyNotes || request.projectManagerNotes ? `
-      <div style="margin-bottom: 20px;">
-        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">الملاحظات</h3>
-        ${request.healthSafetyNotes ? `
-        <div style="margin-bottom: 10px;">
-          <strong>ملاحظات الصحة والسلامة:</strong>
-          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; ${MULTI_LINE_STYLE}">
-            ${escapeHtml(request.healthSafetyNotes)}
-          </div>
+        <div class="timeline-author">
+          ${escapeHtml(note.author.name || "كاتب غير متوفر")} — ${escapeHtml(getRoleLabel(note.author.role))}
         </div>
-        ` : ""}
-        ${request.projectManagerNotes ? `
-        <div style="margin-bottom: 10px;">
-          <strong>ملاحظات مدير المشروع:</strong>
-          <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 5px; ${MULTI_LINE_STYLE}">
-            ${escapeHtml(request.projectManagerNotes)}
-          </div>
-        </div>
-        ` : ""}
-      </div>
-      ` : ""}
+        <div class="timeline-body" style="${MULTI_LINE_STYLE}">${escapeHtml(note.body)}</div>
+      </article>`,
+        )
+        .join("")
+    : '<p class="empty-state">لا توجد ملاحظات مسجلة.</p>';
 
-      ${request.stopReason ? `
-      <div style="margin-bottom: 20px;">
-        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">سبب التوقف</h3>
-        <div style="padding: 10px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; ${MULTI_LINE_STYLE}">
-          ${escapeHtml(request.stopReason)}
-        </div>
-      </div>
-      ` : ""}
+  return `
+    <section class="content-section report-section">
+      <h2 class="section-title">1 — بيانات الطلب</h2>
+      <table class="data-table details-table">
+        ${row("كود الطلب", request.requestCode)}
+        ${row("نوع الصيانة", typeMap[request.maintenanceType] || request.maintenanceType)}
+        ${row("الحالة", statusMap[request.status] || request.status)}
+        ${row("الموقع", request.locationName)}
+        ${row("الطابق", request.floorName)}
+        ${row("الموقع التفصيلي", request.detailedLocation)}
+        ${row("القسم", request.departmentName)}
+        ${row("النظام", request.systemName)}
+        ${row("الآلة / البند", request.machineName)}
+        ${row("رقم / توصيف البند", request.machineNumber)}
+        ${row("سبب الطلب", request.reasonText)}
+        ${row("احتياجات الطلب", request.requestNeeds)}
+        ${row("تاريخ فتح الطلب", formatReportDateTime(request.openedAt))}
+        ${request.stopReason ? row("سبب التوقف", request.stopReason) : ""}
+      </table>
+    </section>
 
-      <div style="margin-bottom: 20px;">
-        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">ملاحظات الاستشاري</h3>
-        <table class="data-table" style="width: 100%;">
-          <tr>
-            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">المهندس الاستشاري</td>
-            <td>${consultant ? escapeHtml(consultant.name || "-") : "لا يوجد"}</td>
-          </tr>
-          ${(request.maintenanceType === "preventive" && (request as any).scheduledTaskId?.createdBy) ? `
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">الاستشاري الذي أنشأ المهمة الوقائية</td>
-            <td>${escapeHtml((request as any).scheduledTaskId.createdBy?.name || "-")}</td>
-          </tr>
-          ` : ""}
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">ملاحظة الاستشاري</td>
-            <td style="${MULTI_LINE_STYLE}">${request.consultantNotes ? escapeHtml(request.consultantNotes) : "لا يوجد"}</td>
-          </tr>
-        </table>
-      </div>
+    <section class="content-section report-section">
+      <h2 class="section-title">2 — المسؤولون</h2>
+      <table class="data-table details-table">
+        ${personRow("المهندس المسؤول", view.people.engineer)}
+        ${personRow("الاستشاري المسؤول", view.people.assignedConsultant)}
+        ${personRow("مراقب السلامة", view.people.healthSafetySupervisor)}
+        ${personRow("مدير المشروع", view.people.projectManager)}
+      </table>
+    </section>
 
-      <div style="margin-bottom: 20px;">
-        <h3 style="font-size: 12px; font-weight: bold; color: #0f5b7a; margin-bottom: 10px; border-bottom: 1px solid #0f5b7a; padding-bottom: 5px;">حالة الطلب</h3>
-        <table class="data-table" style="width: 100%;">
-          <tr>
-            <td style="width: 200px; font-weight: bold; background-color: #f8f9fa;">الحالة</td>
-            <td>${escapeHtml(statusText)}</td>
-          </tr>
-          ${request.status === RequestStatus.COMPLETED && request.closedAt ? `
-          <tr>
-            <td style="font-weight: bold; background-color: #f8f9fa;">تاريخ الإغلاق</td>
-            <td>${formatDateEnglish(new Date(request.closedAt))}</td>
-          </tr>
-          ` : ""}
-        </table>
-      </div>
-    </div>
-  `;
+    <section class="content-section report-section">
+      <h2 class="section-title">3 — تنفيذ العمل</h2>
+      <table class="data-table details-table">
+        ${row("المهندس المنفذ", view.people.engineer?.name)}
+        ${row("ما تم تنفيذه", request.implementedWork)}
+        ${row("تاريخ ووقت طلب اعتماد الإكمال", formatReportDateTime(view.completion.requestedAt))}
+        ${row("من أرسل طلب الاعتماد", view.completion.requestedBy?.name)}
+        ${view.completion.requestedBy ? row("صفة مرسل الطلب", getRoleLabel(view.completion.requestedBy.role)) : ""}
+      </table>
+    </section>
 
-  return html;
+    <section class="content-section report-section approval-section">
+      <h2 class="section-title">4 — اعتماد إكمال أعمال الصيانة</h2>
+      <table class="data-table details-table">
+        ${row("حالة الاعتماد", getApprovalStatusLabel(view.completion.status))}
+        ${view.completion.approvedBy ? row("اعتمد بواسطة", view.completion.approvedBy.name) : ""}
+        ${view.completion.approvedBy ? row("الصفة", getRoleLabel(view.completion.approvedBy.role)) : ""}
+        ${view.completion.approvedAt ? row("تاريخ ووقت الاعتماد", formatReportDateTime(view.completion.approvedAt)) : ""}
+      </table>
+    </section>
+
+    <section class="content-section report-section notes-section">
+      <h2 class="section-title">5 — سجل الملاحظات والتوجيهات</h2>
+      <div class="timeline">${notes}</div>
+    </section>`;
 }
 
 // Generate HTML content for empty request template
@@ -478,27 +430,7 @@ function generateEmptyRequestTemplateContent(): string {
   return html;
 }
 
-export interface RequestReportData {
-  id: string;
-  requestCode: string;
-  engineerName: string;
-  consultantName: string | null;
-  maintenanceType: string;
-  status: string;
-  locationName: string;
-  departmentName: string;
-  systemName: string;
-  machineName: string;
-  machineNumber: string | null;
-  reasonText: string;
-  engineerNotes: string | null;
-  consultantNotes: string | null;
-  requestNeeds: string | null;
-  implementedWork: string | null;
-  openedAt: Date;
-  closedAt: Date | null;
-  createdAt: Date;
-}
+export type RequestReportData = RequestReportView;
 
 export type BulkExportJobStatus = "queued" | "processing" | "completed" | "failed";
 
@@ -768,35 +700,20 @@ export class ReportsService {
 
     const requests = await this.requestModel
       .find(matchStage)
-      .populate("engineerId", "name")
-      .populate("consultantId", "name")
+      .populate("engineerId", "name role")
+      .populate("consultantId", "name role")
+      .populate("healthSafetySupervisorId", "name role")
+      .populate("projectManagerId", "name role")
+      .populate("completionRequestedBy", "name role")
+      .populate("completionApprovedBy", "name role")
       .populate("locationId", "name")
+      .populate("floorId", "name")
       .populate("departmentId", "name")
       .populate("systemId", "name")
       .populate("machineId", "name")
       .sort({ createdAt: -1 });
 
-    return requests.map((req) => ({
-      id: (req as any)._id?.toString?.() || "",
-      requestCode: req.requestCode,
-      engineerName: (req.engineerId as any)?.name || "N/A",
-      consultantName: (req.consultantId as any)?.name || null,
-      maintenanceType: req.maintenanceType,
-      status: req.status,
-      locationName: (req.locationId as any)?.name || "N/A",
-      departmentName: (req.departmentId as any)?.name || "N/A",
-      systemName: (req.systemId as any)?.name || "N/A",
-      machineName: (req.machineId as any)?.name || "N/A",
-      machineNumber: req.machineNumber || null,
-      reasonText: req.reasonText,
-      engineerNotes: req.engineerNotes || null,
-      consultantNotes: req.consultantNotes || null,
-      requestNeeds: req.requestNeeds || null,
-      implementedWork: req.implementedWork || null,
-      openedAt: req.openedAt,
-      closedAt: req.closedAt || null,
-      createdAt: (req as any).createdAt,
-    }));
+    return requests.map((request) => buildRequestReportView(request));
   }
 
   async generateExcelReport(
@@ -806,72 +723,16 @@ export class ReportsService {
   ): Promise<void> {
     const data = await this.getRequestsReport(filter, user);
 
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = "Maintenance System";
-    workbook.created = new Date();
-
-    const sheet = workbook.addWorksheet("Maintenance Requests");
-
-    // Define columns
-    sheet.columns = [
-      { header: "Request Code", key: "requestCode", width: 18 },
-      { header: "Engineer", key: "engineerName", width: 20 },
-      { header: "Consultant", key: "consultantName", width: 20 },
-      { header: "Type", key: "maintenanceType", width: 12 },
-      { header: "Status", key: "status", width: 15 },
-      { header: "Location", key: "locationName", width: 20 },
-      { header: "Department", key: "departmentName", width: 15 },
-      { header: "System", key: "systemName", width: 15 },
-      { header: "Machine", key: "machineName", width: 15 },
-      { header: "Machine No.", key: "machineNumber", width: 12 },
-      { header: "Reason", key: "reasonText", width: 30 },
-      { header: "Engineer Notes", key: "engineerNotes", width: 25 },
-      { header: "Consultant Notes", key: "consultantNotes", width: 25 },
-      { header: "Request Needs", key: "requestNeeds", width: 25 },
-      { header: "Implemented Work", key: "implementedWork", width: 25 },
-      { header: "Opened At", key: "openedAt", width: 18 },
-      { header: "Closed At", key: "closedAt", width: 18 },
-    ];
-
-    // Style header row
-    const headerRow = sheet.getRow(1);
-    headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
-    headerRow.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FF4472C4" },
-    };
-    headerRow.alignment = { horizontal: "center" };
-
-    // Add data rows
-    data.forEach((row) => {
-      sheet.addRow({
-        ...row,
-        openedAt: row.openedAt ? new Date(row.openedAt).toLocaleString() : "",
-        closedAt: row.closedAt ? new Date(row.closedAt).toLocaleString() : "",
-        consultantName: row.consultantName || "-",
-        machineNumber: row.machineNumber || "-",
-        engineerNotes: row.engineerNotes || "-",
-        consultantNotes: row.consultantNotes || "-",
-        requestNeeds: row.requestNeeds || "-",
-        implementedWork: row.implementedWork || "-",
-      });
-    });
-
-    // Auto-filter
-    sheet.autoFilter = {
-      from: "A1",
-      to: `Q${data.length + 1}`,
-    };
+    const workbook = buildReportsWorkbook(data);
 
     // Set response headers
     res.setHeader(
       "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename=maintenance-report-${Date.now()}.xlsx`
+      `attachment; filename=maintenance-report-${Date.now()}.xlsx`,
     );
 
     await workbook.xlsx.write(res);
@@ -886,7 +747,7 @@ export class ReportsService {
 
     if (data.length > maxPdfExportRows) {
       throw new Error(
-        `لا يمكن تصدير PDF لأكثر من ${maxPdfExportRows} طلب. يرجى تضييق الفلترة أو استخدام Excel.`
+        `لا يمكن تصدير PDF لأكثر من ${maxPdfExportRows} طلب. يرجى تضييق الفلترة أو استخدام Excel.`,
       );
     }
 
@@ -914,7 +775,7 @@ export class ReportsService {
     const templatePath = path.join(
       __dirname,
       "templates",
-      "report-template.html"
+      "report-template.html",
     );
     if (!fs.existsSync(templatePath)) {
       throw new Error(`Template file not found at: ${templatePath}`);
@@ -922,7 +783,13 @@ export class ReportsService {
     let htmlContent = fs.readFileSync(templatePath, "utf-8");
     htmlContent = htmlContent.replace(/{{{report_content}}}/g, reportContent);
 
-    return this.generatePdfFromHtml(htmlContent, headerTemplate, footerTemplate);
+    return this.generatePdfFromHtml(
+      htmlContent,
+      headerTemplate,
+      footerTemplate,
+      undefined,
+      true,
+    );
   }
 
   async generatePdfReport(
@@ -1136,7 +1003,8 @@ export class ReportsService {
     htmlContent: string,
     headerTemplate: string,
     footerTemplate: string,
-    browser?: Browser
+    browser?: Browser,
+    landscape = false,
   ): Promise<Buffer> {
     const ownedBrowser = browser || (await this.createPuppeteerBrowser());
     const shouldCloseBrowser = !browser;
@@ -1152,6 +1020,7 @@ export class ReportsService {
 
       const pdfBuffer = await page.pdf({
         format: "A4",
+        landscape,
         printBackground: true,
         displayHeaderFooter: true,
         headerTemplate,
@@ -1174,7 +1043,7 @@ export class ReportsService {
         pdfBuffer[0],
         pdfBuffer[1],
         pdfBuffer[2],
-        pdfBuffer[3]
+        pdfBuffer[3],
       );
       if (pdfHeader !== "%PDF") {
         throw new Error("Generated PDF is not in valid PDF format");
@@ -1274,13 +1143,17 @@ export class ReportsService {
   async getSingleRequestDetails(
     requestId: string,
     user?: CurrentUserData,
-  ): Promise<MaintenanceRequestDocument> {
+  ): Promise<RequestReportView> {
     const request = await this.requestModel
       .findById(requestId)
       .populate("engineerId", "name email")
       .populate("consultantId", "name email")
       .populate("healthSafetySupervisorId", "name email")
+      .populate("projectManagerId", "name email role")
+      .populate("completionRequestedBy", "name email role")
+      .populate("completionApprovedBy", "name email role")
       .populate("locationId", "name")
+      .populate("floorId", "name")
       .populate("departmentId", "name")
       .populate("systemId", "name")
       .populate("machineId", "name components description")
@@ -1312,31 +1185,32 @@ export class ReportsService {
       );
     }
 
-    return request as MaintenanceRequestDocument;
+    return buildRequestReportView(request);
   }
 
   async generateSingleRequestPdfBuffer(
     requestId: string,
     user?: CurrentUserData,
-    browser?: Browser
+    browser?: Browser,
   ): Promise<Buffer> {
     const request = await this.getSingleRequestDetails(requestId, user);
     return this.generateSingleRequestPdfBufferFromRequest(request, browser);
   }
 
   private async generateSingleRequestPdfBufferFromRequest(
-    request: MaintenanceRequestDocument,
-    browser?: Browser
+    source: MaintenanceRequestDocument | RequestReportView,
+    browser?: Browser,
   ): Promise<Buffer> {
+    const view = "request" in source ? source : buildRequestReportView(source);
     const logoBase64 = convertLogoToBase64();
-    const reportContent = generateSingleRequestContent(request);
+    const reportContent = generateSingleRequestReportContent(view);
     const headerTemplate = this.getPdfHeaderTemplate(logoBase64);
     const footerTemplate = this.getPdfFooterTemplate();
 
     const templatePath = path.join(
       __dirname,
       "templates",
-      "report-template.html"
+      "report-template.html",
     );
     if (!fs.existsSync(templatePath)) {
       throw new Error(`Template file not found at: ${templatePath}`);
@@ -1348,7 +1222,7 @@ export class ReportsService {
       htmlContent,
       headerTemplate,
       footerTemplate,
-      browser
+      browser,
     );
   }
 
@@ -1422,7 +1296,7 @@ export class ReportsService {
 
   private async getRequestsForIds(
     requestIds: string[],
-    user?: CurrentUserData
+    user?: CurrentUserData,
   ): Promise<MaintenanceRequestDocument[]> {
     const normalizedRequestIds = this.normalizeSelectedRequestIds(requestIds);
     const baseMatchStage: FilterQuery<MaintenanceRequestDocument> = {
@@ -1435,7 +1309,11 @@ export class ReportsService {
       .populate("engineerId", "name email")
       .populate("consultantId", "name email")
       .populate("healthSafetySupervisorId", "name email")
+      .populate("projectManagerId", "name email role")
+      .populate("completionRequestedBy", "name email role")
+      .populate("completionApprovedBy", "name email role")
       .populate("locationId", "name")
+      .populate("floorId", "name")
       .populate("departmentId", "name")
       .populate("systemId", "name")
       .populate("machineId", "name components description")
@@ -1455,7 +1333,7 @@ export class ReportsService {
 
   private async getRequestsForFilter(
     filter: ReportFilterDto,
-    user?: CurrentUserData
+    user?: CurrentUserData,
   ): Promise<MaintenanceRequestDocument[]> {
     const matchStage = this.buildMatchStage(filter, user);
     const requests = await this.requestModel
@@ -1463,7 +1341,11 @@ export class ReportsService {
       .populate("engineerId", "name email")
       .populate("consultantId", "name email")
       .populate("healthSafetySupervisorId", "name email")
+      .populate("projectManagerId", "name email role")
+      .populate("completionRequestedBy", "name email role")
+      .populate("completionApprovedBy", "name email role")
       .populate("locationId", "name")
+      .populate("floorId", "name")
       .populate("departmentId", "name")
       .populate("systemId", "name")
       .populate("machineId", "name components description")
@@ -1480,7 +1362,9 @@ export class ReportsService {
 
     const maxBulkExportRequests = getMaxBulkExportRequests();
     if (requests.length > maxBulkExportRequests) {
-      throw new Error(`الحد الأقصى لتصدير الطلبات دفعة واحدة هو ${maxBulkExportRequests} طلب.`);
+      throw new Error(
+        `الحد الأقصى لتصدير الطلبات دفعة واحدة هو ${maxBulkExportRequests} طلب.`,
+      );
     }
 
     return requests as MaintenanceRequestDocument[];

@@ -1,5 +1,10 @@
 import api from "./api";
-import { ApiResponse, MaintenanceType, RequestStatus } from "@/types";
+import {
+  ApiResponse,
+  MaintenanceType,
+  RequestNoteType,
+  RequestStatus,
+} from "@/types";
 
 export interface ReportFilter {
   fromDate?: string;
@@ -14,23 +19,56 @@ export interface ReportFilter {
   format?: "json" | "excel" | "pdf";
 }
 
+export interface ReportPerson {
+  id: string | null;
+  name: string | null;
+  role: string | null;
+}
+
+export interface ReportApproval {
+  status: "approved" | "pending" | "not_requested";
+  requestedAt: string | null;
+  requestedBy: ReportPerson | null;
+  approvedAt: string | null;
+  approvedBy: ReportPerson | null;
+}
+
+export interface ReportNote {
+  type: RequestNoteType;
+  body: string;
+  author: ReportPerson;
+  createdAt: string | null;
+}
+
 export interface RequestReportData {
-  id: string;
-  requestCode: string;
-  engineerName: string;
-  consultantName: string | null;
-  maintenanceType: string;
-  status: string;
-  locationName: string;
-  departmentName: string;
-  systemName: string;
-  machineName: string;
-  machineNumber: string | null;
-  reasonText: string;
-  engineerNotes: string | null;
-  openedAt: string;
-  closedAt: string | null;
-  createdAt: string;
+  request: {
+    id: string;
+    requestCode: string;
+    maintenanceType: MaintenanceType;
+    status: RequestStatus;
+    locationName: string | null;
+    floorName: string | null;
+    detailedLocation: string | null;
+    departmentName: string | null;
+    systemName: string | null;
+    machineName: string | null;
+    machineNumber: string | null;
+    reasonText: string;
+    requestNeeds: string | null;
+    implementedWork: string | null;
+    stopReason: string | null;
+    openedAt: string | null;
+    closedAt: string | null;
+    createdAt: string | null;
+  };
+  people: {
+    engineer: ReportPerson | null;
+    assignedConsultant: ReportPerson | null;
+    healthSafetySupervisor: ReportPerson | null;
+    projectManager: ReportPerson | null;
+  };
+  completion: ReportApproval;
+  notes: ReportNote[];
 }
 
 export interface EngineerReport {
