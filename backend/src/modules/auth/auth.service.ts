@@ -260,13 +260,13 @@ export class AuthService {
         const pendingTasks = tasks.filter((task) => task.status === "pending");
 
         if (overdueTasks.length > 0) {
-          this.notificationsGateway.notifyPendingTasks(engineerId, {
+          await this.notificationsGateway.notifyPendingTasks(engineerId, {
             overdue: overdueTasks.length,
             pending: pendingTasks.length,
             total: tasks.length,
           });
         } else if (pendingTasks.length > 0) {
-          this.notificationsGateway.notifyPendingTasks(engineerId, {
+          await this.notificationsGateway.notifyPendingTasks(engineerId, {
             overdue: 0,
             pending: pendingTasks.length,
             total: tasks.length,

@@ -1048,7 +1048,8 @@ export default function RequestsList() {
                   )}
                   {isEngineer &&
                     request.engineerId?.id === user?.id &&
-                    request.status === RequestStatus.IN_PROGRESS && (
+                    request.status === RequestStatus.IN_PROGRESS &&
+                    !request.complaintId && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1234,7 +1235,8 @@ export default function RequestsList() {
                           )}
                           {isEngineer &&
                             request.engineerId?.id === user?.id &&
-                            request.status === RequestStatus.IN_PROGRESS && (
+                            request.status === RequestStatus.IN_PROGRESS &&
+                            !request.complaintId && (
                               <Button
                                 variant="ghost"
                                 size="sm"

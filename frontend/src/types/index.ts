@@ -330,10 +330,14 @@ export interface CreateUserForm {
 
 // Notification types
 export interface Notification {
+  id: string;
   type: string;
+  entityType?: string;
+  entityId?: string;
   data: Record<string, unknown>;
   message: string;
-  timestamp: string;
+  readAt: string | null;
+  createdAt: string;
 }
 
 // Audit Log types
@@ -437,4 +441,3 @@ export interface CreateComplaintRequestForm {
   requestNeeds?: string;
   reviewerNotes?: string;
 }
-

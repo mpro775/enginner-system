@@ -139,18 +139,19 @@ export class ScheduledTasksService {
     const isAvailableToAll = !createDto.engineerId;
     let targetUserIds: string[] = [];
     if (isAvailableToAll) {
-      targetUserIds = await this.getDepartmentTargetUserIds(
+      targetUserIds = await this.notificationsGateway.resolveRecipientUserIds(
         createDto.departmentId,
         [Role.ADMIN, Role.MAINTENANCE_MANAGER, Role.ENGINEER],
       );
     } else if (createDto.engineerId) {
-      const adminManagerIds = await this.getDepartmentTargetUserIds(
-        createDto.departmentId,
-        [Role.ADMIN, Role.MAINTENANCE_MANAGER],
-      );
+      const adminManagerIds =
+        await this.notificationsGateway.resolveRecipientUserIds(
+          createDto.departmentId,
+          [Role.ADMIN, Role.MAINTENANCE_MANAGER],
+        );
       targetUserIds = Array.from(new Set([createDto.engineerId, ...adminManagerIds]));
     }
-    this.notificationsGateway.notifyScheduledTaskCreated(
+    await this.notificationsGateway.notifyScheduledTaskCreated(
       populated,
       isAvailableToAll,
       targetUserIds,
@@ -982,13 +983,12 @@ export class ScheduledTasksService {
               (task.departmentId as any)?._id?.toString() ??
               task.departmentId?.toString();
             const targetUserIds = rawDeptId
-              ? await this.getDepartmentTargetUserIds(rawDeptId, [
-                  Role.ADMIN,
-                  Role.MAINTENANCE_MANAGER,
-                  Role.ENGINEER,
-                ])
+              ? await this.notificationsGateway.resolveRecipientUserIds(
+                  rawDeptId,
+                  [Role.ADMIN, Role.MAINTENANCE_MANAGER, Role.ENGINEER],
+                )
               : [];
-            this.notificationsGateway.notifyScheduledTaskCreated(
+            await this.notificationsGateway.notifyScheduledTaskCreated(
               populatedNewTask,
               true,
               targetUserIds,
@@ -1062,13 +1062,12 @@ export class ScheduledTasksService {
               (task.departmentId as any)?._id?.toString() ??
               task.departmentId?.toString();
             const targetUserIds = rawDeptId
-              ? await this.getDepartmentTargetUserIds(rawDeptId, [
-                  Role.ADMIN,
-                  Role.MAINTENANCE_MANAGER,
-                  Role.ENGINEER,
-                ])
+              ? await this.notificationsGateway.resolveRecipientUserIds(
+                  rawDeptId,
+                  [Role.ADMIN, Role.MAINTENANCE_MANAGER, Role.ENGINEER],
+                )
               : [];
-            this.notificationsGateway.notifyScheduledTaskCreated(
+            await this.notificationsGateway.notifyScheduledTaskCreated(
               populatedNewTask,
               true,
               targetUserIds,
@@ -1077,25 +1076,6 @@ export class ScheduledTasksService {
         }
       }
     }
-  }
-
-  private async getDepartmentTargetUserIds(
-    departmentId: string,
-    roles: Role[],
-  ): Promise<string[]> {
-    const users = await this.userModel
-      .find({
-        role: { $in: roles },
-        isActive: true,
-        deletedAt: null,
-        $or: [
-          { role: { $in: [Role.ADMIN, Role.MAINTENANCE_MANAGER] } },
-          { departmentIds: new Types.ObjectId(departmentId) },
-        ],
-      })
-      .select("_id")
-      .lean();
-    return users.map((item) => item._id.toString());
   }
 
   private calculateNextDate(

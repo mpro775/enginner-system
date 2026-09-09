@@ -1,108 +1,155 @@
 import { create } from "zustand";
-import { Notification } from "@/types";
 import { notificationsService } from "@/services/notifications";
-
-interface NotificationWithRead extends Notification {
-  id: string;
-  read: boolean;
-}
+import { Notification } from "@/types";
 
 interface NotificationsState {
-  notifications: NotificationWithRead[];
+  notifications: Notification[];
   unreadCount: number;
   isLoading: boolean;
+  pendingReadIds: string[];
+  isMarkingAll: boolean;
   addNotification: (notification: Notification) => void;
-  markAsRead: (id: string) => void;
-  markAllAsRead: () => void;
+  markAsRead: (id: string) => Promise<boolean>;
+  markAllAsRead: () => Promise<boolean>;
   clearNotifications: () => void;
   fetchNotifications: (limit?: number) => Promise<void>;
 }
 
-export const useNotificationsStore = create<NotificationsState>((set) => ({
+const sortNewestFirst = (items: Notification[]) =>
+  [...items].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+
+export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   notifications: [],
   unreadCount: 0,
   isLoading: false,
+  pendingReadIds: [],
+  isMarkingAll: false,
 
-  addNotification: (notification) =>
+  addNotification: (notification) => {
+    if (notification.readAt) return;
     set((state) => {
-      const key = `${notification.timestamp}-${notification.type}`;
-      const exists = state.notifications.some(
-        (n) => n.id === key || (n.timestamp === notification.timestamp && n.type === notification.type)
-      );
-      if (exists) {
+      if (state.notifications.some((item) => item.id === notification.id)) {
         return state;
       }
-
-      const newNotification: NotificationWithRead = {
-        ...notification,
-        id: key,
-        read: false,
-      };
       return {
-        notifications: [newNotification, ...state.notifications].slice(0, 50),
+        notifications: [notification, ...state.notifications].slice(0, 20),
         unreadCount: state.unreadCount + 1,
       };
-    }),
+    });
+  },
 
-  markAsRead: (id) =>
-    set((state) => {
-      const notification = state.notifications.find((n) => n.id === id);
-      if (notification && !notification.read) {
-        return {
-          notifications: state.notifications.map((n) =>
-            n.id === id ? { ...n, read: true } : n
-          ),
-          unreadCount: Math.max(0, state.unreadCount - 1),
-        };
-      }
-      return state;
-    }),
-
-  markAllAsRead: () =>
+  markAsRead: async (id) => {
+    const notification = get().notifications.find((item) => item.id === id);
+    if (!notification || get().pendingReadIds.includes(id)) return true;
     set((state) => ({
-      notifications: state.notifications.map((n) => ({ ...n, read: true })),
+      notifications: state.notifications.filter((item) => item.id !== id),
+      unreadCount: Math.max(0, state.unreadCount - 1),
+      pendingReadIds: [...state.pendingReadIds, id],
+    }));
+    try {
+      await notificationsService.markAsRead(id);
+      set((state) => ({
+        pendingReadIds: state.pendingReadIds.filter((item) => item !== id),
+      }));
+      return true;
+    } catch (error) {
+      console.error("Failed to mark notification as read:", error);
+      set((state) => ({
+        notifications: state.notifications.some((item) => item.id === id)
+          ? state.notifications
+          : sortNewestFirst([notification, ...state.notifications]).slice(
+              0,
+              20,
+            ),
+        unreadCount: state.unreadCount + 1,
+        pendingReadIds: state.pendingReadIds.filter((item) => item !== id),
+      }));
+      return false;
+    }
+  },
+
+  markAllAsRead: async () => {
+    if (get().isMarkingAll || get().notifications.length === 0) return true;
+    const previousNotifications = get().notifications;
+    const previousUnreadCount = get().unreadCount;
+    set({ notifications: [], unreadCount: 0, isMarkingAll: true });
+    try {
+      await notificationsService.markAllAsRead();
+      set({
+        notifications: [],
+        unreadCount: 0,
+        isMarkingAll: false,
+        pendingReadIds: [],
+      });
+      await get().fetchNotifications();
+      return true;
+    } catch (error) {
+      console.error("Failed to mark all notifications as read:", error);
+      set((state) => {
+        const byId = new Map(
+          [...previousNotifications, ...state.notifications].map((item) => [
+            item.id,
+            item,
+          ]),
+        );
+        return {
+          notifications: sortNewestFirst(Array.from(byId.values())).slice(
+            0,
+            20,
+          ),
+          unreadCount: previousUnreadCount + state.unreadCount,
+          isMarkingAll: false,
+        };
+      });
+      return false;
+    }
+  },
+
+  clearNotifications: () =>
+    set({
+      notifications: [],
       unreadCount: 0,
-    })),
+      isLoading: false,
+      pendingReadIds: [],
+      isMarkingAll: false,
+    }),
 
-  clearNotifications: () => set({ notifications: [], unreadCount: 0, isLoading: false }),
-
-  fetchNotifications: async (limit = 50) => {
+  fetchNotifications: async (limit = 20) => {
     set({ isLoading: true });
     try {
-      const serverNotifications = await notificationsService.getAll(limit);
-
+      const [serverNotifications, unreadCount] = await Promise.all([
+        notificationsService.getAll(limit, "unread"),
+        notificationsService.getUnreadCount(),
+      ]);
       set((state) => {
-        const readKeys = new Set(
-          state.notifications
-            .filter((n) => n.read)
-            .map((n) => n.id || `${n.timestamp}-${n.type}`)
-        );
-
-        const currentNotifications: NotificationWithRead[] = serverNotifications.map(
-          (notification) => {
-            const key = `${notification.timestamp}-${notification.type}`;
-            return {
-              ...notification,
-              id: key,
-              read: readKeys.has(key),
-            };
+        if (state.isMarkingAll) return { isLoading: false };
+        const pending = new Set(state.pendingReadIds);
+        const byId = new Map<string, Notification>();
+        for (const notification of [
+          ...serverNotifications,
+          ...state.notifications,
+        ]) {
+          if (!notification.readAt && !pending.has(notification.id)) {
+            byId.set(notification.id, notification);
           }
-        );
-
-        const sortedNotifications = currentNotifications
-          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-          .slice(0, 50);
-
-        const unreadCount = sortedNotifications.filter((n) => !n.read).length;
-
+        }
         return {
-          notifications: sortedNotifications,
-          unreadCount,
+          notifications: sortNewestFirst(Array.from(byId.values())).slice(
+            0,
+            limit,
+          ),
+          unreadCount: Math.max(
+            Math.max(0, unreadCount - pending.size),
+            state.unreadCount,
+            byId.size,
+          ),
           isLoading: false,
         };
       });
     } catch (error) {
-      console.error('Failed to fetch notifications:', error);
+      console.error("Failed to fetch notifications:", error);
       set({ isLoading: false });
     }
   },

@@ -452,6 +452,8 @@ export default function RequestDetails() {
         reasonText: request.reasonText,
         machineNumber: request.machineNumber || "",
         engineerNotes: "",
+        requestNeeds: request.requestNeeds || "",
+        implementedWork: request.implementedWork || "",
       });
       setShowEditDialog(true);
       // Remove the query parameter from URL
@@ -1727,8 +1729,8 @@ export default function RequestDetails() {
               <div className="space-y-2">
                 <Label>النظام / الفرع *</Label>
                 <Select
+                  value={watch("systemId") || undefined}
                   onValueChange={handleSystemChange}
-                  defaultValue={request?.systemId?.id}
                 >
                   <SelectTrigger
                     className={errors.systemId ? "border-destructive" : ""}
@@ -1742,13 +1744,16 @@ export default function RequestDetails() {
                           {system.name}
                         </SelectItem>
                       ))
-                    ) : (
-                      <SelectItem value="" disabled>
-                        لا توجد أنظمة متاحة
-                      </SelectItem>
-                    )}
+                    ) : null}
                   </SelectContent>
                 </Select>
+                {!filteredSystems || filteredSystems.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {watchDepartmentId
+                      ? "لا توجد أنظمة مرتبطة بهذا القسم"
+                      : "اختر القسم أولاً"}
+                  </p>
+                ) : null}
                 {errors.systemId && (
                   <p className="text-xs text-destructive">
                     {errors.systemId.message}

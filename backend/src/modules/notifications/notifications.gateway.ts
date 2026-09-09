@@ -1,17 +1,22 @@
+import { Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { JwtService } from "@nestjs/jwt";
 import {
-  WebSocketGateway,
-  WebSocketServer,
   OnGatewayConnection,
   OnGatewayDisconnect,
   SubscribeMessage,
+  WebSocketGateway,
+  WebSocketServer,
 } from "@nestjs/websockets";
 import { Server, Socket } from "socket.io";
-import { Logger } from "@nestjs/common";
-import { JwtService } from "@nestjs/jwt";
-import { ConfigService } from "@nestjs/config";
+import { Role } from "../../common/enums";
+import { ComplaintDocument } from "../complaints/schemas/complaint.schema";
 import { MaintenanceRequestDocument } from "../maintenance-requests/schemas/maintenance-request.schema";
 import { ScheduledTaskDocument } from "../scheduled-tasks/schemas/scheduled-task.schema";
-import { ComplaintDocument } from "../complaints/schemas/complaint.schema";
+import {
+  CreateNotificationsInput,
+  NotificationsService,
+} from "./notifications.service";
 
 interface BulkExportProgressPayload {
   id: string;
@@ -32,18 +37,11 @@ interface BulkExportProgressPayload {
 }
 
 interface AuthenticatedSocket extends Socket {
-  user?: {
-    userId: string;
-    role: string;
-    name: string;
-  };
+  user?: { userId: string; role: string; name: string };
 }
 
 @WebSocketGateway({
-  cors: {
-    origin: "*",
-    credentials: true,
-  },
+  cors: { origin: "*", credentials: true },
   namespace: "/notifications",
 })
 export class NotificationsGateway
@@ -56,7 +54,8 @@ export class NotificationsGateway
 
   constructor(
     private jwtService: JwtService,
-    private configService: ConfigService
+    private configService: ConfigService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async handleConnection(client: AuthenticatedSocket) {
@@ -64,32 +63,24 @@ export class NotificationsGateway
       const token =
         client.handshake.auth?.token ||
         client.handshake.headers?.authorization?.split(" ")[1];
-
       if (!token) {
-        this.logger.warn(`Client ${client.id} connected without token`);
         client.disconnect();
         return;
       }
-
       const payload = this.jwtService.verify(token, {
         secret: this.configService.get<string>("JWT_SECRET"),
       });
-
       client.user = {
         userId: payload.sub,
         role: payload.role,
         name: payload.name,
       };
-
-      // Join role-based rooms
-      await client.join(payload.role);
       await client.join(`user:${payload.sub}`);
-
       this.logger.log(
-        `Client ${client.id} connected - User: ${payload.name} (${payload.role})`
+        `Client ${client.id} connected - User: ${payload.name} (${payload.role})`,
       );
     } catch (error) {
-      this.logger.error(`Connection error: ${error.message}`);
+      this.logger.error(`Connection error: ${(error as Error).message}`);
       client.disconnect();
     }
   }
@@ -98,59 +89,68 @@ export class NotificationsGateway
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
-  notifyUsers(
-    userIds: string[],
-    type: string,
-    data: Record<string, unknown>,
-    message: string,
-    timestamp = new Date(),
-  ): void {
-    const notification = {
-      type,
-      data,
-      message,
-      timestamp: timestamp.toISOString(),
-    };
-    for (const userId of new Set(userIds.filter(Boolean))) {
-      this.server.to(`user:${userId}`).emit("notification", notification);
-    }
-  }
-
   @SubscribeMessage("ping")
-  handlePing(client: Socket): string {
+  handlePing(): string {
     return "pong";
   }
 
-  // Notify when a new request is created
-  notifyRequestCreated(request: MaintenanceRequestDocument, userIds: string[] = []) {
-    const notification = {
+  resolveRecipientUserIds(departmentId: string, roles: Role[]) {
+    return this.notificationsService.resolveRecipientUserIds(
+      departmentId,
+      roles,
+    );
+  }
+
+  async notifyUsers(input: CreateNotificationsInput): Promise<void> {
+    const created = await this.notificationsService.createForRecipients(input);
+    for (const item of created) {
+      this.server
+        .to(`user:${item.recipientUserId}`)
+        .emit("notification", item.notification);
+    }
+  }
+
+  async notifyRequestCreated(
+    request: MaintenanceRequestDocument,
+    userIds: string[] = [],
+  ) {
+    const id = request._id.toString();
+    const createdAt = (request as any).createdAt ?? new Date();
+    await this.notifyUsers({
+      recipientUserIds: userIds,
       type: "request:created",
+      entityType: "request",
+      entityId: id,
+      eventKey: `request:created:${id}`,
+      createdAt,
       data: {
-        id: request._id.toString(),
+        id,
         requestCode: request.requestCode,
         maintenanceType: request.maintenanceType,
         status: request.status,
         engineerName: (request.engineerId as any)?.name,
         locationName: (request.locationId as any)?.name,
-        createdAt: (request as any).createdAt,
+        createdAt,
       },
       message: `New maintenance request ${request.requestCode} created`,
-      timestamp: new Date().toISOString(),
-    };
-
-    for (const userId of new Set(userIds)) {
-      this.server.to(`user:${userId}`).emit("notification", notification);
-    }
-
-    this.logger.log(`Notified about new request: ${request.requestCode}`);
+    });
   }
 
-  // Notify when a request is stopped
-  notifyRequestStopped(request: MaintenanceRequestDocument, userIds: string[] = []) {
-    const notification = {
+  async notifyRequestStopped(
+    request: MaintenanceRequestDocument,
+    userIds: string[] = [],
+  ) {
+    const id = request._id.toString();
+    const occurredAt = request.stoppedAt ?? new Date();
+    await this.notifyUsers({
+      recipientUserIds: userIds,
       type: "request:stopped",
+      entityType: "request",
+      entityId: id,
+      eventKey: `request:stopped:${id}:${occurredAt.toISOString()}`,
+      createdAt: occurredAt,
       data: {
-        id: request._id.toString(),
+        id,
         requestCode: request.requestCode,
         status: request.status,
         stopReason: request.stopReason,
@@ -158,66 +158,67 @@ export class NotificationsGateway
         stoppedAt: request.stoppedAt,
       },
       message: `Request ${request.requestCode} has been stopped`,
-      timestamp: new Date().toISOString(),
-    };
-
-    for (const userId of new Set(userIds)) {
-      this.server.to(`user:${userId}`).emit("notification", notification);
-    }
-
-    this.logger.log(`Notified about stopped request: ${request.requestCode}`);
+    });
   }
 
-  // Notify when a request is completed
-  notifyRequestCompleted(request: MaintenanceRequestDocument, userIds: string[] = []) {
-    const notification = {
+  async notifyRequestCompleted(
+    request: MaintenanceRequestDocument,
+    userIds: string[] = [],
+  ) {
+    const id = request._id.toString();
+    const occurredAt = request.closedAt ?? new Date();
+    await this.notifyUsers({
+      recipientUserIds: userIds,
       type: "request:completed",
+      entityType: "request",
+      entityId: id,
+      eventKey: `request:completed:${id}:${occurredAt.toISOString()}`,
+      createdAt: occurredAt,
       data: {
-        id: request._id.toString(),
+        id,
         requestCode: request.requestCode,
         status: request.status,
         engineerName: (request.engineerId as any)?.name,
         closedAt: request.closedAt,
       },
       message: `Request ${request.requestCode} has been completed`,
-      timestamp: new Date().toISOString(),
-    };
-
-    for (const userId of new Set(userIds)) {
-      this.server.to(`user:${userId}`).emit("notification", notification);
-    }
-
-    this.logger.log(`Notified about completed request: ${request.requestCode}`);
+    });
   }
 
-  // Notify when a request is updated
-  notifyRequestUpdated(request: MaintenanceRequestDocument, userIds: string[] = []) {
-    const notification = {
+  async notifyRequestUpdated(
+    request: MaintenanceRequestDocument,
+    userIds: string[] = [],
+  ) {
+    const id = request._id.toString();
+    const occurredAt = (request as any).updatedAt ?? new Date();
+    await this.notifyUsers({
+      recipientUserIds: userIds,
       type: "request:updated",
+      entityType: "request",
+      entityId: id,
+      eventKey: `request:updated:${id}:${occurredAt.toISOString()}`,
+      createdAt: occurredAt,
       data: {
-        id: request._id.toString(),
+        id,
         requestCode: request.requestCode,
         status: request.status,
         engineerName: (request.engineerId as any)?.name,
       },
       message: `Request ${request.requestCode} has been updated`,
-      timestamp: new Date().toISOString(),
-    };
-
-    for (const userId of new Set(userIds)) {
-      this.server.to(`user:${userId}`).emit("notification", notification);
-    }
-
-    this.logger.log(`Notified about updated request: ${request.requestCode}`);
+    });
   }
 
-  // Notify about pending scheduled tasks
-  notifyPendingTasks(
+  async notifyPendingTasks(
     engineerId: string,
-    counts: { overdue: number; pending: number; total: number }
-  ): void {
-    const notification = {
-      type: counts.overdue > 0 ? "task:overdue" : "task:pending",
+    counts: { overdue: number; pending: number; total: number },
+  ) {
+    const day = new Date().toISOString().slice(0, 10);
+    const type = counts.overdue > 0 ? "task:overdue" : "task:pending";
+    await this.notifyUsers({
+      recipientUserIds: [engineerId],
+      type,
+      entityType: "task",
+      eventKey: `${type}:${engineerId}:${day}:${counts.overdue}:${counts.pending}`,
       data: {
         engineerId,
         overdueCount: counts.overdue,
@@ -228,27 +229,25 @@ export class NotificationsGateway
         counts.overdue > 0
           ? `لديك ${counts.overdue} صيانة وقائية متأخرة و ${counts.pending} صيانة معلقة`
           : `لديك ${counts.pending} صيانة وقائية معلقة`,
-      timestamp: new Date().toISOString(),
-    };
-
-    // Notify the specific engineer
-    this.server.to(`user:${engineerId}`).emit("notification", notification);
-
-    this.logger.log(
-      `Notified engineer ${engineerId} about pending tasks: ${counts.total} total`
-    );
+    });
   }
 
-  // Notify when a new scheduled task is created
-  notifyScheduledTaskCreated(
+  async notifyScheduledTaskCreated(
     task: ScheduledTaskDocument,
-    isAvailableToAll: boolean = false,
-    targetUserIds: string[] = []
+    isAvailableToAll = false,
+    targetUserIds: string[] = [],
   ) {
-    const notification = {
+    const id = task._id.toString();
+    const createdAt = (task as any).createdAt ?? new Date();
+    await this.notifyUsers({
+      recipientUserIds: targetUserIds,
       type: "task:created",
+      entityType: "task",
+      entityId: id,
+      eventKey: `task:created:${id}`,
+      createdAt,
       data: {
-        id: task._id.toString(),
+        id,
         taskCode: task.taskCode,
         title: task.title,
         locationName: (task.locationId as any)?.name,
@@ -256,166 +255,191 @@ export class NotificationsGateway
         machineName: (task.machineId as any)?.name,
         scheduledDate: `${task.scheduledYear}-${String(task.scheduledMonth).padStart(2, "0")}-${String(task.scheduledDay || 1).padStart(2, "0")}`,
         isAvailableToAll,
-        createdAt: (task as any).createdAt,
+        createdAt,
       },
       message: isAvailableToAll
         ? `تم إضافة صيانة وقائية جديدة متاحة لمهندسي القسم: ${task.taskCode}`
         : `تم إضافة صيانة وقائية جديدة: ${task.taskCode}`,
-      timestamp: new Date().toISOString(),
-    };
-
-    if (targetUserIds && targetUserIds.length > 0) {
-      for (const userId of new Set(targetUserIds.filter(Boolean))) {
-        this.server.to(`user:${userId}`).emit("notification", notification);
-      }
-      this.logger.log(
-        `Notified target users (${targetUserIds.length}) about new task: ${task.taskCode}`
-      );
-    } else if (isAvailableToAll) {
-      // Fallback if no target users provided
-      this.server.to("engineer").emit("notification", notification);
-      this.logger.log(
-        `Notified all engineers about new available task: ${task.taskCode}`
-      );
-    } else if (task.engineerId) {
-      // Notify specific engineer
-      const engineerId =
-        (task.engineerId as any)?._id?.toString() ||
-        (task.engineerId as any)?.id ||
-        task.engineerId.toString();
-      if (engineerId) {
-        this.server.to(`user:${engineerId}`).emit("notification", notification);
-        this.logger.log(
-          `Notified engineer ${engineerId} about new task: ${task.taskCode}`
-        );
-      }
-    }
+    });
   }
 
-  // Notify when a new complaint is created
-  notifyComplaintCreated(complaint: ComplaintDocument, userIds: string[] = []) {
-    const notification = {
+  async notifyComplaintCreated(
+    complaint: ComplaintDocument,
+    userIds: string[] = [],
+  ) {
+    const id = complaint._id.toString();
+    const createdAt = (complaint as any).createdAt ?? new Date();
+    await this.notifyUsers({
+      recipientUserIds: userIds,
       type: "complaint:created",
-      data: {
-        id: complaint._id.toString(),
-        complaintCode: complaint.complaintCode,
-        reporterName:
-          complaint.reporterNameAr || complaint.reporterNameEn || "",
-        location:
-          (complaint.locationId as any)?.name ||
-          complaint.locationAr ||
-          complaint.locationEn ||
-          "",
-        submissionLanguage: complaint.submissionLanguage,
-        reporterNameAr: complaint.reporterNameAr,
-        reporterNameEn: complaint.reporterNameEn,
-        locationAr: complaint.locationAr,
-        locationEn: complaint.locationEn,
-        status: complaint.status,
-        createdAt: (complaint as any).createdAt,
-      },
+      entityType: "complaint",
+      entityId: id,
+      eventKey: `complaint:created:${id}`,
+      createdAt,
+      data: this.complaintData(complaint, createdAt),
       message: `تم تقديم بلاغ جديد: ${complaint.complaintCode}`,
-      timestamp: new Date().toISOString(),
-    };
-
-    for (const userId of new Set(userIds)) {
-      this.server.to(`user:${userId}`).emit("notification", notification);
-    }
-
-    this.logger.log(`Notified about new complaint: ${complaint.complaintCode}`);
+    });
   }
 
-  notifyComplaintTransferred(complaint: ComplaintDocument, userIds: string[]) {
-    this.notifyUsers(
-      userIds,
-      "complaint:transferred",
-      {
-        id: complaint._id.toString(),
+  async notifyComplaintTransferred(
+    complaint: ComplaintDocument,
+    userIds: string[],
+  ) {
+    const id = complaint._id.toString();
+    const occurredAt = (complaint as any).updatedAt ?? new Date();
+    await this.notifyUsers({
+      recipientUserIds: userIds,
+      type: "complaint:transferred",
+      entityType: "complaint",
+      entityId: id,
+      eventKey: `complaint:transferred:${id}:${occurredAt.toISOString()}`,
+      createdAt: occurredAt,
+      data: {
+        id,
         complaintCode: complaint.complaintCode,
         departmentId: complaint.departmentId?.toString(),
         status: complaint.status,
       },
-      `تم تحويل البلاغ ${complaint.complaintCode} إلى قسم جديد`,
-    );
+      message: `تم تحويل البلاغ ${complaint.complaintCode} إلى قسم جديد`,
+    });
   }
 
-  notifyCompletionPending(request: MaintenanceRequestDocument, userIds: string[]) {
-    this.notifyUsers(
-      userIds,
-      "request:completion-pending",
-      {
-        id: request._id.toString(),
+  async notifyComplaintAssigned(
+    complaint: ComplaintDocument,
+    engineerId: string,
+  ) {
+    const id = complaint._id.toString();
+    const occurredAt = (complaint as any).updatedAt ?? new Date();
+    await this.notifyUsers({
+      recipientUserIds: [engineerId],
+      type: "complaint:assigned",
+      entityType: "complaint",
+      entityId: id,
+      eventKey: `complaint:assigned:${id}:${engineerId}:${occurredAt.toISOString()}`,
+      createdAt: occurredAt,
+      data: {
+        id,
+        complaintCode: complaint.complaintCode,
+        status: complaint.status,
+      },
+      message: `تم إسناد البلاغ ${complaint.complaintCode} إليك`,
+    });
+  }
+
+  async notifyCompletionPending(
+    request: MaintenanceRequestDocument,
+    userIds: string[],
+  ) {
+    const id = request._id.toString();
+    const occurredAt = request.completionRequestedAt ?? new Date();
+    await this.notifyUsers({
+      recipientUserIds: userIds,
+      type: "request:completion-pending",
+      entityType: "request",
+      entityId: id,
+      eventKey: `request:completion-pending:${id}:${occurredAt.toISOString()}`,
+      createdAt: occurredAt,
+      data: {
+        id,
         requestCode: request.requestCode,
         status: request.status,
         completionRequestedAt: request.completionRequestedAt,
       },
-      `طلب ${request.requestCode} بانتظار اعتماد الإكمال`,
-      request.completionRequestedAt || new Date(),
-    );
+      message: `طلب ${request.requestCode} بانتظار اعتماد الإكمال`,
+    });
   }
 
-  notifyCompletionApproved(request: MaintenanceRequestDocument, userIds: string[]) {
-    this.notifyUsers(
-      userIds,
-      "request:completion-approved",
-      {
-        id: request._id.toString(),
+  async notifyCompletionApproved(
+    request: MaintenanceRequestDocument,
+    userIds: string[],
+  ) {
+    const id = request._id.toString();
+    const occurredAt = request.completionApprovedAt ?? new Date();
+    await this.notifyUsers({
+      recipientUserIds: userIds,
+      type: "request:completion-approved",
+      entityType: "request",
+      entityId: id,
+      eventKey: `request:completion-approved:${id}:${occurredAt.toISOString()}`,
+      createdAt: occurredAt,
+      data: {
+        id,
         requestCode: request.requestCode,
         status: request.status,
         completionApprovedAt: request.completionApprovedAt,
         completionApprovedByName: request.completionApprovedByName,
       },
-      `تم اعتماد إكمال الطلب ${request.requestCode}`,
-      request.completionApprovedAt || new Date(),
-    );
+      message: `تم اعتماد إكمال الطلب ${request.requestCode}`,
+    });
   }
 
-  notifyCompletionRejected(request: MaintenanceRequestDocument, userIds: string[], reason: string) {
-    this.notifyUsers(
-      userIds,
-      "request:completion-rejected",
-      {
-        id: request._id.toString(),
+  async notifyCompletionRejected(
+    request: MaintenanceRequestDocument,
+    userIds: string[],
+    reason: string,
+  ) {
+    const id = request._id.toString();
+    const occurredAt = (request as any).updatedAt ?? new Date();
+    await this.notifyUsers({
+      recipientUserIds: userIds,
+      type: "request:completion-rejected",
+      entityType: "request",
+      entityId: id,
+      eventKey: `request:completion-rejected:${id}:${occurredAt.toISOString()}`,
+      createdAt: occurredAt,
+      data: {
+        id,
         requestCode: request.requestCode,
         status: request.status,
         reason,
       },
-      `أُعيد الطلب ${request.requestCode} للمهندس: ${reason}`,
-    );
+      message: `أُعيد الطلب ${request.requestCode} للمهندس: ${reason}`,
+    });
   }
 
-  // Notify when a complaint is resolved
-  notifyComplaintResolved(complaint: ComplaintDocument, userIds: string[]) {
-    this.notifyUsers(
-      userIds,
-      "complaint:resolved",
-      {
-        id: complaint._id.toString(),
-        complaintCode: complaint.complaintCode,
-        reporterName:
-          complaint.reporterNameAr || complaint.reporterNameEn || "",
-        location:
-          (complaint.locationId as any)?.name ||
-          complaint.locationAr ||
-          complaint.locationEn ||
-          "",
-        submissionLanguage: complaint.submissionLanguage,
-        reporterNameAr: complaint.reporterNameAr,
-        reporterNameEn: complaint.reporterNameEn,
-        locationAr: complaint.locationAr,
-        locationEn: complaint.locationEn,
-        status: complaint.status,
+  async notifyComplaintResolved(
+    complaint: ComplaintDocument,
+    userIds: string[],
+  ) {
+    const id = complaint._id.toString();
+    const occurredAt = complaint.resolvedAt ?? new Date();
+    await this.notifyUsers({
+      recipientUserIds: userIds,
+      type: "complaint:resolved",
+      entityType: "complaint",
+      entityId: id,
+      eventKey: `complaint:resolved:${id}:${occurredAt.toISOString()}`,
+      createdAt: occurredAt,
+      data: {
+        ...this.complaintData(complaint, occurredAt),
         engineerName: (complaint.assignedEngineerId as any)?.name,
         resolvedAt: complaint.resolvedAt,
       },
-      `تم حل البلاغ ${complaint.complaintCode}`,
-      complaint.resolvedAt || new Date(),
-    );
-
-    this.logger.log(`Notified about resolved complaint: ${complaint.complaintCode}`);
+      message: `تم حل البلاغ ${complaint.complaintCode}`,
+    });
   }
 
   notifyBulkExportProgress(userId: string, payload: BulkExportProgressPayload) {
     this.server.to(`user:${userId}`).emit("bulk-export:progress", payload);
+  }
+
+  private complaintData(complaint: ComplaintDocument, createdAt: Date) {
+    return {
+      id: complaint._id.toString(),
+      complaintCode: complaint.complaintCode,
+      reporterName: complaint.reporterNameAr || complaint.reporterNameEn || "",
+      location:
+        (complaint.locationId as any)?.name ||
+        complaint.locationAr ||
+        complaint.locationEn ||
+        "",
+      submissionLanguage: complaint.submissionLanguage,
+      reporterNameAr: complaint.reporterNameAr,
+      reporterNameEn: complaint.reporterNameEn,
+      locationAr: complaint.locationAr,
+      locationEn: complaint.locationEn,
+      status: complaint.status,
+      createdAt,
+    };
   }
 }

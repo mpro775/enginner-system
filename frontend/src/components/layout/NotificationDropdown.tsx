@@ -1,4 +1,11 @@
-import { Bell, CheckCircle2, Clock, XCircle, AlertCircle, Calendar } from "lucide-react";
+import {
+  Bell,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  AlertCircle,
+  Calendar,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,14 +16,19 @@ import {
 import { useNotificationsStore } from "@/store/notifications";
 import { useAuthStore } from "@/store/auth";
 import { formatDateTime } from "@/lib/utils";
-import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Role } from "@/types";
 
 export function NotificationDropdown() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead, fetchNotifications } =
-    useNotificationsStore();
+  const {
+    notifications,
+    unreadCount,
+    isMarkingAll,
+    markAsRead,
+    markAllAsRead,
+    fetchNotifications,
+  } = useNotificationsStore();
   const { user } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
@@ -30,35 +42,32 @@ export function NotificationDropdown() {
   };
 
   // Handle notification click - navigate to related page
-  const handleNotificationClick = (notification: typeof notifications[0]) => {
-    // Mark as read if not already read
-    if (!notification.read) {
-      markAsRead(notification.id);
-    }
+  const handleNotificationClick = (notification: (typeof notifications)[0]) => {
+    void markAsRead(notification.id);
 
     // Determine navigation path based on notification type
     const notificationId = notification.data.id as string;
-    
-    if (notification.type.startsWith('request:')) {
+
+    if (notification.type.startsWith("request:")) {
       // Navigate to request details page
       if (notificationId) {
         navigate(`/app/requests/${notificationId}`);
         setIsOpen(false);
       }
-    } else if (notification.type.startsWith('complaint:')) {
+    } else if (notification.type.startsWith("complaint:")) {
       // Navigate to complaint details page
       if (notificationId) {
         navigate(`/app/complaints/${notificationId}`);
         setIsOpen(false);
       }
-    } else if (notification.type.startsWith('task:')) {
+    } else if (notification.type.startsWith("task:")) {
       // Navigate to scheduled tasks page based on user role
       // Admin and Consultant go to admin scheduled tasks page
       // Engineers go to their my-tasks page
       if (user?.role === Role.ADMIN || user?.role === Role.CONSULTANT) {
-        navigate('/app/admin/scheduled-tasks');
+        navigate("/app/admin/scheduled-tasks");
       } else {
-        navigate('/app/engineer/my-tasks');
+        navigate("/app/engineer/my-tasks");
       }
       setIsOpen(false);
     }
@@ -81,6 +90,7 @@ export function NotificationDropdown() {
       case "request:completion-rejected":
         return <XCircle className="h-4 w-4 text-red-500" />;
       case "complaint:created":
+      case "complaint:assigned":
       case "complaint:resolved":
       case "complaint:transferred":
         return <AlertCircle className="h-4 w-4 text-red-500" />;
@@ -111,6 +121,8 @@ export function NotificationDropdown() {
         return "أُعيد للمهندس";
       case "complaint:created":
         return "بلاغ جديد";
+      case "complaint:assigned":
+        return "تم إسناد بلاغ";
       case "complaint:resolved":
         return "تم حل البلاغ";
       case "complaint:transferred":
@@ -136,8 +148,8 @@ export function NotificationDropdown() {
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -top-0.5 -left-0.5 sm:-top-1 sm:-left-1 flex h-4 w-4 sm:h-5 sm:w-5 items-center justify-center rounded-full bg-destructive text-[9px] sm:text-[10px] text-destructive-foreground font-medium">
-              {unreadCount > 9 ? "9+" : unreadCount}
+            <span className="absolute -top-0.5 -left-0.5 sm:-top-1 sm:-left-1 flex h-4 min-w-4 sm:h-5 sm:min-w-5 px-1 items-center justify-center rounded-full bg-destructive text-[9px] sm:text-[10px] text-destructive-foreground font-medium">
+              {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           )}
         </Button>
@@ -147,13 +159,14 @@ export function NotificationDropdown() {
         className="w-80 sm:w-96 max-h-[500px] overflow-y-auto"
       >
         <div className="flex items-center justify-between p-3 border-b">
-          <h3 className="font-semibold text-sm">الإشعارات</h3>
+          <h3 className="font-semibold text-sm">الإشعارات الجديدة</h3>
           {unreadCount > 0 && (
             <Button
               variant="ghost"
               size="sm"
               className="h-7 text-xs"
-              onClick={markAllAsRead}
+              disabled={isMarkingAll}
+              onClick={() => void markAllAsRead()}
             >
               تحديد الكل كمقروء
             </Button>
@@ -162,17 +175,14 @@ export function NotificationDropdown() {
 
         {notifications.length === 0 ? (
           <div className="p-6 text-center text-sm text-muted-foreground">
-            لا توجد إشعارات
+            لا توجد إشعارات جديدة
           </div>
         ) : (
           <div className="py-1">
             {notifications.map((notification) => (
               <div
                 key={notification.id}
-                className={cn(
-                  "px-3 py-2 hover:bg-accent cursor-pointer transition-colors",
-                  !notification.read && "bg-muted/50"
-                )}
+                className="px-3 py-2 bg-muted/50 hover:bg-accent cursor-pointer transition-colors"
                 onClick={() => handleNotificationClick(notification)}
               >
                 <div className="flex items-start gap-3">
@@ -184,9 +194,7 @@ export function NotificationDropdown() {
                       <p className="text-xs font-medium text-muted-foreground">
                         {getNotificationTypeLabel(notification.type)}
                       </p>
-                      {!notification.read && (
-                        <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
-                      )}
+                      <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
                     </div>
                     <p className="text-sm text-foreground leading-relaxed">
                       {notification.message}
@@ -198,7 +206,7 @@ export function NotificationDropdown() {
                       </p>
                     ) : null}
                     <p className="text-xs text-muted-foreground">
-                      {formatDateTime(notification.timestamp)}
+                      {formatDateTime(notification.createdAt)}
                     </p>
                   </div>
                 </div>
@@ -212,7 +220,7 @@ export function NotificationDropdown() {
             <DropdownMenuSeparator />
             <div className="p-2">
               <p className="text-xs text-center text-muted-foreground">
-                إجمالي الإشعارات: {notifications.length}
+                الإشعارات الجديدة المعروضة: {notifications.length}
               </p>
             </div>
           </>

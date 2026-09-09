@@ -158,7 +158,7 @@ export class ComplaintsService {
       throw new InvalidOperationException("Could not allocate a complaint code");
     }
     const populated = await this.requirePopulated(complaint._id.toString());
-    const targetIds = await this.getDepartmentTargetUserIds(
+    const targetIds = await this.notificationsGateway.resolveRecipientUserIds(
       createDto.departmentId,
       [
         Role.ADMIN,
@@ -167,7 +167,10 @@ export class ComplaintsService {
         Role.MAINTENANCE_MANAGER,
       ],
     );
-    this.notificationsGateway.notifyComplaintCreated(populated, targetIds);
+    await this.notificationsGateway.notifyComplaintCreated(
+      populated,
+      targetIds,
+    );
     return populated;
   }
 
@@ -306,7 +309,12 @@ export class ComplaintsService {
       changes: { assignedEngineerId: engineer._id.toString(), status: ComplaintStatus.IN_PROGRESS },
       previousValues: { assignedEngineerId: previousEngineerId, status: complaint.status },
     });
-    return this.requirePopulated(id);
+    const updated = await this.requirePopulated(id);
+    await this.notificationsGateway.notifyComplaintAssigned(
+      updated,
+      engineer._id.toString(),
+    );
+    return updated;
   }
 
   async changeStatus(
@@ -331,14 +339,17 @@ export class ComplaintsService {
     });
     const updated = await this.requirePopulated(id);
     if (dto.status === ComplaintStatus.RESOLVED) {
-      const targetIds = await this.getDepartmentTargetUserIds(
+      const targetIds = await this.notificationsGateway.resolveRecipientUserIds(
         complaint.departmentId!.toString(),
         [Role.ADMIN, Role.ENGINEER, Role.CONSULTANT, Role.MAINTENANCE_MANAGER],
       );
       if (complaint.assignedEngineerId) {
         targetIds.push(complaint.assignedEngineerId.toString());
       }
-      this.notificationsGateway.notifyComplaintResolved(updated, targetIds);
+      await this.notificationsGateway.notifyComplaintResolved(
+        updated,
+        targetIds,
+      );
     }
     return updated;
   }
@@ -414,13 +425,17 @@ export class ComplaintsService {
       previousValues: { departmentId: complaint.departmentId.toString() },
     });
     const updated = await this.requirePopulated(id);
-    const targetIds = await this.getDepartmentTargetUserIds(dto.toDepartmentId, [
-      Role.ADMIN,
-      Role.ENGINEER,
-      Role.CONSULTANT,
-      Role.MAINTENANCE_MANAGER,
-    ]);
-    this.notificationsGateway.notifyComplaintTransferred(updated, targetIds);
+    const targetIds =
+      await this.notificationsGateway.resolveRecipientUserIds(
+        dto.toDepartmentId,
+        [
+          Role.ADMIN,
+          Role.ENGINEER,
+          Role.CONSULTANT,
+          Role.MAINTENANCE_MANAGER,
+        ],
+      );
+    await this.notificationsGateway.notifyComplaintTransferred(updated, targetIds);
     return updated;
   }
 
@@ -555,12 +570,16 @@ export class ComplaintsService {
       .populate("machineId", "name components description")
       .exec();
     if (populatedRequest) {
-      const requestTargets = await this.getDepartmentTargetUserIds(
-        complaint.departmentId.toString(),
-        [Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER],
-      );
+      const requestTargets =
+        await this.notificationsGateway.resolveRecipientUserIds(
+          complaint.departmentId.toString(),
+          [Role.ADMIN, Role.CONSULTANT, Role.MAINTENANCE_MANAGER],
+        );
       requestTargets.push(engineer._id.toString());
-      this.notificationsGateway.notifyRequestCreated(populatedRequest, requestTargets);
+      await this.notificationsGateway.notifyRequestCreated(
+        populatedRequest,
+        requestTargets,
+      );
     }
     return this.requirePopulated(id);
   }
@@ -694,25 +713,6 @@ export class ComplaintsService {
       rawDepartmentId,
       "Complaint is outside your assigned departments",
     );
-  }
-
-  private async getDepartmentTargetUserIds(
-    departmentId: string,
-    roles: Role[],
-  ): Promise<string[]> {
-    const users = await this.userModel
-      .find({
-        role: { $in: roles },
-        isActive: true,
-        deletedAt: null,
-        $or: [
-          { role: { $in: [Role.ADMIN, Role.MAINTENANCE_MANAGER] } },
-          { departmentIds: new Types.ObjectId(departmentId) },
-        ],
-      })
-      .select("_id")
-      .lean();
-    return users.map((item) => item._id.toString());
   }
 
   private async validateComplaintReferences(dto: CreateComplaintDto) {

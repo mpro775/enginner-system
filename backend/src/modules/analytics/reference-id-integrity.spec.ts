@@ -63,7 +63,10 @@ describe("reference ID integrity hardening", () => {
       machineModel as never,
       userModel as never,
       systemModel as never,
-      { notifyRequestCreated: jest.fn() } as never,
+      {
+        resolveRecipientUserIds: jest.fn().mockResolvedValue([]),
+        notifyRequestCreated: jest.fn(),
+      } as never,
       { create: jest.fn() } as never,
       {} as never,
     );

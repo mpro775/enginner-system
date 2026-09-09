@@ -45,7 +45,10 @@ function createService(atomicResult: unknown, departmentId = ids.department) {
       }),
     }),
   };
-  const gateway = { notifyCompletionApproved: jest.fn() };
+  const gateway = {
+    resolveRecipientUserIds: jest.fn().mockResolvedValue([]),
+    notifyCompletionApproved: jest.fn(),
+  };
   const audit = { create: jest.fn() };
   const service = new MaintenanceRequestsService(
     requestModel as never,

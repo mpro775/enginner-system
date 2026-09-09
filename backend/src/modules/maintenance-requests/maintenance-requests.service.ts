@@ -201,12 +201,12 @@ export class MaintenanceRequestsService {
     }
 
     // Send real-time notification only to the engineer and scoped operational users.
-    const targetIds = await this.getDepartmentNotificationUserIds(
+    const targetIds = await this.notificationsGateway.resolveRecipientUserIds(
       referenceIds.departmentId.toString(),
       [Role.CONSULTANT, Role.MAINTENANCE_MANAGER, Role.ADMIN],
     );
     targetIds.push(user.userId);
-    this.notificationsGateway.notifyRequestCreated(populated, targetIds);
+    await this.notificationsGateway.notifyRequestCreated(populated, targetIds);
 
     // Log the action
     await this.auditLogsService.create({
@@ -425,7 +425,9 @@ export class MaintenanceRequestsService {
     const updated = await this.populateRequest(id);
 
     // The updating engineer receives the event in their user room.
-    this.notificationsGateway.notifyRequestUpdated(updated, [user.userId]);
+    await this.notificationsGateway.notifyRequestUpdated(updated, [
+      user.userId,
+    ]);
 
     return updated;
   }
@@ -486,8 +488,9 @@ export class MaintenanceRequestsService {
 
     const updated = await this.populateRequest(id);
 
-    // Historical stop support remains internal; no role-wide broadcast.
-    this.notificationsGateway.notifyRequestUpdated(updated, [user.userId]);
+    await this.notificationsGateway.notifyRequestStopped(updated, [
+      user.userId,
+    ]);
 
     return updated;
   }
@@ -531,7 +534,7 @@ export class MaintenanceRequestsService {
 
     const updated = await this.populateRequest(id);
 
-    this.notificationsGateway.notifyRequestUpdated(updated, [
+    await this.notificationsGateway.notifyRequestUpdated(updated, [
       request.engineerId.toString(),
       user.userId,
     ]);
@@ -578,7 +581,7 @@ export class MaintenanceRequestsService {
 
     const updated = await this.populateRequest(id);
 
-    this.notificationsGateway.notifyRequestUpdated(updated, [
+    await this.notificationsGateway.notifyRequestUpdated(updated, [
       request.engineerId.toString(),
       user.userId,
     ]);
@@ -643,11 +646,11 @@ export class MaintenanceRequestsService {
 
     const updated = await this.populateRequest(id);
 
-    const targetIds = await this.getDepartmentNotificationUserIds(
+    const targetIds = await this.notificationsGateway.resolveRecipientUserIds(
       request.departmentId.toString(),
       [Role.CONSULTANT, Role.ADMIN],
     );
-    this.notificationsGateway.notifyCompletionPending(updated, targetIds);
+    await this.notificationsGateway.notifyCompletionPending(updated, targetIds);
 
     return updated;
   }
@@ -703,7 +706,7 @@ export class MaintenanceRequestsService {
       changes: { requestNoteAdded: true },
     });
     const updated = await this.populateRequest(id);
-    this.notificationsGateway.notifyRequestUpdated(updated, [
+    await this.notificationsGateway.notifyRequestUpdated(updated, [
       request.engineerId.toString(),
       user.userId,
     ]);
@@ -746,12 +749,15 @@ export class MaintenanceRequestsService {
       previousValues: { status: RequestStatus.PENDING_CONSULTANT_APPROVAL },
     });
     const updated = await this.populateRequest(id);
-    const targetIds = await this.getDepartmentNotificationUserIds(
+    const targetIds = await this.notificationsGateway.resolveRecipientUserIds(
       request.departmentId.toString(),
       [Role.CONSULTANT, Role.ADMIN],
     );
     targetIds.push(request.engineerId.toString());
-    this.notificationsGateway.notifyCompletionApproved(updated, targetIds);
+    await this.notificationsGateway.notifyCompletionApproved(
+      updated,
+      targetIds,
+    );
     return updated;
   }
 
@@ -801,7 +807,7 @@ export class MaintenanceRequestsService {
       previousValues: { status: RequestStatus.PENDING_CONSULTANT_APPROVAL },
     });
     const updated = await this.populateRequest(id);
-    this.notificationsGateway.notifyCompletionRejected(
+    await this.notificationsGateway.notifyCompletionRejected(
       updated,
       [request.engineerId.toString()],
       dto.reason.trim(),
@@ -1001,25 +1007,6 @@ export class MaintenanceRequestsService {
       .populate("completionApprovedBy", "name email")
       .populate("deletedBy", "name email")
       .exec() as Promise<MaintenanceRequestDocument>;
-  }
-
-  private async getDepartmentNotificationUserIds(
-    departmentId: string,
-    roles: Role[],
-  ): Promise<string[]> {
-    const users = await this.userModel
-      .find({
-        role: { $in: roles },
-        isActive: true,
-        deletedAt: null,
-        $or: [
-          { role: { $in: [Role.ADMIN, Role.MAINTENANCE_MANAGER] } },
-          { departmentIds: new Types.ObjectId(departmentId) },
-        ],
-      })
-      .select("_id")
-      .lean();
-    return users.map((item) => item._id.toString());
   }
 
   // Methods for statistics
