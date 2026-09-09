@@ -94,19 +94,38 @@ export class NotificationsGateway
     return "pong";
   }
 
-  resolveRecipientUserIds(departmentId: string, roles: Role[]) {
-    return this.notificationsService.resolveRecipientUserIds(
-      departmentId,
-      roles,
-    );
+  async resolveRecipientUserIds(
+    departmentId: string,
+    roles: Role[],
+  ): Promise<string[]> {
+    try {
+      return await this.notificationsService.resolveRecipientUserIds(
+        departmentId,
+        roles,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to resolve notification recipients for department ${departmentId}: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+      return [];
+    }
   }
 
   async notifyUsers(input: CreateNotificationsInput): Promise<void> {
-    const created = await this.notificationsService.createForRecipients(input);
-    for (const item of created) {
-      this.server
-        .to(`user:${item.recipientUserId}`)
-        .emit("notification", item.notification);
+    try {
+      const created =
+        await this.notificationsService.createForRecipients(input);
+      for (const item of created) {
+        this.server
+          .to(`user:${item.recipientUserId}`)
+          .emit("notification", item.notification);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to persist or deliver notification ${input.eventKey}: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
     }
   }
 

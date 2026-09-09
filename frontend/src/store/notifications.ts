@@ -20,6 +20,8 @@ const sortNewestFirst = (items: Notification[]) =>
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 
+let fetchSequence = 0;
+
 export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   notifications: [],
   unreadCount: 0,
@@ -117,6 +119,10 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
     }),
 
   fetchNotifications: async (limit = 20) => {
+    const requestSequence = ++fetchSequence;
+    const notificationIdsAtStart = new Set(
+      get().notifications.map((notification) => notification.id),
+    );
     set({ isLoading: true });
     try {
       const [serverNotifications, unreadCount] = await Promise.all([
@@ -124,12 +130,16 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
         notificationsService.getUnreadCount(),
       ]);
       set((state) => {
+        if (requestSequence !== fetchSequence) return state;
         if (state.isMarkingAll) return { isLoading: false };
         const pending = new Set(state.pendingReadIds);
         const byId = new Map<string, Notification>();
+        const websocketArrivals = state.notifications.filter(
+          (notification) => !notificationIdsAtStart.has(notification.id),
+        );
         for (const notification of [
           ...serverNotifications,
-          ...state.notifications,
+          ...websocketArrivals,
         ]) {
           if (!notification.readAt && !pending.has(notification.id)) {
             byId.set(notification.id, notification);
@@ -142,7 +152,6 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
           ),
           unreadCount: Math.max(
             Math.max(0, unreadCount - pending.size),
-            state.unreadCount,
             byId.size,
           ),
           isLoading: false,
@@ -150,7 +159,7 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
       });
     } catch (error) {
       console.error("Failed to fetch notifications:", error);
-      set({ isLoading: false });
+      if (requestSequence === fetchSequence) set({ isLoading: false });
     }
   },
 }));

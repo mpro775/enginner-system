@@ -1,4 +1,5 @@
 import { Types } from "mongoose";
+import { NotificationsGateway } from "./notifications.gateway";
 import { NotificationsService } from "./notifications.service";
 
 const ids = {
@@ -135,5 +136,54 @@ describe("NotificationsService", () => {
       eventKey: "request:created:request-id",
     });
     expect(operations[0].updateOne.upsert).toBe(true);
+  });
+});
+
+describe("NotificationsGateway failure isolation", () => {
+  it("does not fail a business operation when persistence fails", async () => {
+    const persistenceError = new Error("database unavailable");
+    const service = {
+      createForRecipients: jest.fn().mockRejectedValue(persistenceError),
+    };
+    const gateway = new NotificationsGateway(
+      {} as never,
+      {} as never,
+      service as never,
+    );
+    const loggerError = jest
+      .spyOn((gateway as any).logger, "error")
+      .mockImplementation();
+
+    await expect(
+      gateway.notifyUsers({
+        recipientUserIds: [ids.user],
+        type: "request:created",
+        message: "New request",
+        eventKey: "request:created:request-id",
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(loggerError).toHaveBeenCalledWith(
+      expect.stringContaining("request:created:request-id"),
+      persistenceError.stack,
+    );
+  });
+
+  it("returns no recipients instead of failing the domain operation", async () => {
+    const service = {
+      resolveRecipientUserIds: jest
+        .fn()
+        .mockRejectedValue(new Error("database unavailable")),
+    };
+    const gateway = new NotificationsGateway(
+      {} as never,
+      {} as never,
+      service as never,
+    );
+    jest.spyOn((gateway as any).logger, "error").mockImplementation();
+
+    await expect(
+      gateway.resolveRecipientUserIds("department-id", []),
+    ).resolves.toEqual([]);
   });
 });

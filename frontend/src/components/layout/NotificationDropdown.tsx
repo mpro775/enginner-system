@@ -63,10 +63,10 @@ export function NotificationDropdown() {
     } else if (notification.type.startsWith("task:")) {
       // Navigate to scheduled tasks page based on user role
       // Admin and Consultant go to admin scheduled tasks page
-      // Engineers go to their my-tasks page
+      // Engineers go to their my-tasks page. Other roles have no task route.
       if (user?.role === Role.ADMIN || user?.role === Role.CONSULTANT) {
         navigate("/app/admin/scheduled-tasks");
-      } else {
+      } else if (user?.role === Role.ENGINEER) {
         navigate("/app/engineer/my-tasks");
       }
       setIsOpen(false);

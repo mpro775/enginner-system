@@ -141,15 +141,17 @@ export class ScheduledTasksService {
     if (isAvailableToAll) {
       targetUserIds = await this.notificationsGateway.resolveRecipientUserIds(
         createDto.departmentId,
-        [Role.ADMIN, Role.MAINTENANCE_MANAGER, Role.ENGINEER],
+        [Role.ADMIN, Role.CONSULTANT, Role.ENGINEER],
       );
     } else if (createDto.engineerId) {
-      const adminManagerIds =
+      const adminConsultantIds =
         await this.notificationsGateway.resolveRecipientUserIds(
           createDto.departmentId,
-          [Role.ADMIN, Role.MAINTENANCE_MANAGER],
+          [Role.ADMIN, Role.CONSULTANT],
         );
-      targetUserIds = Array.from(new Set([createDto.engineerId, ...adminManagerIds]));
+      targetUserIds = Array.from(
+        new Set([createDto.engineerId, ...adminConsultantIds]),
+      );
     }
     await this.notificationsGateway.notifyScheduledTaskCreated(
       populated,
@@ -985,7 +987,7 @@ export class ScheduledTasksService {
             const targetUserIds = rawDeptId
               ? await this.notificationsGateway.resolveRecipientUserIds(
                   rawDeptId,
-                  [Role.ADMIN, Role.MAINTENANCE_MANAGER, Role.ENGINEER],
+                  [Role.ADMIN, Role.CONSULTANT, Role.ENGINEER],
                 )
               : [];
             await this.notificationsGateway.notifyScheduledTaskCreated(
@@ -1064,7 +1066,7 @@ export class ScheduledTasksService {
             const targetUserIds = rawDeptId
               ? await this.notificationsGateway.resolveRecipientUserIds(
                   rawDeptId,
-                  [Role.ADMIN, Role.MAINTENANCE_MANAGER, Role.ENGINEER],
+                  [Role.ADMIN, Role.CONSULTANT, Role.ENGINEER],
                 )
               : [];
             await this.notificationsGateway.notifyScheduledTaskCreated(
