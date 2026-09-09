@@ -25,6 +25,14 @@ export class StatisticsFilterDto {
 
   @IsOptional()
   @IsMongoId()
+  consultantId?: string;
+
+  @IsOptional()
+  @IsMongoId()
+  approvedById?: string;
+
+  @IsOptional()
+  @IsMongoId()
   locationId?: string;
 
   @IsOptional()

@@ -6,7 +6,11 @@ export interface ReportPerson {
   role: string | null;
 }
 
-export type ReportApprovalStatus = "approved" | "pending" | "not_requested";
+export type ReportApprovalStatus =
+  | "approved"
+  | "pending"
+  | "not_requested"
+  | "approval_unknown";
 
 export interface ReportApproval {
   status: ReportApprovalStatus;
@@ -264,6 +268,11 @@ export function buildRequestReportView(source: unknown): RequestReportView {
     stringValue(request.completionApprovedByName),
   );
   const status = String(request.status ?? "");
+  const hasApprovalEvidence = Boolean(
+    idValue(request.completionApprovedBy) ||
+      stringValue(request.completionApprovedByName) ||
+      dateValue(request.completionApprovedAt),
+  );
 
   return {
     request: {
@@ -290,7 +299,9 @@ export function buildRequestReportView(source: unknown): RequestReportView {
     completion: {
       status:
         status === RequestStatus.COMPLETED
-          ? "approved"
+          ? hasApprovalEvidence
+            ? "approved"
+            : "approval_unknown"
           : status === RequestStatus.PENDING_CONSULTANT_APPROVAL
             ? "pending"
             : "not_requested",

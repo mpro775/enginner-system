@@ -474,16 +474,16 @@ export default function Reports() {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium mb-2 block">الاستشاري</label>
+              <label className="text-sm font-medium mb-2 block">الاستشاري المعتمد</label>
               <Select
-                value={filters.consultantId || 'all'}
-                onValueChange={(value) => handleFilterChange('consultantId', value === 'all' ? undefined : value)}
+                value={filters.approvedById || 'all'}
+                onValueChange={(value) => handleFilterChange('approvedById', value === 'all' ? undefined : value)}
               >
                 <SelectTrigger className="justify-between text-right">
-                  <SelectValue placeholder="جميع الاستشاريين" />
+                  <SelectValue placeholder="جميع الاستشاريين المعتمدين" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">جميع الاستشاريين</SelectItem>
+                  <SelectItem value="all">جميع الاستشاريين المعتمدين</SelectItem>
                   {Array.isArray(consultants) && consultants.map((consultant) => (
                     <SelectItem key={consultant.id} value={consultant.id}>
                       {consultant.name}
@@ -875,11 +875,10 @@ export default function Reports() {
                     </th>
                     <th>رمز الطلب</th>
                     <th>المهندس</th>
-                    <th>الاستشاري</th>
                     <th>نوع الصيانة</th>
                     <th>حالة الطلب</th>
                     <th>حالة الاعتماد</th>
-                    <th>اعتمد بواسطة</th>
+                    <th>الاستشاري المعتمد</th>
                     <th>تاريخ الاعتماد</th>
                     <th>الموقع</th>
                     <th>تاريخ الفتح</th>
@@ -900,7 +899,6 @@ export default function Reports() {
                       </td>
                       <td className="font-medium">{row.request.requestCode}</td>
                       <td>{row.people.engineer?.name || '-'}</td>
-                      <td>{row.people.assignedConsultant?.name || '-'}</td>
                       <td>
                         <MaintenanceTypeBadge
                           type={row.request.maintenanceType}
@@ -916,6 +914,8 @@ export default function Reports() {
                               ? 'success'
                               : row.completion.status === 'pending'
                                 ? 'warning'
+                                : row.completion.status === 'approval_unknown'
+                                  ? 'outline'
                                 : 'secondary'
                           }
                         >
@@ -923,6 +923,8 @@ export default function Reports() {
                             ? 'معتمد'
                             : row.completion.status === 'pending'
                               ? 'بانتظار الاعتماد'
+                              : row.completion.status === 'approval_unknown'
+                                ? 'بيانات الاعتماد غير متوفرة'
                               : 'لم يُطلب بعد'}
                         </Badge>
                       </td>

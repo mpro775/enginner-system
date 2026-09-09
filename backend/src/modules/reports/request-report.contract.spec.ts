@@ -72,6 +72,23 @@ describe("request report contract", () => {
     });
   });
 
+  it("does not claim that a legacy completed request was approved without evidence", () => {
+    const view = buildRequestReportView({
+      requestCode: "EM-202609-0099",
+      status: RequestStatus.COMPLETED,
+      maintenanceType: "emergency",
+      engineerId: engineer,
+    });
+
+    expect(view.completion).toEqual({
+      status: "approval_unknown",
+      requestedAt: null,
+      requestedBy: null,
+      approvedAt: null,
+      approvedBy: null,
+    });
+  });
+
   it("includes legacy notes without invented timestamps and deduplicates mirrored notes", () => {
     const view = buildRequestReportView({
       requestCode: "PM-202609-0001",

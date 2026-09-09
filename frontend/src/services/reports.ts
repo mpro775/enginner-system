@@ -11,6 +11,7 @@ export interface ReportFilter {
   toDate?: string;
   engineerId?: string;
   consultantId?: string;
+  approvedById?: string;
   locationId?: string;
   departmentId?: string;
   systemId?: string;
@@ -26,7 +27,7 @@ export interface ReportPerson {
 }
 
 export interface ReportApproval {
-  status: "approved" | "pending" | "not_requested";
+  status: "approved" | "pending" | "not_requested" | "approval_unknown";
   requestedAt: string | null;
   requestedBy: ReportPerson | null;
   approvedAt: string | null;

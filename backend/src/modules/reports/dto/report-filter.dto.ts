@@ -20,6 +20,10 @@ export class ReportFilterDto {
 
   @IsOptional()
   @IsMongoId()
+  approvedById?: string;
+
+  @IsOptional()
+  @IsMongoId()
   locationId?: string;
 
   @IsOptional()
@@ -41,7 +45,6 @@ export class ReportFilterDto {
   @IsOptional()
   format?: 'json' | 'excel' | 'pdf' = 'json';
 }
-
 
 
 

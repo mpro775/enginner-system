@@ -696,6 +696,28 @@ export class StatisticsService {
       } as any;
     }
 
+    if (filter.consultantId) {
+      matchStage.consultantId = {
+        $in: [
+          filter.consultantId,
+          Types.ObjectId.isValid(filter.consultantId)
+            ? new Types.ObjectId(filter.consultantId)
+            : null,
+        ].filter(Boolean),
+      } as any;
+    }
+
+    if (filter.approvedById) {
+      matchStage.completionApprovedBy = {
+        $in: [
+          filter.approvedById,
+          Types.ObjectId.isValid(filter.approvedById)
+            ? new Types.ObjectId(filter.approvedById)
+            : null,
+        ].filter(Boolean),
+      } as any;
+    }
+
     if (filter.locationId) {
       // Support both String and ObjectId formats
       matchStage.locationId = {

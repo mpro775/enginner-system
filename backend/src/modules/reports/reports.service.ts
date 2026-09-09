@@ -103,6 +103,9 @@ const MULTI_LINE_STYLE =
 function getApprovalStatusLabel(status: ReportApprovalStatus): string {
   if (status === "approved") return "معتمد";
   if (status === "pending") return "بانتظار اعتماد الاستشاري";
+  if (status === "approval_unknown") {
+    return "مكتمل — بيانات الاعتماد غير متوفرة";
+  }
   return "لم يُطلب الاعتماد بعد";
 }
 
@@ -185,9 +188,8 @@ function generateReportContent(data: RequestReportData[], stats: any): string {
             <th>الكود</th>
             <th>النوع</th>
             <th>المهندس</th>
-            <th>الاستشاري</th>
             <th>حالة الاعتماد</th>
-            <th>اعتمد بواسطة</th>
+            <th>الاستشاري المعتمد</th>
             <th>الحالة</th>
             <th>الموقع</th>
             <th>التاريخ</th>
@@ -230,7 +232,6 @@ function generateReportContent(data: RequestReportData[], stats: any): string {
         <td>${escapeHtml(row.request.requestCode || "N/A")}</td>
         <td>${escapeHtml(typeText)}</td>
         <td>${escapeHtml(row.people.engineer?.name || "غير متوفر")}</td>
-        <td>${escapeHtml(row.people.assignedConsultant?.name || "غير معيّن")}</td>
         <td>${escapeHtml(getApprovalStatusLabel(row.completion.status))}</td>
         <td>${escapeHtml(row.completion.approvedBy?.name || "-")}</td>
         <td>${escapeHtml(statusText)}</td>
@@ -751,11 +752,13 @@ export class ReportsService {
       );
     }
 
-    // Convert ReportFilterDto to StatisticsFilterDto (remove format and consultantId)
+    // Keep the summary cards aligned with every filter applied to the table.
     const statsFilter = {
       fromDate: filter.fromDate,
       toDate: filter.toDate,
       engineerId: filter.engineerId,
+      consultantId: filter.consultantId,
+      approvedById: filter.approvedById,
       locationId: filter.locationId,
       departmentId: filter.departmentId,
       systemId: filter.systemId,
@@ -853,6 +856,8 @@ export class ReportsService {
       fromDate: filter.fromDate,
       toDate: filter.toDate,
       engineerId: engineerId,
+      consultantId: filter.consultantId,
+      approvedById: filter.approvedById,
       locationId: filter.locationId,
       departmentId: filter.departmentId,
       systemId: filter.systemId,
@@ -894,6 +899,8 @@ export class ReportsService {
       fromDate: filter.fromDate,
       toDate: filter.toDate,
       engineerId: filter.engineerId,
+      consultantId: filter.consultantId,
+      approvedById: filter.approvedById,
       locationId: filter.locationId,
       departmentId: filter.departmentId,
       systemId: filter.systemId,
@@ -1080,6 +1087,17 @@ export class ReportsService {
           filter.consultantId,
           Types.ObjectId.isValid(filter.consultantId) ? new Types.ObjectId(filter.consultantId) : null
         ].filter(Boolean)
+      } as any;
+    }
+
+    if (filter.approvedById) {
+      matchStage.completionApprovedBy = {
+        $in: [
+          filter.approvedById,
+          Types.ObjectId.isValid(filter.approvedById)
+            ? new Types.ObjectId(filter.approvedById)
+            : null,
+        ].filter(Boolean),
       } as any;
     }
 
