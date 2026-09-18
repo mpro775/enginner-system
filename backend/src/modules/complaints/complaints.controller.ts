@@ -10,7 +10,13 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  UploadedFiles,
+  UseInterceptors,
+  BadRequestException,
 } from "@nestjs/common";
+import { FilesInterceptor } from "@nestjs/platform-express";
+import { Throttle, ThrottlerGuard } from "@nestjs/throttler";
+import { memoryStorage } from "multer";
 import { ComplaintsService } from "./complaints.service";
 import {
   CreateComplaintDto,
@@ -30,6 +36,10 @@ import {
 } from "../../common/decorators/current-user.decorator";
 import { Role } from "../../common/enums";
 import { Public } from "../auth/decorators/public.decorator";
+import {
+  COMPLAINT_IMAGE_MIME_TYPES,
+  DEFAULT_MEDIA_LIMITS,
+} from "../media/media.constants";
 
 @Controller("complaints")
 export class ComplaintsController {
@@ -38,8 +48,39 @@ export class ComplaintsController {
   @Public()
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() createDto: CreateComplaintDto) {
-    const complaint = await this.complaintsService.create(createDto);
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @UseInterceptors(
+    FilesInterceptor("images", DEFAULT_MEDIA_LIMITS.maxFiles, {
+      storage: memoryStorage(),
+      limits: {
+        files: DEFAULT_MEDIA_LIMITS.maxFiles,
+        fileSize: DEFAULT_MEDIA_LIMITS.maxInputBytes,
+        fields: 20,
+        fieldSize: 64 * 1024,
+        parts: 23,
+      },
+      fileFilter: (_request, file, callback) => {
+        if (
+          !COMPLAINT_IMAGE_MIME_TYPES.includes(
+            file.mimetype as (typeof COMPLAINT_IMAGE_MIME_TYPES)[number],
+          )
+        ) {
+          callback(
+            new BadRequestException("Only JPEG, PNG, and WebP images are supported"),
+            false,
+          );
+          return;
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  async create(
+    @Body() createDto: CreateComplaintDto,
+    @UploadedFiles() files: Express.Multer.File[] = [],
+  ) {
+    const complaint = await this.complaintsService.create(createDto, files);
     return {
       data: complaint,
       message: "Complaint created successfully",

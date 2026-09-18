@@ -16,6 +16,7 @@ import { useAuthStore } from "@/store/auth";
 import { useToast } from "@/hooks/use-toast";
 import { ComplaintStatus, CreateComplaintRequestForm, MaintenanceType, Role } from "@/types";
 import { formatDateTime } from "@/lib/utils";
+import { ComplaintImageGallery } from "@/components/complaints/ComplaintImageGallery";
 
 const emptyRequest: CreateComplaintRequestForm = {
   maintenanceType: MaintenanceType.EMERGENCY,
@@ -54,6 +55,7 @@ export default function ComplaintDetails() {
     isLoading,
     isError,
     error,
+    refetch,
   } = useQuery({
     queryKey: ["complaint", user?.id, id],
     queryFn: () => complaintsService.getById(id!),
@@ -196,6 +198,11 @@ export default function ComplaintDetails() {
               <p className="text-xs text-muted-foreground">هذا المحتوى ثابت ولا يمكن تعديله بعد الإرسال.</p>
             </CardContent>
           </Card>
+
+          <ComplaintImageGallery
+            attachments={complaint.attachments}
+            onRefreshUrls={() => refetch()}
+          />
 
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5" />بيانات الموقع الأصلية</CardTitle></CardHeader>

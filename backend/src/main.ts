@@ -10,6 +10,10 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
+  // The production deployment is behind one reverse proxy (Traefik). This
+  // keeps per-IP throttling accurate instead of grouping all users by proxy IP.
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
+
   // Security
   app.use(helmet());
 

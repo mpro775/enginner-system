@@ -13,6 +13,7 @@ import { Floor, FloorSchema } from "../floors/schemas/floor.schema";
 import { Department, DepartmentSchema } from "../departments/schemas/department.schema";
 import { System, SystemSchema } from "../systems/schemas/system.schema";
 import { Machine, MachineSchema } from "../machines/schemas/machine.schema";
+import { MediaModule } from "../media/media.module";
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { Machine, MachineSchema } from "../machines/schemas/machine.schema";
     ]),
     forwardRef(() => NotificationsModule),
     forwardRef(() => AuditLogsModule),
+    MediaModule,
   ],
   controllers: [ComplaintsController, PublicComplaintsController],
   providers: [ComplaintsService],

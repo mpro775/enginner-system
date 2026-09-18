@@ -50,6 +50,10 @@ import {
   assertDepartmentAccess,
   getDepartmentMatchValues,
 } from "../../common/utils/access-scope.util";
+import { randomUUID } from "crypto";
+import { MediaService } from "../media/services/media.service";
+import { DEFAULT_MEDIA_LIMITS } from "../media/media.constants";
+import { StoredImage } from "../media/interfaces/stored-image.interface";
 
 type ComplaintUser = AccessScopedUser & { name?: string };
 type NormalizedComplaintPayload = Partial<Pick<
@@ -128,35 +132,65 @@ export class ComplaintsService {
     private notificationsGateway: NotificationsGateway,
     @Inject(forwardRef(() => AuditLogsService))
     private auditLogsService: AuditLogsService,
+    private readonly mediaService: MediaService,
   ) {}
 
-  async create(createDto: CreateComplaintDto): Promise<ComplaintDocument> {
+  async create(
+    createDto: CreateComplaintDto,
+    files: Express.Multer.File[] = [],
+  ): Promise<ComplaintDocument> {
     await this.validateComplaintReferences(createDto);
+    if (files.length > DEFAULT_MEDIA_LIMITS.maxFiles) {
+      throw new InvalidOperationException("A complaint can contain at most 3 images");
+    }
+
+    const complaintId = new Types.ObjectId();
+    const attachments: StoredImage[] = [];
+    const uploadedKeys: string[] = [];
     let complaint: ComplaintDocument | null = null;
-    for (let attempt = 0; attempt < 5 && !complaint; attempt += 1) {
-      const complaintCode = await this.generateComplaintCode();
-      try {
-        complaint = await new this.complaintModel({
-          ...normalizeComplaintPayload(createDto),
-          locationId: new Types.ObjectId(createDto.locationId),
-          floorId: new Types.ObjectId(createDto.floorId),
-          departmentId: new Types.ObjectId(createDto.departmentId),
-          complaintCode,
-          status: ComplaintStatus.NEW,
-        }).save();
-      } catch (error: any) {
-        const duplicateComplaintCode =
-          error?.code === 11000 &&
-          (error?.keyPattern?.complaintCode ||
-            error?.keyValue?.complaintCode ||
-            String(error?.message || "").includes("complaintCode"));
-        if (duplicateComplaintCode) continue;
-        throw error;
+
+    try {
+      for (const file of files) {
+        const attachment = await this.mediaService.storeComplaintImage({
+          complaintId: complaintId.toString(),
+          attachmentId: randomUUID(),
+          buffer: file.buffer,
+        });
+        attachments.push(attachment);
+        uploadedKeys.push(attachment.key, attachment.thumbnailKey);
       }
+
+      for (let attempt = 0; attempt < 5 && !complaint; attempt += 1) {
+        const complaintCode = await this.generateComplaintCode();
+        try {
+          complaint = await new this.complaintModel({
+            _id: complaintId,
+            ...normalizeComplaintPayload(createDto),
+            locationId: new Types.ObjectId(createDto.locationId),
+            floorId: new Types.ObjectId(createDto.floorId),
+            departmentId: new Types.ObjectId(createDto.departmentId),
+            complaintCode,
+            status: ComplaintStatus.NEW,
+            attachments,
+          }).save();
+        } catch (error: any) {
+          const duplicateComplaintCode =
+            error?.code === 11000 &&
+            (error?.keyPattern?.complaintCode ||
+              error?.keyValue?.complaintCode ||
+              String(error?.message || "").includes("complaintCode"));
+          if (duplicateComplaintCode) continue;
+          throw error;
+        }
+      }
+      if (!complaint) {
+        throw new InvalidOperationException("Could not allocate a complaint code");
+      }
+    } catch (error) {
+      await this.mediaService.deleteObjectsBestEffort(uploadedKeys);
+      throw error;
     }
-    if (!complaint) {
-      throw new InvalidOperationException("Could not allocate a complaint code");
-    }
+
     const populated = await this.requirePopulated(complaint._id.toString());
     const targetIds = await this.notificationsGateway.resolveRecipientUserIds(
       createDto.departmentId,
@@ -242,10 +276,29 @@ export class ComplaintsService {
   async findOne(
     id: string,
     user: AccessScopedUser,
-  ): Promise<ComplaintDocument> {
+  ): Promise<Record<string, unknown>> {
     const complaint = await this.requirePopulated(id);
     await this.assertAccess(complaint, user);
-    return complaint;
+
+    const complaintWithAttachments = await this.complaintModel
+      .findOne({ _id: id, deletedAt: null })
+      .select("+attachments")
+      .lean()
+      .exec();
+    if (!complaintWithAttachments) {
+      throw new EntityNotFoundException("Complaint", id);
+    }
+    const attachmentViews = await Promise.all(
+      ((complaintWithAttachments.attachments || []) as StoredImage[]).map(
+        (attachment) => this.mediaService.createView(attachment),
+      ),
+    );
+    const safeComplaint = complaint.toObject({ virtuals: true }) as Record<
+      string,
+      unknown
+    >;
+    safeComplaint.attachments = attachmentViews;
+    return safeComplaint;
   }
 
   async addReviewNote(
@@ -602,8 +655,15 @@ export class ComplaintsService {
   }
 
   async hardDelete(id: string, user: { userId: string; name: string }): Promise<void> {
-    const complaint = await this.complaintModel.findById(id);
+    const complaint = await this.complaintModel.findById(id).select("+attachments");
     if (!complaint) throw new EntityNotFoundException("Complaint", id);
+    const attachments = (complaint.attachments || []) as StoredImage[];
+    await this.mediaService.deleteObjects(
+      attachments.flatMap((attachment) => [
+        attachment.key,
+        attachment.thumbnailKey,
+      ]),
+    );
     await this.complaintModel.findByIdAndDelete(id);
     await this.auditLogsService.create({
       userId: user.userId,
@@ -611,7 +671,10 @@ export class ComplaintsService {
       action: AuditAction.HARD_DELETE,
       entity: "Complaint",
       entityId: id,
-      changes: { complaintCode: complaint.complaintCode },
+      changes: {
+        complaintCode: complaint.complaintCode,
+        attachmentCount: attachments.length,
+      },
     });
   }
 

@@ -393,8 +393,23 @@ export interface Complaint {
   closedAt?: string;
   deletedAt?: string;
   deletedBy?: User;
+  attachments?: ComplaintAttachment[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ComplaintAttachment {
+  id: string;
+  mimeType: "image/webp";
+  width: number;
+  height: number;
+  size: number;
+  thumbnailWidth: number;
+  thumbnailHeight: number;
+  thumbnailSize: number;
+  createdAt: string;
+  url: string;
+  thumbnailUrl: string;
 }
 
 export interface CreateComplaintForm {

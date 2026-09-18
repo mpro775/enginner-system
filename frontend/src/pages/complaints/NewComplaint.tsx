@@ -15,6 +15,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { complaintsService } from "@/services/complaints";
 import { useTheme } from "@/hooks/useTheme";
 import type { CreateComplaintForm } from "@/types";
+import {
+  ComplaintImageSelection,
+  ComplaintImageUploader,
+} from "@/components/complaints/ComplaintImageUploader";
 
 type ComplaintLanguage = "ar" | "en";
 type ComplaintUiForm = {
@@ -64,6 +68,8 @@ export default function NewComplaint() {
   const [error, setError] = useState("");
   const [successDialog, setSuccessDialog] = useState(false);
   const [complaintCode, setComplaintCode] = useState("");
+  const [images, setImages] = useState<ComplaintImageSelection[]>([]);
+  const [imagesProcessing, setImagesProcessing] = useState(false);
   const isArabic = language === "ar";
 
   const {
@@ -116,10 +122,18 @@ export default function NewComplaint() {
               ...(data.notes?.trim() ? { notesEn: data.notes.trim() } : {}),
             }),
       };
-      const complaint = await complaintsService.create(payload);
+      if (imagesProcessing) {
+        setError(isArabic ? "انتظر حتى يكتمل تجهيز الصور." : "Wait until the images are ready.");
+        return;
+      }
+      const complaint = await complaintsService.create(
+        payload,
+        images.map((image) => image.file),
+      );
       setComplaintCode(complaint.complaintCode);
       setSuccessDialog(true);
       reset(emptyForm);
+      setImages([]);
     } catch (err: any) {
       const message = err?.response?.data?.message;
       setError(Array.isArray(message) ? message.join("، ") : message || (isArabic ? "فشل تقديم البلاغ" : "Failed to submit the complaint"));
@@ -181,10 +195,17 @@ export default function NewComplaint() {
               <Field label={isArabic ? "وصف البلاغ" : "Complaint description"} error={errors.description?.message}>
                 <Textarea {...register("description")} rows={5} placeholder={isArabic ? "صف سبب البلاغ بوضوح" : "Clearly describe the reason for the complaint"} />
               </Field>
+              <ComplaintImageUploader
+                value={images}
+                onChange={setImages}
+                onProcessingChange={setImagesProcessing}
+                isArabic={isArabic}
+                disabled={isSubmitting}
+              />
               <Field label={isArabic ? "ملاحظات مقدم البلاغ (اختياري)" : "Reporter notes (optional)"}>
                 <Textarea {...register("notes")} rows={3} />
               </Field>
-              <Button type="submit" className="w-full" disabled={isSubmitting || loadingReferences}>
+              <Button type="submit" className="w-full" disabled={isSubmitting || imagesProcessing || loadingReferences}>
                 {isSubmitting && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
                 {isArabic ? "تقديم البلاغ" : "Submit complaint"}
               </Button>

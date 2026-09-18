@@ -7,6 +7,45 @@ import {
 
 export type ComplaintDocument = Complaint & Document;
 
+@Schema({ _id: false, timestamps: false })
+export class ComplaintAttachment {
+  @Prop({ required: true })
+  id: string;
+
+  @Prop({ required: true })
+  key: string;
+
+  @Prop({ required: true })
+  thumbnailKey: string;
+
+  @Prop({ required: true, enum: ["image/webp"] })
+  mimeType: "image/webp";
+
+  @Prop({ required: true })
+  width: number;
+
+  @Prop({ required: true })
+  height: number;
+
+  @Prop({ required: true })
+  size: number;
+
+  @Prop({ required: true })
+  thumbnailWidth: number;
+
+  @Prop({ required: true })
+  thumbnailHeight: number;
+
+  @Prop({ required: true })
+  thumbnailSize: number;
+
+  @Prop({ required: true, default: () => new Date() })
+  createdAt: Date;
+}
+
+export const ComplaintAttachmentSchema =
+  SchemaFactory.createForClass(ComplaintAttachment);
+
 @Schema({ _id: true, timestamps: false })
 export class ComplaintReviewNote {
   @Prop({ required: true, trim: true })
@@ -145,6 +184,13 @@ export class Complaint {
 
   @Prop({ type: Types.ObjectId, ref: "User" })
   deletedBy?: Types.ObjectId;
+
+  @Prop({
+    type: [ComplaintAttachmentSchema],
+    default: [],
+    select: false,
+  })
+  attachments?: ComplaintAttachment[];
 }
 
 export const ComplaintSchema = SchemaFactory.createForClass(Complaint);

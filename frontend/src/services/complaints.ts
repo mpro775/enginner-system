@@ -40,8 +40,15 @@ export const complaintsService = {
     return response.data.data;
   },
 
-  async create(data: CreateComplaintForm): Promise<Complaint> {
-    const response = await api.post<ApiResponse<Complaint>>('/complaints', data);
+  async create(data: CreateComplaintForm, images: File[] = []): Promise<Complaint> {
+    const formData = new FormData();
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        formData.append(key, String(value));
+      }
+    });
+    images.forEach((image) => formData.append('images', image));
+    const response = await api.post<ApiResponse<Complaint>>('/complaints', formData);
     return response.data.data;
   },
 
