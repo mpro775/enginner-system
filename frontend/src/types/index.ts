@@ -408,6 +408,7 @@ export interface ChangePasswordRequest {
 
 export interface PasswordResetChallenge {
   challengeId: string;
+  resendAfterSeconds: number;
 }
 
 export interface PasswordResetVerification {

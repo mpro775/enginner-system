@@ -23,10 +23,23 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return candidate.response?.data?.message || fallback;
 }
 
+function getRetryAfterSeconds(error: unknown): number | undefined {
+  const candidate = error as {
+    response?: { data?: { details?: { retryAfterSeconds?: number } } };
+  };
+  return candidate.response?.data?.details?.retryAfterSeconds;
+}
+
 function maskEmail(email: string): string {
   const [name, domain] = email.split('@');
   if (!name || !domain) return email;
   return `${name.slice(0, 2)}${'*'.repeat(Math.max(2, name.length - 2))}@${domain}`;
+}
+
+function formatCountdown(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
 }
 
 export default function ForgotPassword() {
@@ -63,7 +76,7 @@ export default function ForgotPassword() {
     try {
       const response = await authService.requestPasswordReset(email.trim());
       setChallengeId(response.challengeId);
-      setCountdown(60);
+      setCountdown(response.resendAfterSeconds ?? 60);
       setStep('otp');
       window.setTimeout(() => otpRefs.current[0]?.focus(), 0);
     } catch (requestError) {
@@ -136,9 +149,11 @@ export default function ForgotPassword() {
       const response = await authService.resendPasswordResetOtp(challengeId);
       setChallengeId(response.challengeId);
       setOtp(Array(6).fill(''));
-      setCountdown(60);
+      setCountdown(response.resendAfterSeconds ?? 60);
       window.setTimeout(() => otpRefs.current[0]?.focus(), 0);
     } catch (resendError) {
+      const retryAfterSeconds = getRetryAfterSeconds(resendError);
+      if (retryAfterSeconds) setCountdown(retryAfterSeconds);
       setError(getErrorMessage(resendError, 'تعذر إعادة إرسال الرمز.'));
     } finally {
       setLoading(false);
@@ -265,7 +280,7 @@ export default function ForgotPassword() {
               </Button>
               <Button className="w-full gap-2" type="button" variant="ghost" disabled={loading || countdown > 0} onClick={() => void resendOtp()}>
                 <RotateCcw className="h-4 w-4" />
-                {countdown > 0 ? `إعادة الإرسال بعد 00:${String(countdown).padStart(2, '0')}` : 'إعادة إرسال الرمز'}
+                {countdown > 0 ? `إعادة الإرسال بعد ${formatCountdown(countdown)}` : 'إعادة إرسال الرمز'}
               </Button>
             </form>
           )}

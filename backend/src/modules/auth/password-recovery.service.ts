@@ -24,6 +24,7 @@ interface ChallengeRecord {
   otpDigest: string;
   attempts: number;
   authVersion: number;
+  isDecoy: boolean;
 }
 
 interface ResetTokenRecord {
@@ -49,13 +50,35 @@ export class PasswordRecoveryService {
     private readonly auditLogsService: AuditLogsService,
   ) {}
 
-  async request(email: string): Promise<{ challengeId: string }> {
+  async request(
+    email: string,
+  ): Promise<{ challengeId: string; resendAfterSeconds: number }> {
     const normalizedEmail = email.trim().toLowerCase();
     const challengeId = randomBytes(32).toString('hex');
     const identityDigest = this.digest(`email:${normalizedEmail}`);
 
     const reservation = await this.reserveSend(identityDigest);
-    if (!reservation.allowed) return { challengeId };
+    if (!reservation.allowed) {
+      const currentChallengeId =
+        await this.readCurrentChallengeId(identityDigest);
+      if (currentChallengeId) {
+        return {
+          challengeId: currentChallengeId,
+          resendAfterSeconds:
+            reservation.retryAfterSeconds ?? this.resendCooldown,
+        };
+      }
+
+      await this.storeChallenge(
+        challengeId,
+        this.createDecoyChallenge(identityDigest, challengeId),
+      );
+      return {
+        challengeId,
+        resendAfterSeconds:
+          reservation.retryAfterSeconds ?? this.resendCooldown,
+      };
+    }
 
     const user = await this.userModel.findOne({
       email: normalizedEmail,
@@ -63,7 +86,13 @@ export class PasswordRecoveryService {
       deletedAt: null,
     });
 
-    if (!user) return { challengeId };
+    if (!user) {
+      await this.storeChallenge(
+        challengeId,
+        this.createDecoyChallenge(identityDigest, challengeId),
+      );
+      return { challengeId, resendAfterSeconds: this.resendCooldown };
+    }
 
     const otp = this.generateOtp();
     const record: ChallengeRecord = {
@@ -72,6 +101,7 @@ export class PasswordRecoveryService {
       otpDigest: this.digest(`otp:${challengeId}:${otp}`),
       attempts: 0,
       authVersion: user.authVersion ?? 0,
+      isDecoy: false,
     };
 
     await this.storeChallenge(challengeId, record);
@@ -86,10 +116,12 @@ export class PasswordRecoveryService {
       otp,
     });
 
-    return { challengeId };
+    return { challengeId, resendAfterSeconds: this.resendCooldown };
   }
 
-  async resend(challengeId: string): Promise<{ challengeId: string }> {
+  async resend(
+    challengeId: string,
+  ): Promise<{ challengeId: string; resendAfterSeconds: number }> {
     const record = await this.readChallenge(challengeId);
     if (!record) throw new BadRequestException(INVALID_OTP_MESSAGE);
 
@@ -104,17 +136,34 @@ export class PasswordRecoveryService {
       }, HttpStatus.TOO_MANY_REQUESTS);
     }
 
+    const nextChallengeId = randomBytes(32).toString('hex');
+    if (record.isDecoy) {
+      await this.storeChallenge(
+        nextChallengeId,
+        this.createDecoyChallenge(record.identityDigest, nextChallengeId),
+      );
+      return {
+        challengeId: nextChallengeId,
+        resendAfterSeconds: this.resendCooldown,
+      };
+    }
+
     const user = await this.userModel.findOne({
       _id: record.userId,
       isActive: true,
       deletedAt: null,
     });
     if (!user || (user.authVersion ?? 0) !== record.authVersion) {
-      await this.invalidateChallenge(challengeId, record.identityDigest);
-      throw new BadRequestException(INVALID_OTP_MESSAGE);
+      await this.storeChallenge(
+        nextChallengeId,
+        this.createDecoyChallenge(record.identityDigest, nextChallengeId),
+      );
+      return {
+        challengeId: nextChallengeId,
+        resendAfterSeconds: this.resendCooldown,
+      };
     }
 
-    const nextChallengeId = randomBytes(32).toString('hex');
     const otp = this.generateOtp();
     const nextRecord: ChallengeRecord = {
       ...record,
@@ -123,20 +172,18 @@ export class PasswordRecoveryService {
     };
 
     await this.storeChallenge(nextChallengeId, nextRecord);
-    try {
-      await this.mailService.sendPasswordResetOtp({
-        to: user.email,
-        name: user.name,
-        otp,
-        expiresInMinutes: Math.max(1, Math.ceil(this.otpTtl / 60)),
-      });
-    } catch (error) {
-      await this.invalidateChallenge(nextChallengeId, record.identityDigest);
-      await this.releaseSendReservation(record.identityDigest);
-      throw error;
-    }
+    void this.dispatchInitialEmail({
+      challengeId: nextChallengeId,
+      identityDigest: record.identityDigest,
+      email: user.email,
+      name: user.name,
+      otp,
+    });
 
-    return { challengeId: nextChallengeId };
+    return {
+      challengeId: nextChallengeId,
+      resendAfterSeconds: this.resendCooldown,
+    };
   }
 
   async verify(
@@ -162,7 +209,7 @@ export class PasswordRecoveryService {
         redis.call('DEL', KEYS[1], KEYS[2])
         return {-1}
       end
-      if record.otpDigest ~= ARGV[2] then
+      if record.isDecoy == true or record.otpDigest ~= ARGV[2] then
         attempts = attempts + 1
         record.attempts = attempts
         if attempts >= maxAttempts then
@@ -221,13 +268,7 @@ export class PasswordRecoveryService {
   ): Promise<void> {
     const tokenDigest = this.digest(`token:${resetToken}`);
     const tokenKey = passwordResetKeys.resetToken(tokenDigest);
-    const raw = await this.redisService.execute((client) =>
-      client.eval(
-        "local v=redis.call('GET',KEYS[1]); if v then redis.call('DEL',KEYS[1]) end; return v",
-        1,
-        tokenKey,
-      ),
-    );
+    const raw = await this.redisService.execute((client) => client.get(tokenKey));
 
     if (typeof raw !== 'string') {
       throw new BadRequestException('رابط إعادة التعيين غير صالح أو انتهت صلاحيته.');
@@ -251,6 +292,18 @@ export class PasswordRecoveryService {
 
     await this.passwordSecurityService.assertDifferent(newPassword, user.password);
     const password = await this.passwordSecurityService.hash(newPassword);
+    const consumed = await this.redisService.execute((client) =>
+      client.eval(
+        "if redis.call('GET',KEYS[1]) == ARGV[1] then redis.call('DEL',KEYS[1]); return 1 end; return 0",
+        1,
+        tokenKey,
+        raw,
+      ),
+    );
+    if (Number(consumed) !== 1) {
+      throw new BadRequestException('رابط إعادة التعيين غير صالح أو انتهت صلاحيته.');
+    }
+
     const updated = await this.userModel.findOneAndUpdate(
       {
         _id: user._id,
@@ -344,27 +397,11 @@ export class PasswordRecoveryService {
       });
       this.logger.log('Password reset email dispatched.');
     } catch {
-      await this.invalidateChallenge(
+      await this.storeChallenge(
         input.challengeId,
-        input.identityDigest,
+        this.createDecoyChallenge(input.identityDigest, input.challengeId),
       ).catch(() => undefined);
-      await this.releaseSendReservation(input.identityDigest);
       this.logger.warn('Password reset email could not be dispatched.');
-    }
-  }
-
-  private async releaseSendReservation(identityDigest: string): Promise<void> {
-    try {
-      await this.redisService.execute((client) =>
-        client.eval(
-          "redis.call('DEL',KEYS[1]); local n=tonumber(redis.call('GET',KEYS[2]) or '0'); if n > 1 then redis.call('DECR',KEYS[2]) else redis.call('DEL',KEYS[2]) end; return 1",
-          2,
-          passwordResetKeys.cooldown(identityDigest),
-          passwordResetKeys.hourly(identityDigest),
-        ),
-      );
-    } catch {
-      // Reservation keys expire automatically; cleanup failure must not leak secrets.
     }
   }
 
@@ -407,19 +444,27 @@ export class PasswordRecoveryService {
     }
   }
 
-  private async invalidateChallenge(
-    challengeId: string,
+  private async readCurrentChallengeId(
     identityDigest: string,
-  ): Promise<void> {
-    await this.redisService.execute((client) =>
-      client.eval(
-        "redis.call('DEL',KEYS[1]); if redis.call('GET',KEYS[2]) == ARGV[1] then redis.call('DEL',KEYS[2]) end; return 1",
-        2,
-        passwordResetKeys.challenge(challengeId),
-        passwordResetKeys.currentChallenge(identityDigest),
-        challengeId,
-      ),
+  ): Promise<string | null> {
+    return this.redisService.execute((client) =>
+      client.get(passwordResetKeys.currentChallenge(identityDigest)),
     );
+  }
+
+  private createDecoyChallenge(
+    identityDigest: string,
+    challengeId: string,
+  ): ChallengeRecord {
+    const undisclosedOtp = this.generateOtp();
+    return {
+      userId: randomBytes(12).toString('hex'),
+      identityDigest,
+      otpDigest: this.digest(`otp:${challengeId}:${undisclosedOtp}`),
+      attempts: 0,
+      authVersion: 0,
+      isDecoy: true,
+    };
   }
 
   private async invalidateCurrentChallenge(identityDigest: string): Promise<void> {

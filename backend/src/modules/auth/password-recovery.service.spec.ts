@@ -77,6 +77,7 @@ describe('PasswordRecoveryService', () => {
     };
 
     expect(response.challengeId).toMatch(/^[a-f0-9]{64}$/);
+    expect(response.resendAfterSeconds).toBe(60);
     expect(mailedOtp).toMatch(/^\d{6}$/);
     expect(storedRecord.otpDigest).toMatch(/^[a-f0-9]{64}$/);
     expect(storedRecord.otpDigest).not.toBe(mailedOtp);
@@ -91,6 +92,7 @@ describe('PasswordRecoveryService', () => {
     const response = await service.request('missing@example.com');
 
     expect(response.challengeId).toMatch(/^[a-f0-9]{64}$/);
+    expect(response.resendAfterSeconds).toBe(60);
     expect(mailService.sendPasswordResetOtp).not.toHaveBeenCalled();
     expect(userModel.findOne).toHaveBeenCalledWith({
       email: 'missing@example.com',
@@ -98,6 +100,90 @@ describe('PasswordRecoveryService', () => {
       deletedAt: null,
     });
   });
+
+  it('returns the current challenge when forgot is repeated during cooldown', async () => {
+    const { service, userModel, mailService } = setup();
+    userModel.findOne.mockResolvedValue(user);
+    jest
+      .spyOn(service as any, 'reserveSend')
+      .mockResolvedValueOnce({ allowed: true })
+      .mockResolvedValueOnce({
+        allowed: false,
+        reason: 'cooldown',
+        retryAfterSeconds: 41,
+      });
+    let currentChallengeId: string | null = null;
+    jest
+      .spyOn(service as any, 'storeChallenge')
+      .mockImplementation(async (challengeId: string) => {
+        currentChallengeId = challengeId;
+      });
+    jest
+      .spyOn(service as any, 'readCurrentChallengeId')
+      .mockImplementation(async () => currentChallengeId);
+    mailService.sendPasswordResetOtp.mockResolvedValue(undefined);
+
+    const first = await service.request('user@example.com');
+    const repeated = await service.request('user@example.com');
+
+    expect(repeated).toEqual({
+      challengeId: first.challengeId,
+      resendAfterSeconds: 41,
+    });
+    expect(mailService.sendPasswordResetOtp).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['active', { ...user, isActive: true, deletedAt: null }],
+    ['inactive', { ...user, isActive: false, deletedAt: null }],
+    ['deleted', { ...user, isActive: true, deletedAt: new Date() }],
+    ['unknown', null],
+  ])(
+    'keeps forgot to resend responses indistinguishable for %s accounts',
+    async (_label, candidate) => {
+      const { service, userModel, mailService } = setup();
+      userModel.findOne.mockImplementation(async (query: Record<string, any>) => {
+        if (!candidate) return null;
+        if (candidate.isActive !== true || candidate.deletedAt != null) return null;
+        if (query.email && query.email !== candidate.email) return null;
+        if (query._id && query._id !== candidate._id.toString()) return null;
+        return candidate;
+      });
+      jest
+        .spyOn(service as any, 'reserveSend')
+        .mockResolvedValue({ allowed: true });
+      const records = new Map<string, any>();
+      let currentChallengeId: string | null = null;
+      jest
+        .spyOn(service as any, 'storeChallenge')
+        .mockImplementation(async (challengeId: string, record: any) => {
+          if (currentChallengeId) records.delete(currentChallengeId);
+          records.set(challengeId, record);
+          currentChallengeId = challengeId;
+        });
+      jest
+        .spyOn(service as any, 'readChallenge')
+        .mockImplementation(async (challengeId: string) =>
+          records.get(challengeId) ?? null,
+        );
+      mailService.sendPasswordResetOtp.mockResolvedValue(undefined);
+
+      const forgot = await service.request('user@example.com');
+      const resent = await service.resend(forgot.challengeId);
+
+      expect(forgot).toEqual({
+        challengeId: expect.stringMatching(/^[a-f0-9]{64}$/),
+        resendAfterSeconds: 60,
+      });
+      expect(resent).toEqual({
+        challengeId: expect.stringMatching(/^[a-f0-9]{64}$/),
+        resendAfterSeconds: 60,
+      });
+      expect(resent.challengeId).not.toBe(forgot.challengeId);
+      expect(records.has(forgot.challengeId)).toBe(false);
+      expect(records.has(resent.challengeId)).toBe(true);
+    },
+  );
 
   it('fails closed when Redis is unavailable', async () => {
     const { service, redisService } = setup();
@@ -136,6 +222,7 @@ describe('PasswordRecoveryService', () => {
       otpDigest: 'digest',
       attempts: 0,
       authVersion: 2,
+      isDecoy: false,
     });
     redisService.execute.mockResolvedValue([1]);
 
@@ -162,6 +249,7 @@ describe('PasswordRecoveryService', () => {
       otpDigest: 'digest',
       attempts: 0,
       authVersion: 2,
+      isDecoy: false,
     });
     redisService.execute.mockResolvedValue([-2, 1]);
 
@@ -178,6 +266,7 @@ describe('PasswordRecoveryService', () => {
       otpDigest: 'digest',
       attempts: 4,
       authVersion: 2,
+      isDecoy: false,
     });
     redisService.execute.mockResolvedValue([-1]);
 
@@ -233,6 +322,27 @@ describe('PasswordRecoveryService', () => {
     await expect(service.reset('f'.repeat(64), 'new-password')).rejects.toThrow(
       BadRequestException,
     );
+  });
+
+  it('does not consume the reset token when the new password matches the current password', async () => {
+    const { service, userModel, redisService, passwordSecurityService } = setup();
+    redisService.execute.mockResolvedValueOnce(
+      JSON.stringify({
+        userId: 'user-1',
+        identityDigest: 'identity',
+        authVersion: 2,
+      }),
+    );
+    userModel.findOne.mockResolvedValue(user);
+    passwordSecurityService.assertDifferent.mockRejectedValue(
+      new BadRequestException('same password'),
+    );
+
+    await expect(service.reset('f'.repeat(64), 'same-password')).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(redisService.execute).toHaveBeenCalledTimes(1);
+    expect(userModel.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it('rejects a reset token after authVersion has changed', async () => {
