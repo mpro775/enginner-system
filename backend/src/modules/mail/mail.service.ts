@@ -31,11 +31,24 @@ export class MailService {
     const secure =
       this.configService.get<string>('SMTP_SECURE', 'false').toLowerCase() ===
       'true';
+    const requireTLS =
+      this.configService
+        .get<string>('SMTP_REQUIRE_TLS', 'false')
+        .toLowerCase() === 'true';
+    const isProduction =
+      this.configService.get<string>('NODE_ENV') === 'production';
+
+    if (isProduction && !secure && !requireTLS) {
+      throw new Error(
+        'SMTP TLS must be enabled in production with SMTP_SECURE or SMTP_REQUIRE_TLS.',
+      );
+    }
 
     this.transporter = nodemailer.createTransport({
       host,
       port,
       secure,
+      requireTLS,
       auth: user && password ? { user, pass: password } : undefined,
       connectionTimeout: 8_000,
       greetingTimeout: 8_000,

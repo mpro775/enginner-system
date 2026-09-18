@@ -1,10 +1,18 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
-import { PASSWORD_HASH_ROUNDS } from '../../common/security/password-policy';
+import {
+  isWithinBcryptPasswordLimit,
+  PASSWORD_HASH_ROUNDS,
+} from '../../common/security/password-policy';
 
 @Injectable()
 export class PasswordSecurityService {
   hash(password: string): Promise<string> {
+    if (!isWithinBcryptPasswordLimit(password)) {
+      throw new BadRequestException(
+        'يجب ألا تتجاوز كلمة المرور 72 بايت بترميز UTF-8.',
+      );
+    }
     return bcrypt.hash(password, PASSWORD_HASH_ROUNDS);
   }
 

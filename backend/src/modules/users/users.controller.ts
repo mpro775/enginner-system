@@ -10,7 +10,9 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Req,
 } from "@nestjs/common";
+import { Request } from "express";
 import { UsersService } from "./users.service";
 import { CreateUserDto, UpdateUserDto, FilterUsersDto } from "./dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
@@ -104,11 +106,15 @@ export class UsersController {
   async update(
     @Param("id") id: string,
     @Body() updateUserDto: UpdateUserDto,
-    @CurrentUser() user: CurrentUserData
+    @CurrentUser() user: CurrentUserData,
+    @Req() req: Request,
   ) {
     const updatedUser = await this.usersService.update(id, updateUserDto, {
       userId: user.userId,
       name: user.name,
+    }, {
+      ipAddress: req.ip || req.socket.remoteAddress,
+      userAgent: req.headers["user-agent"],
     });
     return {
       data: updatedUser,

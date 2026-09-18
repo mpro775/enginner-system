@@ -21,6 +21,7 @@ export interface ApiErrorResponse {
   statusCode: number;
   message: string;
   error: string;
+  code?: string;
   details?: Record<string, unknown>;
   path: string;
   timestamp: string;

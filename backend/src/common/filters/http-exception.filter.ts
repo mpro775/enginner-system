@@ -21,6 +21,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     let status: number;
     let message: string;
     let error: string;
+    let code: string | undefined;
     let details: Record<string, unknown> | undefined;
 
     if (exception instanceof HttpException) {
@@ -34,6 +35,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
         const responseObj = exceptionResponse as Record<string, unknown>;
         message = (responseObj.message as string) || exception.message;
         error = (responseObj.error as string) || exception.name;
+        code =
+          typeof responseObj.code === 'string' ? responseObj.code : undefined;
         
         // Handle validation errors
         if (Array.isArray(responseObj.message)) {
@@ -71,6 +74,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       statusCode: status,
       message,
       error,
+      code,
       details,
       path: request.url,
       timestamp: new Date().toISOString(),

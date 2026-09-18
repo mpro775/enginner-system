@@ -11,12 +11,22 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { authService } from '@/services/auth';
+import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 type Step = 'email' | 'otp' | 'password' | 'done';
+
+const CHALLENGE_TERMINAL_CODES = new Set([
+  'PASSWORD_RESET_CHALLENGE_INVALID',
+  'PASSWORD_RESET_CHALLENGE_EXPIRED',
+  'PASSWORD_RESET_ATTEMPTS_EXCEEDED',
+]);
+const TOKEN_TERMINAL_CODES = new Set([
+  'PASSWORD_RESET_TOKEN_INVALID',
+]);
 
 function getErrorMessage(error: unknown, fallback: string): string {
   const candidate = error as { response?: { data?: { message?: string } } };
@@ -28,6 +38,11 @@ function getRetryAfterSeconds(error: unknown): number | undefined {
     response?: { data?: { details?: { retryAfterSeconds?: number } } };
   };
   return candidate.response?.data?.details?.retryAfterSeconds;
+}
+
+function getErrorCode(error: unknown): string | undefined {
+  const candidate = error as { response?: { data?: { code?: string } } };
+  return candidate.response?.data?.code;
 }
 
 function maskEmail(email: string): string {
@@ -56,6 +71,17 @@ export default function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
+
+  const restartRecovery = (message = '') => {
+    setChallengeId('');
+    setOtp(Array(6).fill(''));
+    setResetToken('');
+    setNewPassword('');
+    setConfirmation('');
+    setCountdown(0);
+    setError(message);
+    setStep('email');
+  };
 
   useEffect(() => {
     if (step !== 'otp' || countdown <= 0) return;
@@ -133,7 +159,15 @@ export default function ForgotPassword() {
       setResetToken(response.resetToken);
       setStep('password');
     } catch (verifyError) {
-      setError(getErrorMessage(verifyError, 'رمز التحقق غير صحيح أو انتهت صلاحيته.'));
+      const message = getErrorMessage(
+        verifyError,
+        'رمز التحقق غير صحيح أو انتهت صلاحيته.',
+      );
+      if (CHALLENGE_TERMINAL_CODES.has(getErrorCode(verifyError) ?? '')) {
+        restartRecovery(`${message} ابدأ عملية الاستعادة من جديد.`);
+        return;
+      }
+      setError(message);
       setOtp(Array(6).fill(''));
       window.setTimeout(() => otpRefs.current[0]?.focus(), 0);
     } finally {
@@ -152,6 +186,12 @@ export default function ForgotPassword() {
       setCountdown(response.resendAfterSeconds ?? 60);
       window.setTimeout(() => otpRefs.current[0]?.focus(), 0);
     } catch (resendError) {
+      if (CHALLENGE_TERMINAL_CODES.has(getErrorCode(resendError) ?? '')) {
+        restartRecovery(
+          'انتهت جلسة الاستعادة. ابدأ عملية الاستعادة من جديد.',
+        );
+        return;
+      }
       const retryAfterSeconds = getRetryAfterSeconds(resendError);
       if (retryAfterSeconds) setCountdown(retryAfterSeconds);
       setError(getErrorMessage(resendError, 'تعذر إعادة إرسال الرمز.'));
@@ -169,19 +209,38 @@ export default function ForgotPassword() {
       setError('تأكيد كلمة المرور غير مطابق.');
       return;
     }
+    if (new TextEncoder().encode(newPassword).length > 72) {
+      setError('يجب ألا تتجاوز كلمة المرور 72 بايت بترميز UTF-8.');
+      return;
+    }
     if (!resetToken) {
-      setError('انتهت جلسة الاستعادة. ابدأ العملية من جديد.');
-      setStep('email');
+      restartRecovery('انتهت جلسة الاستعادة. ابدأ العملية من جديد.');
       return;
     }
     setLoading(true);
     setError('');
     try {
       await authService.resetPassword(resetToken, newPassword);
+      // The backend has already invalidated all sessions. Clear the matching
+      // local auth state without calling the authenticated logout endpoint.
+      useAuthStore.getState().logout();
+      setChallengeId('');
+      setOtp(Array(6).fill(''));
       setResetToken('');
+      setNewPassword('');
+      setConfirmation('');
+      setCountdown(0);
       setStep('done');
     } catch (resetError) {
-      setError(getErrorMessage(resetError, 'تعذر تعيين كلمة المرور الجديدة.'));
+      const message = getErrorMessage(
+        resetError,
+        'تعذر تعيين كلمة المرور الجديدة.',
+      );
+      if (TOKEN_TERMINAL_CODES.has(getErrorCode(resetError) ?? '')) {
+        restartRecovery(`${message} ابدأ عملية الاستعادة من جديد.`);
+        return;
+      }
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -282,6 +341,9 @@ export default function ForgotPassword() {
                 <RotateCcw className="h-4 w-4" />
                 {countdown > 0 ? `إعادة الإرسال بعد ${formatCountdown(countdown)}` : 'إعادة إرسال الرمز'}
               </Button>
+              <Button className="w-full" type="button" variant="outline" disabled={loading} onClick={() => restartRecovery()}>
+                ابدأ من جديد
+              </Button>
             </form>
           )}
 
@@ -304,6 +366,9 @@ export default function ForgotPassword() {
               <Button className="w-full" type="submit" disabled={loading}>
                 {loading && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
                 حفظ كلمة المرور
+              </Button>
+              <Button className="w-full" type="button" variant="outline" disabled={loading} onClick={() => restartRecovery()}>
+                ابدأ من جديد
               </Button>
             </form>
           )}

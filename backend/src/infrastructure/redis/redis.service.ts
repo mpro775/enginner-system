@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+import { PasswordRecoveryErrorCode } from '../../modules/auth/password-recovery.errors';
 
 const UNAVAILABLE_MESSAGE =
   'خدمة استعادة كلمة المرور غير متاحة مؤقتاً، يرجى المحاولة لاحقاً.';
@@ -50,7 +51,7 @@ export class RedisService implements OnApplicationShutdown {
       return await operation(client);
     } catch {
       this.logger.warn('A password recovery Redis operation failed.');
-      throw new ServiceUnavailableException(UNAVAILABLE_MESSAGE);
+      throw this.unavailableException();
     }
   }
 
@@ -74,7 +75,7 @@ export class RedisService implements OnApplicationShutdown {
 
   private async getReadyClient(): Promise<Redis> {
     if (!this.client) {
-      throw new ServiceUnavailableException(UNAVAILABLE_MESSAGE);
+      throw this.unavailableException();
     }
 
     if (this.client.status === 'ready') return this.client;
@@ -89,8 +90,15 @@ export class RedisService implements OnApplicationShutdown {
       await this.connectPromise;
       return this.client;
     } catch {
-      throw new ServiceUnavailableException(UNAVAILABLE_MESSAGE);
+      throw this.unavailableException();
     }
+  }
+
+  private unavailableException(): ServiceUnavailableException {
+    return new ServiceUnavailableException({
+      code: PasswordRecoveryErrorCode.SERVICE_UNAVAILABLE,
+      message: UNAVAILABLE_MESSAGE,
+    });
   }
 
   private async connectClient(client: Redis): Promise<void> {

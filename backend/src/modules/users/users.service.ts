@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, FilterQuery, Types } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
@@ -22,10 +22,20 @@ import {
   assertDepartmentAccess,
   getDepartmentMatchValues,
 } from '../../common/utils/access-scope.util';
-import { PASSWORD_HASH_ROUNDS } from '../../common/security/password-policy';
+import {
+  assertWithinBcryptPasswordLimit,
+  PASSWORD_HASH_ROUNDS,
+} from '../../common/security/password-policy';
+
+interface RequestMetadata {
+  ipAddress?: string;
+  userAgent?: string;
+}
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private auditLogsService: AuditLogsService,
@@ -35,6 +45,8 @@ export class UsersService {
     createUserDto: CreateUserDto,
     currentUser: { userId: string; name: string },
   ): Promise<UserDocument> {
+    assertWithinBcryptPasswordLimit(createUserDto.password);
+
     // Check if email already exists
     const existingUser = await this.userModel.findOne({
       email: createUserDto.email.toLowerCase(),
@@ -149,6 +161,7 @@ export class UsersService {
     id: string,
     updateUserDto: UpdateUserDto,
     currentUser: { userId: string; name: string },
+    metadata: RequestMetadata = {},
   ): Promise<UserDocument> {
     const user = await this.userModel.findById(id);
 
@@ -156,15 +169,26 @@ export class UsersService {
       throw new EntityNotFoundException('User', id);
     }
 
+    const normalizedEmail = updateUserDto.email?.trim().toLowerCase();
+    const emailChanged =
+      normalizedEmail !== undefined &&
+      normalizedEmail !== user.email.toLowerCase();
+    const passwordChanged = Boolean(updateUserDto.password);
+    const statusChanged =
+      updateUserDto.isActive !== undefined &&
+      updateUserDto.isActive !== user.isActive;
+    const securityIdentityChanged =
+      passwordChanged || emailChanged || statusChanged;
+
     // Check if email is being changed and already exists
-    if (updateUserDto.email && updateUserDto.email !== user.email) {
+    if (emailChanged) {
       const existingUser = await this.userModel.findOne({
-        email: updateUserDto.email.toLowerCase(),
+        email: normalizedEmail,
         _id: { $ne: id },
       });
 
       if (existingUser) {
-        throw new DuplicateEntityException('User', 'email', updateUserDto.email);
+        throw new DuplicateEntityException('User', 'email', normalizedEmail!);
       }
     }
 
@@ -176,7 +200,6 @@ export class UsersService {
       isActive: user.isActive,
     };
 
-    const passwordChanged = Boolean(updateUserDto.password);
     if (
       updateUserDto.password &&
       (await bcrypt.compare(updateUserDto.password, user.password))
@@ -188,22 +211,23 @@ export class UsersService {
 
     const updateData: any = { ...updateUserDto };
     if (updateUserDto.password) {
+      assertWithinBcryptPasswordLimit(updateUserDto.password);
       updateData.password = await bcrypt.hash(
         updateUserDto.password,
         PASSWORD_HASH_ROUNDS,
       );
-      updateData.refreshToken = null;
     }
-    if (updateUserDto.email) {
-      updateData.email = updateUserDto.email.toLowerCase();
+    if (normalizedEmail !== undefined) {
+      updateData.email = normalizedEmail;
     }
     if (updateUserDto.departmentIds !== undefined) {
       updateData.departmentIds = (updateUserDto.departmentIds || []).map((id) => new Types.ObjectId(id));
     }
     delete updateData.departmentId;
 
+    if (securityIdentityChanged) updateData.refreshToken = null;
     const updateOperation: Record<string, unknown> = { $set: updateData };
-    if (passwordChanged) updateOperation.$inc = { authVersion: 1 };
+    if (securityIdentityChanged) updateOperation.$inc = { authVersion: 1 };
 
     const updatedUser = await this.userModel
       .findByIdAndUpdate(id, updateOperation, { new: true })
@@ -214,7 +238,7 @@ export class UsersService {
     delete auditChanges.password;
     if (passwordChanged) auditChanges.passwordChanged = true;
 
-    await this.auditLogsService.create({
+    const auditPayload = {
       userId: currentUser.userId,
       userName: currentUser.name,
       action: passwordChanged
@@ -224,7 +248,19 @@ export class UsersService {
       entityId: id,
       changes: auditChanges,
       previousValues,
-    });
+      ...(passwordChanged ? metadata : {}),
+    };
+    if (passwordChanged) {
+      try {
+        await this.auditLogsService.create(auditPayload);
+      } catch {
+        this.logger.warn(
+          'Admin password reset succeeded, but its security audit event could not be recorded.',
+        );
+      }
+    } else {
+      await this.auditLogsService.create(auditPayload);
+    }
 
     return updatedUser!;
   }
@@ -242,7 +278,14 @@ export class UsersService {
     const newStatus = !user.isActive;
 
     const updatedUser = await this.userModel
-      .findByIdAndUpdate(id, { isActive: newStatus }, { new: true })
+      .findByIdAndUpdate(
+        id,
+        {
+          $set: { isActive: newStatus, refreshToken: null },
+          $inc: { authVersion: 1 },
+        },
+        { new: true },
+      )
       .select('-password -refreshToken')
       .populate('departmentIds', 'name');
 
@@ -271,8 +314,12 @@ export class UsersService {
     }
 
     await this.userModel.findByIdAndUpdate(id, {
-      deletedAt: new Date(),
-      deletedBy: currentUser.userId,
+      $set: {
+        deletedAt: new Date(),
+        deletedBy: currentUser.userId,
+        refreshToken: null,
+      },
+      $inc: { authVersion: 1 },
     });
 
     // Log the action
@@ -330,7 +377,11 @@ export class UsersService {
     const restored = await this.userModel
       .findByIdAndUpdate(
         id,
-        { $unset: { deletedAt: 1, deletedBy: 1 } },
+        {
+          $set: { refreshToken: null },
+          $unset: { deletedAt: 1, deletedBy: 1 },
+          $inc: { authVersion: 1 },
+        },
         { new: true }
       )
       .select('-password -refreshToken')

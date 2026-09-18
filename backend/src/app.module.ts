@@ -25,6 +25,7 @@ import { AdminSearchModule } from "./modules/admin-search/admin-search.module";
 import { FloorsModule } from "./modules/floors/floors.module";
 import { RedisModule } from "./infrastructure/redis/redis.module";
 import { MailModule } from "./modules/mail/mail.module";
+import { validateEnvironment } from "./config/environment.validation";
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { MailModule } from "./modules/mail/mail.module";
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ".env",
+      validate: validateEnvironment,
     }),
 
     // MongoDB

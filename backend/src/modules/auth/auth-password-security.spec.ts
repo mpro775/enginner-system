@@ -143,6 +143,23 @@ describe('AuthService password security', () => {
     expect(userModel.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
+  it('keeps a successful password change successful when audit storage fails', async () => {
+    const {
+      service,
+      userModel,
+      auditLogsService,
+      passwordSecurityService,
+    } = setup();
+    userModel.findOne.mockResolvedValue(baseUser);
+    userModel.findOneAndUpdate.mockResolvedValue({ ...baseUser, authVersion: 5 });
+    passwordSecurityService.compare.mockResolvedValue(true);
+    auditLogsService.create.mockRejectedValue(new Error('audit down'));
+
+    await expect(
+      service.changePassword('user-1', 'old-password', 'new-password'),
+    ).resolves.toBeUndefined();
+  });
+
   it('rejects reusing the current password', async () => {
     const { service, userModel, passwordSecurityService } = setup();
     userModel.findOne.mockResolvedValue(baseUser);

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import { InjectModel } from "@nestjs/mongoose";
@@ -32,6 +32,8 @@ export interface AuthResponse extends TokensResponse {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private jwtService: JwtService,
@@ -232,16 +234,22 @@ export class AuthService {
       throw new UnauthorizedException('تعذر تغيير كلمة المرور. يرجى تسجيل الدخول مجدداً.');
     }
 
-    await this.auditLogsService.create({
-      userId: user._id.toString(),
-      userName: user.name,
-      action: AuditAction.PASSWORD_CHANGE,
-      entity: 'User',
-      entityId: user._id.toString(),
-      changes: { passwordChanged: true },
-      ipAddress,
-      userAgent,
-    });
+    try {
+      await this.auditLogsService.create({
+        userId: user._id.toString(),
+        userName: user.name,
+        action: AuditAction.PASSWORD_CHANGE,
+        entity: 'User',
+        entityId: user._id.toString(),
+        changes: { passwordChanged: true },
+        ipAddress,
+        userAgent,
+      });
+    } catch {
+      this.logger.warn(
+        'Password change succeeded, but its security audit event could not be recorded.',
+      );
+    }
   }
 
   private async generateTokens(user: UserDocument): Promise<TokensResponse> {
