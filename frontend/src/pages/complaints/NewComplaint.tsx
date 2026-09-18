@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { isAxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,6 +22,14 @@ import {
 } from "@/components/complaints/ComplaintImageUploader";
 
 type ComplaintLanguage = "ar" | "en";
+type SubmissionStage =
+  | "idle"
+  | "preparing"
+  | "uploading"
+  | "processing"
+  | "success"
+  | "error";
+
 type ComplaintUiForm = {
   reporterName: string;
   locationId: string;
@@ -64,13 +73,18 @@ export default function NewComplaint() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const [language, setLanguage] = useState<ComplaintLanguage>("ar");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionStage, setSubmissionStage] = useState<SubmissionStage>("idle");
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState("");
   const [successDialog, setSuccessDialog] = useState(false);
   const [complaintCode, setComplaintCode] = useState("");
   const [images, setImages] = useState<ComplaintImageSelection[]>([]);
   const [imagesProcessing, setImagesProcessing] = useState(false);
+  const [lastSubmissionHadImages, setLastSubmissionHadImages] = useState(false);
+  const submissionInFlightRef = useRef(false);
   const isArabic = language === "ar";
+  const isSending =
+    submissionStage === "uploading" || submissionStage === "processing";
 
   const {
     register,
@@ -100,9 +114,24 @@ export default function NewComplaint() {
   });
 
   const onSubmit = async (data: ComplaintUiForm) => {
+    if (submissionInFlightRef.current) return;
+    if (imagesProcessing) {
+      setSubmissionStage("preparing");
+      setError(
+        isArabic
+          ? "انتظر حتى يكتمل تجهيز الصور."
+          : "Wait until the images are ready.",
+      );
+      return;
+    }
+
+    const hasImages = images.length > 0;
+    submissionInFlightRef.current = true;
+    setSubmissionStage("uploading");
+    setUploadProgress(0);
+    setError("");
+
     try {
-      setIsSubmitting(true);
-      setError("");
       const payload: CreateComplaintForm = {
         submissionLanguage: language,
         locationId: data.locationId,
@@ -122,24 +151,48 @@ export default function NewComplaint() {
               ...(data.notes?.trim() ? { notesEn: data.notes.trim() } : {}),
             }),
       };
-      if (imagesProcessing) {
-        setError(isArabic ? "انتظر حتى يكتمل تجهيز الصور." : "Wait until the images are ready.");
-        return;
-      }
       const complaint = await complaintsService.create(
         payload,
         images.map((image) => image.file),
+        (progress) => {
+          setUploadProgress(progress);
+          setSubmissionStage(progress >= 100 ? "processing" : "uploading");
+        },
       );
+      setSubmissionStage("success");
+      setUploadProgress(100);
       setComplaintCode(complaint.complaintCode);
+      setLastSubmissionHadImages(hasImages);
       setSuccessDialog(true);
       reset(emptyForm);
       setImages([]);
-    } catch (err: any) {
-      const message = err?.response?.data?.message;
-      setError(Array.isArray(message) ? message.join("، ") : message || (isArabic ? "فشل تقديم البلاغ" : "Failed to submit the complaint"));
+    } catch (submissionError: unknown) {
+      const responseMessage = isAxiosError<{
+        message?: string | string[];
+      }>(submissionError)
+        ? submissionError.response?.data?.message
+        : undefined;
+      const reason = Array.isArray(responseMessage)
+        ? responseMessage.join(isArabic ? "، " : ", ")
+        : responseMessage;
+      const fallback = isArabic
+        ? "تعذر إرسال البلاغ."
+        : "The complaint could not be submitted.";
+      const retentionMessage = isArabic
+        ? "لم يتم فقدان البيانات أو الصور التي اخترتها. تحقق من الاتصال وحاول مرة أخرى."
+        : "Your form data and selected images were kept. Check your connection and try again.";
+
+      setSubmissionStage("error");
+      setError(`${reason || fallback}\n\n${retentionMessage}`);
     } finally {
-      setIsSubmitting(false);
+      submissionInFlightRef.current = false;
     }
+  };
+
+  const closeSuccessDialog = () => {
+    setSuccessDialog(false);
+    setSubmissionStage("idle");
+    setUploadProgress(0);
   };
 
   const themeIcon = theme === "light" ? <Sun className="h-4 w-4" /> : theme === "dark" ? <Moon className="h-4 w-4" /> : <Monitor className="h-4 w-4" />;
@@ -147,7 +200,7 @@ export default function NewComplaint() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary via-primary/90 to-primary px-4 py-8 dark:from-background dark:via-background/95 dark:to-background">
       <Button variant="ghost" size="icon" className="fixed left-4 top-4 text-white" onClick={toggleTheme}>{themeIcon}</Button>
-      <Button variant="ghost" size="icon" className="fixed right-4 top-4 text-white" onClick={() => navigate("/")}><ArrowRight className="h-4 w-4" /></Button>
+      <Button variant="ghost" size="icon" className="fixed right-4 top-4 text-white" disabled={isSending} onClick={() => navigate("/")}><ArrowRight className="h-4 w-4" /></Button>
       <div className="mx-auto max-w-2xl space-y-5">
         <div className="text-center text-white">
           <img src="/assets/logo.png" alt="جامعة الملك سعود" className="mx-auto h-24 w-auto" />
@@ -160,27 +213,28 @@ export default function NewComplaint() {
           </CardHeader>
           <CardContent>
             <div className="mb-5 grid grid-cols-2 gap-2 rounded-lg border bg-muted/30 p-3">
-              <Button type="button" variant={isArabic ? "default" : "outline"} onClick={() => { setLanguage("ar"); reset(emptyForm); }}>العربية</Button>
-              <Button type="button" variant={!isArabic ? "default" : "outline"} onClick={() => { setLanguage("en"); reset(emptyForm); }}>English</Button>
+              <Button type="button" variant={isArabic ? "default" : "outline"} disabled={isSending} onClick={() => { setLanguage("ar"); reset(emptyForm); }}>العربية</Button>
+              <Button type="button" variant={!isArabic ? "default" : "outline"} disabled={isSending} onClick={() => { setLanguage("en"); reset(emptyForm); }}>English</Button>
             </div>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" dir={isArabic ? "rtl" : "ltr"}>
-              {error && <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
-              <Field label={isArabic ? "الموقع" : "Location"} error={errors.locationId?.message}>
+              {error && <div className="whitespace-pre-line rounded-lg bg-destructive/10 p-3 text-sm text-destructive" role="alert">{error}</div>}
+              <fieldset disabled={isSending} className="space-y-4 border-0 p-0">
+              <Field label={isArabic ? "الموقع" : "Location"} error={errors.locationId?.message} required>
                 <Select value={locationId} onValueChange={(value) => { setValue("locationId", value, { shouldValidate: true }); setValue("floorId", ""); }} disabled={loadingReferences}>
                   <SelectTrigger><SelectValue placeholder={isArabic ? "اختر الموقع" : "Select location"} /></SelectTrigger>
                   <SelectContent>{referenceData?.locations.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
                 </Select>
               </Field>
-              <Field label={isArabic ? "الطابق" : "Floor"} error={errors.floorId?.message}>
+              <Field label={isArabic ? "الطابق" : "Floor"} error={errors.floorId?.message} required>
                 <Select value={floorId} onValueChange={(value) => setValue("floorId", value, { shouldValidate: true })} disabled={!locationId || loadingFloors}>
                   <SelectTrigger><SelectValue placeholder={isArabic ? "اختر الطابق" : "Select floor"} /></SelectTrigger>
                   <SelectContent>{floors?.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
                 </Select>
               </Field>
-              <Field label={isArabic ? "الموقع التفصيلي" : "Detailed location"} error={errors.detailedLocation?.message}>
+              <Field label={isArabic ? "الموقع التفصيلي" : "Detailed location"} error={errors.detailedLocation?.message} required>
                 <Input {...register("detailedLocation")} placeholder={isArabic ? "المبنى، الغرفة أو أقرب معلم" : "Building, room, or nearest landmark"} />
               </Field>
-              <Field label={isArabic ? "القسم" : "Department"} error={errors.departmentId?.message}>
+              <Field label={isArabic ? "القسم" : "Department"} error={errors.departmentId?.message} required>
                 <Select value={departmentId} onValueChange={(value) => setValue("departmentId", value, { shouldValidate: true })} disabled={loadingReferences}>
                   <SelectTrigger><SelectValue placeholder={isArabic ? "اختر القسم" : "Select department"} /></SelectTrigger>
                   <SelectContent>{referenceData?.departments.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
@@ -189,10 +243,10 @@ export default function NewComplaint() {
               <Field label={isArabic ? "رقم التواصل (اختياري)" : "Contact number (optional)"} error={errors.contactPhone?.message}>
                 <Input {...register("contactPhone")} inputMode="tel" dir="ltr" placeholder="05XXXXXXXX" />
               </Field>
-              <Field label={isArabic ? "اسم مقدم البلاغ" : "Reporter name"} error={errors.reporterName?.message}>
+              <Field label={isArabic ? "اسم مقدم البلاغ" : "Reporter name"} error={errors.reporterName?.message} required>
                 <Input {...register("reporterName")} autoComplete="name" />
               </Field>
-              <Field label={isArabic ? "وصف البلاغ" : "Complaint description"} error={errors.description?.message}>
+              <Field label={isArabic ? "وصف البلاغ" : "Complaint description"} error={errors.description?.message} required>
                 <Textarea {...register("description")} rows={5} placeholder={isArabic ? "صف سبب البلاغ بوضوح" : "Clearly describe the reason for the complaint"} />
               </Field>
               <ComplaintImageUploader
@@ -200,28 +254,51 @@ export default function NewComplaint() {
                 onChange={setImages}
                 onProcessingChange={setImagesProcessing}
                 isArabic={isArabic}
-                disabled={isSubmitting}
+                disabled={isSending}
               />
               <Field label={isArabic ? "ملاحظات مقدم البلاغ (اختياري)" : "Reporter notes (optional)"}>
                 <Textarea {...register("notes")} rows={3} />
               </Field>
-              <Button type="submit" className="w-full" disabled={isSubmitting || imagesProcessing || loadingReferences}>
-                {isSubmitting && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                {isArabic ? "تقديم البلاغ" : "Submit complaint"}
+              {isSending && (
+                <SubmissionStatus
+                  stage={submissionStage}
+                  progress={uploadProgress}
+                  hasImages={images.length > 0}
+                  isArabic={isArabic}
+                />
+              )}
+              <Button type="submit" className="w-full" disabled={isSending || imagesProcessing || loadingReferences}>
+                {isSending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+                {getSubmitButtonLabel(
+                  submissionStage,
+                  uploadProgress,
+                  images.length > 0,
+                  isArabic,
+                )}
               </Button>
+              </fieldset>
             </form>
           </CardContent>
         </Card>
       </div>
-      <Dialog open={successDialog} onOpenChange={setSuccessDialog}>
+      <Dialog open={successDialog} onOpenChange={(open) => open ? setSuccessDialog(true) : closeSuccessDialog()}>
         <DialogContent dir={isArabic ? "rtl" : "ltr"}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" />{isArabic ? "تم تقديم البلاغ بنجاح" : "Complaint submitted successfully"}</DialogTitle>
-            <DialogDescription className="pt-4 text-start">{isArabic ? "رقم البلاغ" : "Complaint code"}: <strong className="text-primary">{complaintCode}</strong></DialogDescription>
+            <DialogDescription className="pt-4 text-start">
+              {isArabic ? "رقم البلاغ" : "Complaint code"}: <strong className="text-primary">{complaintCode}</strong>
+              {lastSubmissionHadImages && (
+                <span className="mt-2 block">
+                  {isArabic
+                    ? "تم حفظ البلاغ والصور المرفقة بنجاح."
+                    : "The complaint and attached images were saved successfully."}
+                </span>
+              )}
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => navigate("/")}>{isArabic ? "العودة للرئيسية" : "Back home"}</Button>
-            <Button onClick={() => { setSuccessDialog(false); reset(emptyForm); }}>{isArabic ? "تقديم بلاغ آخر" : "Submit another"}</Button>
+            <Button onClick={closeSuccessDialog}>{isArabic ? "تقديم بلاغ آخر" : "Submit another"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -229,12 +306,107 @@ export default function NewComplaint() {
   );
 }
 
-function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+function Field({
+  label,
+  error,
+  required = false,
+  children,
+}: {
+  label: string;
+  error?: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-2">
-      <Label className="text-primary">{label} <span className="text-destructive">*</span></Label>
+      <Label className="text-primary">
+        {label} {required && <span className="text-destructive">*</span>}
+      </Label>
       {children}
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
+}
+
+function SubmissionStatus({
+  stage,
+  progress,
+  hasImages,
+  isArabic,
+}: {
+  stage: SubmissionStage;
+  progress: number;
+  hasImages: boolean;
+  isArabic: boolean;
+}) {
+  const isProcessing = stage === "processing";
+  const title = hasImages
+    ? isProcessing
+      ? isArabic
+        ? "اكتمل رفع الصور"
+        : "Image upload complete"
+      : isArabic
+        ? "جارٍ رفع البلاغ والصور"
+        : "Uploading the complaint and images"
+    : isProcessing
+      ? isArabic
+        ? "جارٍ حفظ البلاغ..."
+        : "Saving the complaint..."
+      : isArabic
+        ? "جارٍ إرسال البلاغ..."
+        : "Submitting the complaint...";
+
+  return (
+    <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-4" aria-live="polite">
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <span className="font-medium text-primary">{title}</span>
+        {hasImages && <span className="tabular-nums">{progress}%</span>}
+      </div>
+      {hasImages && (
+        <div
+          className="h-2 overflow-hidden rounded-full bg-muted"
+          role="progressbar"
+          aria-label={isArabic ? "تقدم رفع الصور" : "Image upload progress"}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progress}
+        >
+          <div
+            className="h-full bg-primary transition-[width] duration-200"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
+      {isProcessing && hasImages && (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {isArabic
+            ? "جارٍ معالجة الصور وحفظ البلاغ..."
+            : "Processing images and saving the complaint..."}
+        </p>
+      )}
+      <p className="text-xs text-muted-foreground">
+        {isArabic
+          ? "يرجى عدم إغلاق الصفحة حتى اكتمال الإرسال."
+          : "Please keep this page open until submission is complete."}
+      </p>
+    </div>
+  );
+}
+
+function getSubmitButtonLabel(
+  stage: SubmissionStage,
+  progress: number,
+  hasImages: boolean,
+  isArabic: boolean,
+): string {
+  if (stage === "uploading") {
+    if (hasImages) return isArabic ? `جارٍ الرفع ${progress}%` : `Uploading ${progress}%`;
+    return isArabic ? "جارٍ الإرسال..." : "Submitting...";
+  }
+  if (stage === "processing") {
+    if (hasImages) return isArabic ? "جارٍ معالجة الصور..." : "Processing images...";
+    return isArabic ? "جارٍ حفظ البلاغ..." : "Saving complaint...";
+  }
+  return isArabic ? "تقديم البلاغ" : "Submit complaint";
 }

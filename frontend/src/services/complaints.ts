@@ -40,7 +40,11 @@ export const complaintsService = {
     return response.data.data;
   },
 
-  async create(data: CreateComplaintForm, images: File[] = []): Promise<Complaint> {
+  async create(
+    data: CreateComplaintForm,
+    images: File[] = [],
+    onProgress?: (progress: number) => void,
+  ): Promise<Complaint> {
     const formData = new FormData();
     Object.entries(data).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
@@ -48,7 +52,16 @@ export const complaintsService = {
       }
     });
     images.forEach((image) => formData.append('images', image));
-    const response = await api.post<ApiResponse<Complaint>>('/complaints', formData);
+    const response = await api.post<ApiResponse<Complaint>>('/complaints', formData, {
+      onUploadProgress: (event) => {
+        if (!event.total) return;
+        const progress = Math.min(
+          100,
+          Math.round((event.loaded * 100) / event.total),
+        );
+        onProgress?.(progress);
+      },
+    });
     return response.data.data;
   },
 

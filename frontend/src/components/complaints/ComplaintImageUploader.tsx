@@ -45,13 +45,13 @@ export function ComplaintImageUploader({
     previousValueRef.current = value;
   }, [value]);
 
-  useEffect(
-    () => () => {
-      currentValueRef.current.forEach((image) =>
-        URL.revokeObjectURL(image.previewUrl),
-      );
-    },
-  );
+  useEffect(() => {
+    return () => {
+      currentValueRef.current.forEach((image) => {
+        URL.revokeObjectURL(image.previewUrl);
+      });
+    };
+  }, []);
 
   const setProcessing = (processing: boolean) => {
     setIsProcessing(processing);
