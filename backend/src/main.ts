@@ -9,6 +9,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+  app.enableShutdownHooks();
 
   // The production deployment is behind one reverse proxy (Traefik). This
   // keeps per-IP throttling accurate instead of grouping all users by proxy IP.

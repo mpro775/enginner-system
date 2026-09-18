@@ -207,6 +207,16 @@ export default function Login() {
                 )}
               </div>
 
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => navigate('/forgot-password')}
+                  className="text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                >
+                  نسيت كلمة المرور؟
+                </button>
+              </div>
+
               <Button
                 type="submit"
                 className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-2.5"

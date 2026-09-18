@@ -23,6 +23,8 @@ import { ComplaintsModule } from "./modules/complaints/complaints.module";
 import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { AdminSearchModule } from "./modules/admin-search/admin-search.module";
 import { FloorsModule } from "./modules/floors/floors.module";
+import { RedisModule } from "./infrastructure/redis/redis.module";
+import { MailModule } from "./modules/mail/mail.module";
 
 @Module({
   imports: [
@@ -77,6 +79,10 @@ import { FloorsModule } from "./modules/floors/floors.module";
 
     // Schedule Module for cron jobs
     ScheduleModule.forRoot(),
+
+    // External shared infrastructure. These modules do not block application startup.
+    RedisModule,
+    MailModule,
 
     // Feature Modules
     AuthModule,

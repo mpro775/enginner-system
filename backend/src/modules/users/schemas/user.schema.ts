@@ -41,6 +41,9 @@ export class User {
   @Prop()
   refreshToken?: string;
 
+  @Prop({ default: 0 })
+  authVersion: number;
+
   @Prop()
   lastLoginAt?: Date;
 

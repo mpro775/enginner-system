@@ -29,12 +29,14 @@ async function changeAdminPassword() {
   // تحديث كلمة المرور
   await userModel.updateOne(
     { email: "admin@maintenance.com" },
-    { password: hashedPassword }
+    {
+      $set: { password: hashedPassword, refreshToken: null },
+      $inc: { authVersion: 1 },
+    }
   );
 
   console.log("✅ تم تغيير كلمة مرور المدير بنجاح!");
   console.log("📧 البريد الإلكتروني: admin@maintenance.com");
-  console.log("🔑 كلمة المرور الجديدة:", NEW_PASSWORD);
 
   await app.close();
 }

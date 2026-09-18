@@ -1,4 +1,4 @@
-import { Sun, Moon, Menu, House } from "lucide-react";
+import { Sun, Moon, Menu, House, LogOut, ShieldCheck, UserCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/auth";
@@ -8,6 +8,15 @@ import { NotificationDropdown } from "./NotificationDropdown";
 import { InstallButton } from "@/components/InstallButton";
 import { AdminCommandPalette } from "@/components/admin/AdminCommandPalette";
 import { Role } from "@/types";
+import { authService } from "@/services/auth";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -15,7 +24,7 @@ interface HeaderProps {
 
 export function Header({ onMenuClick }: HeaderProps) {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const { theme, toggleTheme } = useTheme();
 
   const getThemeIcon = () => {
@@ -28,6 +37,15 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   const getThemeTooltip = () => {
     return theme === "dark" ? "الوضع الداكن" : "الوضع الفاتح";
+  };
+
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } finally {
+      logout();
+      navigate('/login', { replace: true });
+    }
   };
 
   return (
@@ -80,6 +98,38 @@ export function Header({ onMenuClick }: HeaderProps) {
         </Button>
 
         <NotificationDropdown />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 sm:h-10 sm:w-10 rounded-full text-muted-foreground hover:text-foreground"
+              aria-label="قائمة الحساب"
+            >
+              <UserCircle className="h-6 w-6" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64 text-right">
+            <DropdownMenuLabel className="space-y-1">
+              <p className="truncate text-sm font-semibold">{user?.name}</p>
+              <p className="truncate text-xs font-normal text-muted-foreground">{user?.email}</p>
+              <p className="text-xs font-normal text-muted-foreground">
+                {user && getRoleLabel(user.role)}
+              </p>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => navigate('/app/account/security')} className="gap-2">
+              <ShieldCheck className="h-4 w-4" />
+              أمان الحساب
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={handleLogout} className="gap-2 text-destructive focus:text-destructive">
+              <LogOut className="h-4 w-4" />
+              تسجيل الخروج
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

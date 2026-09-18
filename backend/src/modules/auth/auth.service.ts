@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import { InjectModel } from "@nestjs/mongoose";
@@ -12,6 +12,7 @@ import { AuditAction, Role } from "../../common/enums";
 import { Inject, forwardRef } from "@nestjs/common";
 import { ScheduledTasksService } from "../scheduled-tasks/scheduled-tasks.service";
 import { NotificationsGateway } from "../notifications/notifications.gateway";
+import { PasswordSecurityService } from "./password-security.service";
 
 export interface TokensResponse {
   accessToken: string;
@@ -39,7 +40,8 @@ export class AuthService {
     @Inject(forwardRef(() => ScheduledTasksService))
     private scheduledTasksService: ScheduledTasksService,
     @Inject(forwardRef(() => NotificationsGateway))
-    private notificationsGateway: NotificationsGateway
+    private notificationsGateway: NotificationsGateway,
+    private passwordSecurityService: PasswordSecurityService,
   ) {}
 
   async login(
@@ -52,12 +54,8 @@ export class AuthService {
       .populate("departmentIds", "name")
       .exec();
 
-    if (!user) {
+    if (!user || user.isActive !== true || user.deletedAt != null) {
       throw new UnauthorizedException("Invalid email or password");
-    }
-
-    if (!user.isActive) {
-      throw new UnauthorizedException("Your account has been deactivated");
     }
 
     const isPasswordValid = await bcrypt.compare(
@@ -121,11 +119,12 @@ export class AuthService {
 
   async refreshTokens(
     userId: string,
-    refreshToken: string
+    refreshToken: string,
+    tokenAuthVersion?: number,
   ): Promise<TokensResponse> {
     const user = await this.userModel.findById(userId);
 
-    if (!user || !user.refreshToken) {
+    if (!user || !user.refreshToken || user.deletedAt != null) {
       throw new UnauthorizedException("Invalid refresh token");
     }
 
@@ -133,8 +132,12 @@ export class AuthService {
       throw new UnauthorizedException("Invalid refresh token");
     }
 
-    if (!user.isActive) {
+    if (user.isActive !== true) {
       throw new UnauthorizedException("Your account has been deactivated");
+    }
+
+    if ((tokenAuthVersion ?? 0) !== (user.authVersion ?? 0)) {
+      throw new UnauthorizedException("Invalid refresh token");
     }
 
     const tokens = await this.generateTokens(user);
@@ -184,12 +187,70 @@ export class AuthService {
     return user;
   }
 
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const user = await this.userModel.findOne({
+      _id: userId,
+      isActive: true,
+      deletedAt: null,
+    });
+
+    if (!user) throw new UnauthorizedException('User account is unavailable');
+
+    if (!(await this.passwordSecurityService.compare(currentPassword, user.password))) {
+      throw new BadRequestException('كلمة المرور الحالية غير صحيحة.');
+    }
+
+    await this.passwordSecurityService.assertDifferent(newPassword, user.password);
+    const password = await this.passwordSecurityService.hash(newPassword);
+    const currentAuthVersion = user.authVersion ?? 0;
+    const updated = await this.userModel.findOneAndUpdate(
+      {
+        _id: user._id,
+        isActive: true,
+        deletedAt: null,
+        $or: [
+          { authVersion: currentAuthVersion },
+          ...(currentAuthVersion === 0
+            ? [{ authVersion: { $exists: false } }]
+            : []),
+        ],
+      },
+      {
+        $set: { password, refreshToken: null },
+        $inc: { authVersion: 1 },
+      },
+      { new: true },
+    );
+
+    if (!updated) {
+      throw new UnauthorizedException('تعذر تغيير كلمة المرور. يرجى تسجيل الدخول مجدداً.');
+    }
+
+    await this.auditLogsService.create({
+      userId: user._id.toString(),
+      userName: user.name,
+      action: AuditAction.PASSWORD_CHANGE,
+      entity: 'User',
+      entityId: user._id.toString(),
+      changes: { passwordChanged: true },
+      ipAddress,
+      userAgent,
+    });
+  }
+
   private async generateTokens(user: UserDocument): Promise<TokensResponse> {
     const payload: JwtPayload = {
       sub: user._id.toString(),
       email: user.email,
       role: user.role,
       name: user.name,
+      authVersion: user.authVersion ?? 0,
     };
 
     const jwtExpiresIn = this.configService.get<string>(
@@ -203,7 +264,11 @@ export class AuthService {
         expiresIn: jwtExpiresIn,
       }),
       this.jwtService.signAsync(
-        { sub: user._id.toString(), email: user.email },
+        {
+          sub: user._id.toString(),
+          email: user.email,
+          authVersion: user.authVersion ?? 0,
+        },
         {
           secret: this.configService.get<string>("JWT_REFRESH_SECRET"),
           expiresIn: this.configService.get<string>(

@@ -11,6 +11,8 @@ import { User, UserSchema } from '../users/schemas/user.schema';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 import { ScheduledTasksModule } from '../scheduled-tasks/scheduled-tasks.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { PasswordSecurityService } from './password-security.service';
+import { PasswordRecoveryService } from './password-recovery.service';
 
 @Module({
   imports: [
@@ -30,7 +32,13 @@ import { NotificationsModule } from '../notifications/notifications.module';
     forwardRef(() => NotificationsModule),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtRefreshStrategy],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    JwtRefreshStrategy,
+    PasswordSecurityService,
+    PasswordRecoveryService,
+  ],
   exports: [AuthService, JwtStrategy],
 })
 export class AuthModule {}

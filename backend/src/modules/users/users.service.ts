@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, FilterQuery, Types } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
@@ -22,6 +22,7 @@ import {
   assertDepartmentAccess,
   getDepartmentMatchValues,
 } from '../../common/utils/access-scope.util';
+import { PASSWORD_HASH_ROUNDS } from '../../common/security/password-policy';
 
 @Injectable()
 export class UsersService {
@@ -44,7 +45,10 @@ export class UsersService {
     }
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(createUserDto.password, 12);
+    const hashedPassword = await bcrypt.hash(
+      createUserDto.password,
+      PASSWORD_HASH_ROUNDS,
+    );
 
     const userData: any = {
       ...createUserDto,
@@ -172,35 +176,53 @@ export class UsersService {
       isActive: user.isActive,
     };
 
-    // Hash password if being updated
-    if (updateUserDto.password) {
-      updateUserDto.password = await bcrypt.hash(updateUserDto.password, 12);
-    }
-
-    // Update email to lowercase
-    if (updateUserDto.email) {
-      updateUserDto.email = updateUserDto.email.toLowerCase();
+    const passwordChanged = Boolean(updateUserDto.password);
+    if (
+      updateUserDto.password &&
+      (await bcrypt.compare(updateUserDto.password, user.password))
+    ) {
+      throw new BadRequestException(
+        'يجب أن تكون كلمة المرور الجديدة مختلفة عن الحالية.',
+      );
     }
 
     const updateData: any = { ...updateUserDto };
+    if (updateUserDto.password) {
+      updateData.password = await bcrypt.hash(
+        updateUserDto.password,
+        PASSWORD_HASH_ROUNDS,
+      );
+      updateData.refreshToken = null;
+    }
+    if (updateUserDto.email) {
+      updateData.email = updateUserDto.email.toLowerCase();
+    }
     if (updateUserDto.departmentIds !== undefined) {
       updateData.departmentIds = (updateUserDto.departmentIds || []).map((id) => new Types.ObjectId(id));
     }
     delete updateData.departmentId;
 
+    const updateOperation: Record<string, unknown> = { $set: updateData };
+    if (passwordChanged) updateOperation.$inc = { authVersion: 1 };
+
     const updatedUser = await this.userModel
-      .findByIdAndUpdate(id, updateData, { new: true })
+      .findByIdAndUpdate(id, updateOperation, { new: true })
       .select('-password -refreshToken')
       .populate('departmentIds', 'name');
 
-    // Log the action
+    const auditChanges: Record<string, unknown> = { ...updateUserDto };
+    delete auditChanges.password;
+    if (passwordChanged) auditChanges.passwordChanged = true;
+
     await this.auditLogsService.create({
       userId: currentUser.userId,
       userName: currentUser.name,
-      action: AuditAction.UPDATE,
+      action: passwordChanged
+        ? AuditAction.PASSWORD_RESET_BY_ADMIN
+        : AuditAction.UPDATE,
       entity: 'User',
       entityId: id,
-      changes: updateUserDto as Record<string, unknown>,
+      changes: auditChanges,
       previousValues,
     });
 

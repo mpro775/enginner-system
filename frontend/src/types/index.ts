@@ -67,6 +67,9 @@ export enum AuditAction {
   SOFT_DELETE = "soft_delete",
   HARD_DELETE = "hard_delete",
   RESTORE = "restore",
+  PASSWORD_CHANGE = "password_change",
+  PASSWORD_RESET = "password_reset",
+  PASSWORD_RESET_BY_ADMIN = "password_reset_by_admin",
 }
 
 // User types
@@ -396,6 +399,19 @@ export interface Complaint {
   attachments?: ComplaintAttachment[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface PasswordResetChallenge {
+  challengeId: string;
+}
+
+export interface PasswordResetVerification {
+  resetToken: string;
 }
 
 export interface ComplaintAttachment {

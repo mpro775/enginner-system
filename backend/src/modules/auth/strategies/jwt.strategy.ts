@@ -12,6 +12,7 @@ export interface JwtPayload {
   email: string;
   role: string;
   name: string;
+  authVersion?: number;
 }
 
 @Injectable()
@@ -30,7 +31,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   async validate(payload: JwtPayload) {
     const user = (await this.userModel
       .findById(payload.sub)
-      .select('_id email name role isActive deletedAt departmentIds +departmentId')
+      .select('_id email name role isActive deletedAt authVersion departmentIds +departmentId')
       .lean()) as {
       _id: unknown;
       email: string;
@@ -38,6 +39,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       role: string;
       isActive: boolean;
       deletedAt?: Date | null;
+      authVersion?: number;
       departmentIds?: unknown[];
       departmentId?: unknown;
     } | null;
@@ -52,6 +54,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
     if (user.deletedAt != null) {
       throw new UnauthorizedException('User account is deleted');
+    }
+
+    if ((payload.authVersion ?? 0) !== (user.authVersion ?? 0)) {
+      throw new UnauthorizedException('Session has been revoked');
     }
 
     const currentDepartmentIds = normalizeDepartmentIds(user.departmentIds);

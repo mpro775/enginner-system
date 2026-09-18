@@ -30,8 +30,47 @@ export class AuditLogsService {
   ) {}
 
   async create(createDto: CreateAuditLogDto): Promise<AuditLogDocument> {
-    const auditLog = new this.auditLogModel(createDto);
+    const auditLog = new this.auditLogModel({
+      ...createDto,
+      changes: this.sanitizeAuditValue(createDto.changes),
+      previousValues: this.sanitizeAuditValue(createDto.previousValues),
+    });
     return auditLog.save();
+  }
+
+  private sanitizeAuditValue(
+    value: Record<string, unknown> | undefined,
+  ): Record<string, unknown> | undefined {
+    if (!value) return undefined;
+    const sensitiveKeys = new Set([
+      'password',
+      'newpassword',
+      'currentpassword',
+      'passwordhash',
+      'otp',
+      'otpdigest',
+      'resettoken',
+      'resettokendigest',
+      'refreshtoken',
+      'smtppassword',
+      'redisurl',
+    ]);
+
+    const sanitize = (input: unknown): unknown => {
+      if (Array.isArray(input)) return input.map(sanitize);
+      if (!input || typeof input !== 'object') return input;
+
+      return Object.fromEntries(
+        Object.entries(input as Record<string, unknown>)
+          .filter(
+            ([key]) =>
+              !sensitiveKeys.has(key.replace(/[^a-z0-9]/gi, '').toLowerCase()),
+          )
+          .map(([key, nested]) => [key, sanitize(nested)]),
+      );
+    };
+
+    return sanitize(value) as Record<string, unknown>;
   }
 
   async findAll(

@@ -53,8 +53,8 @@ const userSchema = z.object({
   email: z.string().email("البريد الإلكتروني غير صحيح"),
   password: z
     .string()
-    .refine((val) => !val || val.length >= 6, {
-      message: "كلمة المرور يجب أن تكون 6 أحرف على الأقل",
+    .refine((val) => !val || val.length >= 8, {
+      message: "كلمة المرور يجب أن تكون 8 أحرف على الأقل",
     })
     .optional(),
   role: z.nativeEnum(Role),

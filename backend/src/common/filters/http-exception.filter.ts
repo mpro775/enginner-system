@@ -40,6 +40,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
           details = { validationErrors: responseObj.message };
           message = 'Validation failed';
         }
+        if (typeof responseObj.retryAfterSeconds === 'number') {
+          details = {
+            ...(details || {}),
+            retryAfterSeconds: responseObj.retryAfterSeconds,
+          };
+        }
       } else {
         message = exception.message;
         error = exception.name;

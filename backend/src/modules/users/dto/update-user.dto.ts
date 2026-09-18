@@ -1,7 +1,6 @@
 import {
   IsEmail,
   IsString,
-  MinLength,
   IsEnum,
   IsOptional,
   IsArray,
@@ -9,6 +8,7 @@ import {
   IsBoolean,
 } from "class-validator";
 import { Role } from "../../../common/enums";
+import { IsSystemPassword } from "../../../common/security/password-policy";
 
 export class UpdateUserDto {
   @IsOptional()
@@ -21,7 +21,7 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsString()
-  @MinLength(6, { message: "Password must be at least 6 characters" })
+  @IsSystemPassword()
   password?: string;
 
   @IsOptional()

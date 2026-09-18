@@ -30,6 +30,8 @@ import AnalyticsCenter from "@/pages/admin/AnalyticsCenter";
 import PreventiveCalendar from "@/pages/admin/PreventiveCalendar";
 import MachineProfile from "@/pages/admin/MachineProfile";
 import { Role } from "@/types";
+import ForgotPassword from "@/pages/ForgotPassword";
+import AccountSecurity from "@/pages/account/AccountSecurity";
 
 function App() {
   return (
@@ -40,6 +42,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/home" element={<Home />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/complaint/new" element={<NewComplaint />} />
 
         {/* Protected routes */}
@@ -53,6 +56,7 @@ function App() {
         >
           <Route index element={<Navigate to="/app/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="account/security" element={<AccountSecurity />} />
 
           {/* Requests */}
           {/* Complaints */}

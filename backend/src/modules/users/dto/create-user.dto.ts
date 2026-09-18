@@ -2,13 +2,13 @@ import {
   IsEmail,
   IsNotEmpty,
   IsString,
-  MinLength,
   IsEnum,
   IsOptional,
   IsArray,
   IsMongoId,
 } from "class-validator";
 import { Role } from "../../../common/enums";
+import { IsSystemPassword } from "../../../common/security/password-policy";
 
 export class CreateUserDto {
   @IsString()
@@ -21,7 +21,7 @@ export class CreateUserDto {
 
   @IsString()
   @IsNotEmpty({ message: "Password is required" })
-  @MinLength(6, { message: "Password must be at least 6 characters" })
+  @IsSystemPassword()
   password: string;
 
   @IsEnum(Role, {

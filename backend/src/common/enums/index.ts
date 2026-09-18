@@ -44,6 +44,9 @@ export enum AuditAction {
   SOFT_DELETE = "soft_delete",
   HARD_DELETE = "hard_delete",
   RESTORE = "restore",
+  PASSWORD_CHANGE = "password_change",
+  PASSWORD_RESET = "password_reset",
+  PASSWORD_RESET_BY_ADMIN = "password_reset_by_admin",
 }
 
 export enum TaskStatus {
