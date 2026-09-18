@@ -60,6 +60,43 @@ describe('PasswordRecoveryService', () => {
     };
   }
 
+  function installAtomicDecoyFake(
+    redisService: { execute: jest.Mock },
+    state: {
+      currentChallengeId: string;
+      challenges: Map<string, { value: Record<string, unknown>; ttl: number }>;
+    },
+  ) {
+    const evalMock = jest.fn(
+      async (
+        script: string,
+        _keyCount: number,
+        _challengeKey: string,
+        _currentKey: string,
+        expectedChallengeId: string,
+        decoyJson: string,
+      ) => {
+        expect(script).toContain("redis.call('GET', KEYS[2])");
+        expect(script).toContain("redis.call('PTTL', KEYS[1])");
+        expect(script).toContain("'KEEPTTL'");
+
+        if (state.currentChallengeId !== expectedChallengeId) return 0;
+        const current = state.challenges.get(expectedChallengeId);
+        if (!current || current.ttl <= 0) return 0;
+        state.challenges.set(expectedChallengeId, {
+          value: JSON.parse(decoyJson) as Record<string, unknown>,
+          ttl: current.ttl,
+        });
+        return 1;
+      },
+    );
+    redisService.execute.mockImplementation(
+      async (operation: (client: { eval: typeof evalMock }) => Promise<unknown>) =>
+        operation({ eval: evalMock }),
+    );
+    return evalMock;
+  }
+
   it('stores only an OTP digest and returns an opaque challenge', async () => {
     const { service, userModel, mailService } = setup();
     userModel.findOne.mockResolvedValue(user);
@@ -184,6 +221,141 @@ describe('PasswordRecoveryService', () => {
       expect(records.has(resent.challengeId)).toBe(true);
     },
   );
+
+  it('performs the Mongo lookup before rotating a decoy resend', async () => {
+    const { service, userModel, mailService } = setup();
+    jest.spyOn(service as any, 'readChallenge').mockResolvedValue({
+      userId: 'decoy-user-id',
+      identityDigest: 'identity',
+      otpDigest: 'digest',
+      attempts: 0,
+      authVersion: 0,
+      isDecoy: true,
+    });
+    jest.spyOn(service as any, 'reserveSend').mockResolvedValue({ allowed: true });
+    jest.spyOn(service as any, 'storeChallenge').mockResolvedValue(undefined);
+    userModel.findOne.mockResolvedValue(null);
+
+    await service.resend('a'.repeat(64));
+
+    expect(userModel.findOne).toHaveBeenCalledWith({
+      _id: 'decoy-user-id',
+      isActive: true,
+      deletedAt: null,
+    });
+    expect(mailService.sendPasswordResetOtp).not.toHaveBeenCalled();
+  });
+
+  it('still rotates and dispatches email for a valid real resend', async () => {
+    const { service, userModel, mailService } = setup();
+    jest.spyOn(service as any, 'readChallenge').mockResolvedValue({
+      userId: 'user-1',
+      identityDigest: 'identity',
+      otpDigest: 'digest',
+      attempts: 0,
+      authVersion: 2,
+      isDecoy: false,
+    });
+    jest.spyOn(service as any, 'reserveSend').mockResolvedValue({ allowed: true });
+    const store = jest
+      .spyOn(service as any, 'storeChallenge')
+      .mockResolvedValue(undefined);
+    userModel.findOne.mockResolvedValue(user);
+    mailService.sendPasswordResetOtp.mockResolvedValue(undefined);
+
+    await service.resend('a'.repeat(64));
+
+    expect(userModel.findOne).toHaveBeenCalled();
+    expect(store).toHaveBeenCalledWith(
+      expect.stringMatching(/^[a-f0-9]{64}$/),
+      expect.objectContaining({ isDecoy: false, userId: 'user-1' }),
+    );
+    expect(mailService.sendPasswordResetOtp).toHaveBeenCalledTimes(1);
+  });
+
+  it('prevents a stale SMTP failure from overwriting a newer current challenge', async () => {
+    const { service, redisService, mailService } = setup();
+    const challengeA = 'a'.repeat(64);
+    const challengeB = 'b'.repeat(64);
+    const challengeBValue = { isDecoy: false, marker: 'newer' };
+    const state: Parameters<typeof installAtomicDecoyFake>[1] = {
+      currentChallengeId: challengeB,
+      challenges: new Map([
+        [challengeA, { value: { isDecoy: false, marker: 'older' }, ttl: 300_000 }],
+        [challengeB, { value: challengeBValue, ttl: 500_000 }],
+      ]),
+    };
+    installAtomicDecoyFake(redisService, state);
+    mailService.sendPasswordResetOtp.mockRejectedValue(new Error('SMTP unavailable'));
+
+    await (service as any).dispatchInitialEmail({
+      challengeId: challengeA,
+      identityDigest: 'identity',
+      email: 'user@example.com',
+      name: 'User',
+      otp: '123456',
+    });
+
+    expect(state.currentChallengeId).toBe(challengeB);
+    expect(state.challenges.get(challengeB)).toEqual({
+      value: challengeBValue,
+      ttl: 500_000,
+    });
+    expect(state.challenges.get(challengeA)?.value).toEqual({
+      isDecoy: false,
+      marker: 'older',
+    });
+  });
+
+  it('decoyifies a current failed SMTP challenge without extending its TTL', async () => {
+    const { service, redisService, mailService } = setup();
+    const challengeA = 'a'.repeat(64);
+    const state: Parameters<typeof installAtomicDecoyFake>[1] = {
+      currentChallengeId: challengeA,
+      challenges: new Map([
+        [challengeA, { value: { isDecoy: false }, ttl: 321_000 }],
+      ]),
+    };
+    installAtomicDecoyFake(redisService, state);
+    mailService.sendPasswordResetOtp.mockRejectedValue(new Error('SMTP unavailable'));
+
+    await (service as any).dispatchInitialEmail({
+      challengeId: challengeA,
+      identityDigest: 'identity',
+      email: 'user@example.com',
+      name: 'User',
+      otp: '123456',
+    });
+
+    expect(state.currentChallengeId).toBe(challengeA);
+    expect(state.challenges.get(challengeA)?.value).toEqual(
+      expect.objectContaining({ isDecoy: true, identityDigest: 'identity' }),
+    );
+    expect(state.challenges.get(challengeA)?.ttl).toBe(321_000);
+  });
+
+  it('does not revive an expired challenge while decoyifying', async () => {
+    const { service, redisService } = setup();
+    const challengeA = 'a'.repeat(64);
+    const state: Parameters<typeof installAtomicDecoyFake>[1] = {
+      currentChallengeId: challengeA,
+      challenges: new Map([
+        [challengeA, { value: { isDecoy: false }, ttl: 0 }],
+      ]),
+    };
+    installAtomicDecoyFake(redisService, state);
+
+    const converted = await (service as any).decoyifyChallengeIfCurrent(
+      challengeA,
+      'identity',
+    );
+
+    expect(converted).toBe(false);
+    expect(state.challenges.get(challengeA)).toEqual({
+      value: { isDecoy: false },
+      ttl: 0,
+    });
+  });
 
   it('fails closed when Redis is unavailable', async () => {
     const { service, redisService } = setup();

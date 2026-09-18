@@ -137,23 +137,17 @@ export class PasswordRecoveryService {
     }
 
     const nextChallengeId = randomBytes(32).toString('hex');
-    if (record.isDecoy) {
-      await this.storeChallenge(
-        nextChallengeId,
-        this.createDecoyChallenge(record.identityDigest, nextChallengeId),
-      );
-      return {
-        challengeId: nextChallengeId,
-        resendAfterSeconds: this.resendCooldown,
-      };
-    }
-
     const user = await this.userModel.findOne({
       _id: record.userId,
       isActive: true,
       deletedAt: null,
     });
-    if (!user || (user.authVersion ?? 0) !== record.authVersion) {
+    const shouldRemainDecoy =
+      record.isDecoy ||
+      !user ||
+      (user.authVersion ?? 0) !== record.authVersion;
+
+    if (shouldRemainDecoy) {
       await this.storeChallenge(
         nextChallengeId,
         this.createDecoyChallenge(record.identityDigest, nextChallengeId),
@@ -397,12 +391,43 @@ export class PasswordRecoveryService {
       });
       this.logger.log('Password reset email dispatched.');
     } catch {
-      await this.storeChallenge(
+      await this.decoyifyChallengeIfCurrent(
         input.challengeId,
-        this.createDecoyChallenge(input.identityDigest, input.challengeId),
+        input.identityDigest,
       ).catch(() => undefined);
       this.logger.warn('Password reset email could not be dispatched.');
     }
+  }
+
+  private async decoyifyChallengeIfCurrent(
+    challengeId: string,
+    identityDigest: string,
+  ): Promise<boolean> {
+    const challengeKey = passwordResetKeys.challenge(challengeId);
+    const currentKey = passwordResetKeys.currentChallenge(identityDigest);
+    const decoyRecord = this.createDecoyChallenge(
+      identityDigest,
+      challengeId,
+    );
+    const script = `
+      if redis.call('GET', KEYS[2]) ~= ARGV[1] then return 0 end
+      local ttl = redis.call('PTTL', KEYS[1])
+      if ttl <= 0 then return 0 end
+      redis.call('SET', KEYS[1], ARGV[2], 'KEEPTTL')
+      return 1
+    `;
+
+    const result = await this.redisService.execute((client) =>
+      client.eval(
+        script,
+        2,
+        challengeKey,
+        currentKey,
+        challengeId,
+        JSON.stringify(decoyRecord),
+      ),
+    );
+    return Number(result) === 1;
   }
 
   private async storeChallenge(
