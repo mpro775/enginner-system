@@ -87,6 +87,20 @@ export class ObjectStorageService {
     );
   }
 
+  async getObjectBuffer(key: string): Promise<Buffer> {
+    this.assertConfigured();
+    const result = await this.client.send(
+      new GetObjectCommand({
+        Bucket: this.config.bucket,
+        Key: key,
+      }),
+    );
+    if (!result.Body) {
+      throw new ServiceUnavailableException("Private media object could not be read");
+    }
+    return Buffer.from(await result.Body.transformToByteArray());
+  }
+
   private assertConfigured(): void {
     if (
       !this.config.endpoint ||

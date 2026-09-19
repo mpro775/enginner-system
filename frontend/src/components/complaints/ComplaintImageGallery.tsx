@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, ImageOff, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, ImageOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -8,17 +8,28 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { ComplaintAttachment } from "@/types";
+import { complaintsService } from "@/services/complaints";
+import { useToast } from "@/hooks/use-toast";
 
 interface Props {
+  complaintId: string;
+  complaintCode: string;
   attachments?: ComplaintAttachment[];
   onRefreshUrls: () => Promise<unknown>;
 }
 
-export function ComplaintImageGallery({ attachments = [], onRefreshUrls }: Props) {
+export function ComplaintImageGallery({
+  complaintId,
+  complaintCode,
+  attachments = [],
+  onRefreshUrls,
+}: Props) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const refreshAttempted = useRef(false);
+  const { toast } = useToast();
   const selected = selectedIndex === null ? undefined : attachments[selectedIndex];
 
   useEffect(() => {
@@ -74,6 +85,36 @@ export function ComplaintImageGallery({ attachments = [], onRefreshUrls }: Props
     setSelectedIndex(
       (selectedIndex + offset + attachments.length) % attachments.length,
     );
+  };
+
+  const downloadSelected = async () => {
+    if (!selected || selectedIndex === null || downloadingId) return;
+    setDownloadingId(selected.id);
+    try {
+      const blob = await complaintsService.downloadAttachment(
+        complaintId,
+        selected.id,
+      );
+      const safeComplaintCode =
+        complaintCode.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") ||
+        "complaint";
+      const blobUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = blobUrl;
+      anchor.download = `${safeComplaintCode}-image-${selectedIndex + 1}.jpg`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      toast({
+        title: "تعذر تحميل الصورة",
+        description: "حاول مرة أخرى وتأكد من صلاحية الوصول إلى البلاغ.",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   return (
@@ -160,6 +201,23 @@ export function ComplaintImageGallery({ attachments = [], onRefreshUrls }: Props
                 </Button>
               </>
             )}
+          </div>
+          <div className="flex justify-center">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!selected || downloadingId !== null}
+              onClick={downloadSelected}
+            >
+              {selected && downloadingId === selected.id ? (
+                <Loader2 className="me-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="me-2 h-4 w-4" />
+              )}
+              {selected && downloadingId === selected.id
+                ? "جارٍ تحميل الصورة..."
+                : "تحميل الصورة"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

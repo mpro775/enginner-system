@@ -65,6 +65,17 @@ export const complaintsService = {
     return response.data.data;
   },
 
+  async downloadAttachment(
+    complaintId: string,
+    attachmentId: string,
+  ): Promise<Blob> {
+    const response = await api.get<Blob>(
+      `/complaints/${complaintId}/attachments/${attachmentId}/download`,
+      { responseType: 'blob' },
+    );
+    return response.data;
+  },
+
   async assign(id: string, engineerId: string): Promise<Complaint> {
     const response = await api.patch<ApiResponse<Complaint>>(
       `/complaints/${id}/assign`,

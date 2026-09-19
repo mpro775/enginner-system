@@ -18,6 +18,7 @@ import {
   ClipboardList,
   AlertCircle,
   Trash2,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth";
@@ -30,6 +31,7 @@ interface NavItem {
   href?: string;
   roles?: Role[];
   isAction?: boolean;
+  isAccountLevel?: boolean;
   onClick?: () => void;
 }
 
@@ -140,9 +142,16 @@ const navItems: NavItem[] = [
     roles: [Role.ADMIN],
   },
   {
+    icon: ShieldCheck,
+    label: "أمان الحساب",
+    href: "/app/account/security",
+    isAccountLevel: true,
+  },
+  {
     icon: LogOut,
     label: "تسجيل الخروج",
     isAction: true,
+    isAccountLevel: true,
   },
 ];
 
@@ -337,9 +346,12 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 })}
                 <ul className="space-y-1 border-t pt-3">
                   {filteredNavItems
-                    .filter((item) => item.isAction)
+                    .filter((item) => item.isAccountLevel)
                     .map((item, index) =>
-                      renderNavigationItem(item, `action-${index}`),
+                      renderNavigationItem(
+                        item,
+                        item.href || `account-action-${index}`,
+                      ),
                     )}
                 </ul>
               </div>

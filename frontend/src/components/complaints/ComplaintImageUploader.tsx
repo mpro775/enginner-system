@@ -1,5 +1,5 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
-import { ImagePlus, Loader2, X } from "lucide-react";
+import { Camera, ImagePlus, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   COMPLAINT_IMAGE_TYPES,
@@ -32,7 +32,8 @@ export function ComplaintImageUploader({
 }: Props) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const currentValueRef = useRef(value);
   const previousValueRef = useRef(value);
 
@@ -161,7 +162,16 @@ export function ComplaintImageUploader({
       )}
 
       <input
-        ref={inputRef}
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="sr-only"
+        onChange={selectImages}
+        disabled={disabled || isProcessing || value.length >= MAX_IMAGES}
+      />
+      <input
+        ref={galleryInputRef}
         type="file"
         accept={COMPLAINT_IMAGE_TYPES.join(",")}
         multiple
@@ -169,26 +179,38 @@ export function ComplaintImageUploader({
         onChange={selectImages}
         disabled={disabled || isProcessing || value.length >= MAX_IMAGES}
       />
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full"
-        disabled={disabled || isProcessing || value.length >= MAX_IMAGES}
-        onClick={() => inputRef.current?.click()}
-      >
-        {isProcessing ? (
-          <Loader2 className="me-2 h-4 w-4 animate-spin" />
-        ) : (
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          disabled={disabled || isProcessing || value.length >= MAX_IMAGES}
+          onClick={() => cameraInputRef.current?.click()}
+        >
+          {isProcessing ? (
+            <Loader2 className="me-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Camera className="me-2 h-4 w-4" />
+          )}
+          {isProcessing
+            ? isArabic
+              ? "جارٍ تجهيز الصور..."
+              : "Preparing images..."
+            : isArabic
+              ? "التقاط صورة"
+              : "Take a photo"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          disabled={disabled || isProcessing || value.length >= MAX_IMAGES}
+          onClick={() => galleryInputRef.current?.click()}
+        >
           <ImagePlus className="me-2 h-4 w-4" />
-        )}
-        {isProcessing
-          ? isArabic
-            ? "جارٍ تجهيز الصور..."
-            : "Preparing images..."
-          : isArabic
-            ? "اختيار صور"
-            : "Choose images"}
-      </Button>
+          {isArabic ? "اختيار من المعرض" : "Choose from gallery"}
+        </Button>
+      </div>
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
     </section>
   );

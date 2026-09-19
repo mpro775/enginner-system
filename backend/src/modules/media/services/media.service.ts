@@ -97,6 +97,11 @@ export class MediaService {
     };
   }
 
+  async createJpegDownload(image: StoredImage): Promise<Buffer> {
+    const fullImage = await this.objectStorage.getObjectBuffer(image.key);
+    return this.imageProcessor.convertToJpeg(fullImage);
+  }
+
   async deleteObjects(keys: string[]): Promise<void> {
     await this.objectStorage.deleteObjects(keys);
   }

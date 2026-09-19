@@ -301,6 +301,40 @@ export class ComplaintsService {
     return safeComplaint;
   }
 
+  async downloadAttachment(
+    complaintId: string,
+    attachmentId: string,
+    user: AccessScopedUser,
+  ): Promise<{ buffer: Buffer; fileName: string }> {
+    const complaint = await this.complaintModel
+      .findOne({ _id: complaintId, deletedAt: null })
+      .select("+attachments")
+      .exec();
+    if (!complaint) {
+      throw new EntityNotFoundException("Complaint", complaintId);
+    }
+    await this.assertAccess(complaint, user);
+
+    const attachments = (complaint.attachments || []) as StoredImage[];
+    const attachmentIndex = attachments.findIndex(
+      (attachment) => attachment.id === attachmentId,
+    );
+    if (attachmentIndex === -1) {
+      throw new EntityNotFoundException("Complaint attachment", attachmentId);
+    }
+
+    const buffer = await this.mediaService.createJpegDownload(
+      attachments[attachmentIndex],
+    );
+    const safeComplaintCode = complaint.complaintCode
+      .replace(/[^a-zA-Z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "complaint";
+    return {
+      buffer,
+      fileName: `${safeComplaintCode}-image-${attachmentIndex + 1}.jpg`,
+    };
+  }
+
   async addReviewNote(
     id: string,
     dto: AddReviewNoteDto,

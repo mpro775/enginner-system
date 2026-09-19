@@ -13,7 +13,9 @@ import {
   UploadedFiles,
   UseInterceptors,
   BadRequestException,
+  Res,
 } from "@nestjs/common";
+import type { Response } from "express";
 import { FilesInterceptor } from "@nestjs/platform-express";
 import { Throttle, ThrottlerGuard } from "@nestjs/throttler";
 import { memoryStorage } from "multer";
@@ -111,6 +113,28 @@ export class ComplaintsController {
       meta: result.meta,
       message: "Deleted complaints retrieved successfully",
     };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(":id/attachments/:attachmentId/download")
+  async downloadAttachment(
+    @Param("id") id: string,
+    @Param("attachmentId") attachmentId: string,
+    @CurrentUser() user: CurrentUserData,
+    @Res() response: Response,
+  ) {
+    const download = await this.complaintsService.downloadAttachment(
+      id,
+      attachmentId,
+      user,
+    );
+    response.set({
+      "Content-Type": "image/jpeg",
+      "Content-Disposition": `attachment; filename="${download.fileName}"`,
+      "Content-Length": download.buffer.length.toString(),
+      "Cache-Control": "private, no-store",
+    });
+    response.send(download.buffer);
   }
 
   @UseGuards(JwtAuthGuard)

@@ -84,4 +84,13 @@ export class ImageProcessorService {
       throw new BadRequestException("The uploaded file is not a valid supported image");
     }
   }
+
+  async convertToJpeg(input: Buffer): Promise<Buffer> {
+    return sharp(input)
+      .jpeg({
+        quality: 90,
+        mozjpeg: true,
+      })
+      .toBuffer();
+  }
 }

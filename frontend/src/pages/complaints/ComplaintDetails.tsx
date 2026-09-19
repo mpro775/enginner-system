@@ -200,6 +200,8 @@ export default function ComplaintDetails() {
           </Card>
 
           <ComplaintImageGallery
+            complaintId={complaint.id}
+            complaintCode={complaint.complaintCode}
             attachments={complaint.attachments}
             onRefreshUrls={() => refetch()}
           />
