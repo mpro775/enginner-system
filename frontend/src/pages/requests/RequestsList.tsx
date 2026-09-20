@@ -1369,6 +1369,18 @@ export default function RequestsList() {
                 <p className="mb-1 text-muted-foreground">سبب الطلب</p>
                 <p>{quickPeekRequest.reasonText || "لم يُسجل سبب"}</p>
               </div>
+              {[
+                RequestStatus.PENDING_CONSULTANT_APPROVAL,
+                RequestStatus.COMPLETED,
+              ].includes(quickPeekRequest.status) &&
+                quickPeekRequest.implementedWork && (
+                  <div className="sm:col-span-2 rounded-lg border bg-muted/30 p-3">
+                    <p className="mb-1 text-muted-foreground">ما تم تنفيذه</p>
+                    <p className="max-h-24 overflow-hidden whitespace-pre-wrap break-words">
+                      {quickPeekRequest.implementedWork}
+                    </p>
+                  </div>
+                )}
               {(quickPeekRequest.engineerNotes ||
                 quickPeekRequest.consultantNotes ||
                 quickPeekRequest.projectManagerNotes ||

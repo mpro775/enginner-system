@@ -1058,7 +1058,10 @@ export default function RequestDetails() {
                   </div>
                 )}
 
-              {request.status === RequestStatus.COMPLETED &&
+              {[
+                RequestStatus.PENDING_CONSULTANT_APPROVAL,
+                RequestStatus.COMPLETED,
+              ].includes(request.status) &&
                 request.implementedWork && (
                   <div className="space-y-2 pt-4 border-t">
                     <span className="text-sm font-medium text-muted-foreground block">
@@ -1073,15 +1076,27 @@ export default function RequestDetails() {
                 )}
 
               {request.status === RequestStatus.PENDING_CONSULTANT_APPROVAL && (
-                <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
+                <div className="space-y-2 rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
+                  {(request.completionRequestedAt ||
+                    (request.completionRequestedBy &&
+                      typeof request.completionRequestedBy !== "string")) && (
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      {request.completionRequestedAt && (
+                        <p>
+                          أُرسل في {formatDateTime(request.completionRequestedAt)}
+                        </p>
+                      )}
+                      {request.completionRequestedBy &&
+                        typeof request.completionRequestedBy !== "string" && (
+                          <p>
+                            طلب الإكمال: {request.completionRequestedBy.name}
+                          </p>
+                        )}
+                    </div>
+                  )}
                   <p className="font-medium text-blue-700 dark:text-blue-300">
                     بانتظار اعتماد الاستشاري
                   </p>
-                  {request.completionRequestedAt && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      أُرسل في {formatDateTime(request.completionRequestedAt)}
-                    </p>
-                  )}
                 </div>
               )}
 
